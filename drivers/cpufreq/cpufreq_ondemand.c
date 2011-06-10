@@ -117,8 +117,6 @@ static DEFINE_MUTEX(dbs_mutex);
 
 static struct workqueue_struct *input_wq;
 
-static DEFINE_PER_CPU(struct work_struct, dbs_refresh_work);
-
 static struct dbs_tuners {
 	unsigned int sampling_rate;
 	unsigned int up_threshold;
@@ -985,7 +983,7 @@ static DECLARE_WORK(dbs_refresh_work, dbs_refresh_callback);
 static void dbs_input_event(struct input_handle *handle, unsigned int type,
 		unsigned int code, int value)
 {
-	schedule_work_on(0, &dbs_refresh_work);
+	queue_work_on(0, input_wq, &dbs_refresh_work);
 }
 
 static int dbs_input_connect(struct input_handler *handler,
@@ -1183,12 +1181,6 @@ static int __init cpufreq_gov_dbs_init(void)
 		printk(KERN_ERR "Failed to create iewq workqueue\n");
 		return -EFAULT;
 	}
-	for_each_possible_cpu(i) {
-		struct cpu_dbs_info_s *this_dbs_info =
-			&per_cpu(od_cpu_dbs_info, i);
-		mutex_init(&this_dbs_info->timer_mutex);
-		INIT_WORK(&per_cpu(dbs_refresh_work, i), dbs_refresh_callback);
-	}
 
 	return cpufreq_register_governor(&cpufreq_gov_ondemand);
 }
@@ -1198,11 +1190,6 @@ static void __exit cpufreq_gov_dbs_exit(void)
 	unsigned int i;
 
 	cpufreq_unregister_governor(&cpufreq_gov_ondemand);
-	for_each_possible_cpu(i) {
-		struct cpu_dbs_info_s *this_dbs_info =
-			&per_cpu(od_cpu_dbs_info, i);
-		mutex_destroy(&this_dbs_info->timer_mutex);
-	}
 	destroy_workqueue(input_wq);
 }
 
