@@ -187,6 +187,7 @@ obj-y += rpm-regulator.o
 obj-$(CONFIG_ARCH_MSM8X60) += rpm-regulator-8660.o
 obj-$(CONFIG_ARCH_MSM8960) += rpm-regulator-8960.o
 obj-$(CONFIG_ARCH_MSM9615) += rpm-regulator-9615.o
+obj-$(CONFIG_ARCH_MSM8930) += rpm-regulator-8930.o
 endif
 
 obj-$(CONFIG_MSM_RPM_REGULATOR_SMD) += rpm-regulator-smd.o
