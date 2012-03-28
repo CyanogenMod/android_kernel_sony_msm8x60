@@ -68,7 +68,7 @@ static struct usb_device_id btusb_table[] = {
 	{ USB_DEVICE(0x0e8d, 0x763f) },
 
 	/* Broadcom SoftSailing reporting vendor specific */
-	{ USB_DEVICE(0x05ac, 0x21e1) },
+	{ USB_DEVICE(0x0a5c, 0x21e1) },
 
 	/* Apple MacBookPro 7,1 */
 	{ USB_DEVICE(0x05ac, 0x8213) },
