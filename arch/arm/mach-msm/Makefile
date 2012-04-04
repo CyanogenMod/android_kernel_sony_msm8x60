@@ -189,6 +189,8 @@ obj-$(CONFIG_ARCH_MSM8960) += rpm-regulator-8960.o
 obj-$(CONFIG_ARCH_MSM9615) += rpm-regulator-9615.o
 endif
 
+obj-$(CONFIG_MSM_RPM_REGULATOR_SMD) += rpm-regulator-smd.o
+
 ifdef CONFIG_MSM_SUBSYSTEM_RESTART
 	obj-y += subsystem_notif.o
 	obj-y += subsystem_restart.o
