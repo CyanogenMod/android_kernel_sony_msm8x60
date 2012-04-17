@@ -43,6 +43,7 @@
 #include "pil-q6v4.h"
 #include "scm-pas.h"
 #include <mach/msm_dcvs.h>
+#include <mach/iommu_domains.h>
 
 #ifdef CONFIG_MSM_MPM
 #include <mach/mpm.h>

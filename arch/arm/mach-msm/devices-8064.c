@@ -27,6 +27,7 @@
 #include "clock.h"
 #include "devices.h"
 #include "msm_watchdog.h"
+#include <mach/iommu_domains.h>
 
 /* Address of GSBI blocks */
 #define MSM_GSBI1_PHYS		0x12440000
