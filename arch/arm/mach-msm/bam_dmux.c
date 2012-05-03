@@ -227,6 +227,9 @@ static int wakelock_reference_count;
 static struct delayed_work msm9615_bam_init_work;
 static int a2_pc_disabled_wakelock_skipped;
 static int disconnect_ack = 1;
+static DEFINE_MUTEX(delayed_ul_vote_lock);
+static int need_delayed_ul_vote;
+
 /* End A2 power collaspe */
 
 /* subsystem restart */
@@ -1584,6 +1587,19 @@ static void ul_wakeup(void)
 		return;
 	}
 
+	/*
+	 * if someone is voting for UL before bam is inited (modem up first
+	 * time), set flag for init to kickoff ul wakeup once bam is inited
+	 */
+	mutex_lock(&delayed_ul_vote_lock);
+	if (unlikely(!bam_mux_initialized)) {
+		need_delayed_ul_vote = 1;
+		mutex_unlock(&delayed_ul_vote_lock);
+		mutex_unlock(&wakeup_lock);
+		return;
+	}
+	mutex_unlock(&delayed_ul_vote_lock);
+
 	if (a2_pc_disabled) {
 		/*
 		 * don't grab the wakelock the first time because it is
@@ -2000,7 +2016,13 @@ static int bam_init(void)
 		goto rx_event_reg_failed;
 	}
 
+	mutex_lock(&delayed_ul_vote_lock);
 	bam_mux_initialized = 1;
+	if (need_delayed_ul_vote) {
+		need_delayed_ul_vote = 0;
+		msm_bam_dmux_kickoff_ul_wakeup();
+	}
+	mutex_unlock(&delayed_ul_vote_lock);
 	toggle_apps_ack();
 	bam_connection_is_active = 1;
 	complete_all(&bam_connection_completion);
@@ -2066,6 +2088,15 @@ static int bam_init_fallback(void)
 		goto register_bam_failed;
 	}
 	a2_device_handle = h;
+
+	mutex_lock(&delayed_ul_vote_lock);
+	bam_mux_initialized = 1;
+	if (need_delayed_ul_vote) {
+		need_delayed_ul_vote = 0;
+		msm_bam_dmux_kickoff_ul_wakeup();
+	}
+	mutex_unlock(&delayed_ul_vote_lock);
+	toggle_apps_ack();
 
 	return 0;
 
