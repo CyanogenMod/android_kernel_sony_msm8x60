@@ -2242,6 +2242,9 @@ static struct platform_device *rumi3_devices[] __initdata = {
 #ifdef CONFIG_MSM_GEMINI
 	&msm8960_gemini_device,
 #endif
+#ifdef CONFIG_MSM_MERCURY
+	&msm8960_mercury_device,
+#endif
 };
 
 static struct platform_device *cdp_devices[] __initdata = {
@@ -2277,6 +2280,9 @@ static struct platform_device *cdp_devices[] __initdata = {
 #endif
 #ifdef CONFIG_MSM_GEMINI
 	&msm8960_gemini_device,
+#endif
+#ifdef CONFIG_MSM_MERCURY
+	&msm8960_mercury_device,
 #endif
 	&msm_voice,
 	&msm_voip,
