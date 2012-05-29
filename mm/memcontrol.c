@@ -1182,6 +1182,10 @@ static bool mem_cgroup_same_or_subtree(const struct mem_cgroup *root_memcg,
 {
 	bool ret;
 
+	if (root_memcg == memcg)
+		return true;
+	if (!root_memcg->use_hierarchy)
+		return false;
 	rcu_read_lock();
 	ret = __mem_cgroup_same_or_subtree(root_memcg, memcg);
 	rcu_read_unlock();
