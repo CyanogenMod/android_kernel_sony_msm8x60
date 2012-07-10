@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -319,6 +319,61 @@ static u32 ddl_set_dec_property(struct ddl_client_context *ddl,
 		}
 	}
 	break;
+	case VCD_I_SET_EXT_METABUFFER:
+	{
+		int index, buffer_size;
+		u8 *phys_addr;
+		u8 *virt_addr;
+		struct vcd_property_meta_buffer *meta_buffer =
+			(struct vcd_property_meta_buffer *) property_value;
+		DDL_MSG_LOW("Entered VCD_I_SET_EXT_METABUFFER Virt: %p,"\
+					"Phys %p, fd: %d size: %d count: %d",
+					meta_buffer->kernel_virtual_addr,
+					meta_buffer->physical_addr,
+					meta_buffer->pmem_fd,
+					meta_buffer->size, meta_buffer->count);
+		if ((property_hdr->sz == sizeof(struct
+			vcd_property_meta_buffer)) &&
+			(DDLCLIENT_STATE_IS(ddl,
+			DDL_CLIENT_WAIT_FOR_INITCODEC) ||
+			DDLCLIENT_STATE_IS(ddl, DDL_CLIENT_WAIT_FOR_DPB) ||
+			DDLCLIENT_STATE_IS(ddl, DDL_CLIENT_OPEN))) {
+			phys_addr = meta_buffer->dev_addr;
+			virt_addr = meta_buffer->kernel_virtual_addr;
+			buffer_size = meta_buffer->size/meta_buffer->count;
+
+			for (index = 0; index < meta_buffer->count; index++) {
+				ddl->codec_data.decoder.hw_bufs.
+					meta_hdr[index].align_physical_addr
+					= phys_addr;
+				ddl->codec_data.decoder.hw_bufs.
+					meta_hdr[index].align_virtual_addr
+					= virt_addr;
+				ddl->codec_data.decoder.hw_bufs.
+					meta_hdr[index].buffer_size
+					= buffer_size;
+				ddl->codec_data.decoder.hw_bufs.
+					meta_hdr[index].physical_base_addr
+					= phys_addr;
+				ddl->codec_data.decoder.hw_bufs.
+					meta_hdr[index].virtual_base_addr
+					= virt_addr;
+
+				DDL_MSG_LOW("Meta Buffer: "\
+							"Assigned %d buffer for "
+							"virt: %p, phys %p for "
+							"meta_buffers "
+							"of size: %d\n",
+							index, virt_addr,
+							phys_addr, buffer_size);
+
+				phys_addr += buffer_size;
+				virt_addr += buffer_size;
+			}
+			vcd_status = VCD_S_SUCCESS;
+		}
+	}
+	break;
 	case VCD_I_H264_MV_BUFFER:
 	{
 		int index, buffer_size;
@@ -375,6 +430,13 @@ static u32 ddl_set_dec_property(struct ddl_client_context *ddl,
 	case VCD_I_FREE_H264_MV_BUFFER:
 		{
 			memset(&decoder->hw_bufs.h264_mv, 0, sizeof(struct
+					ddl_buf_addr) * DDL_MAX_BUFFER_COUNT);
+			vcd_status = VCD_S_SUCCESS;
+		}
+		break;
+	case VCD_I_FREE_EXT_METABUFFER:
+		{
+			memset(&decoder->hw_bufs.meta_hdr, 0, sizeof(struct
 					ddl_buf_addr) * DDL_MAX_BUFFER_COUNT);
 			vcd_status = VCD_S_SUCCESS;
 		}
@@ -1047,10 +1109,52 @@ static u32 ddl_set_enc_property(struct ddl_client_context *ddl,
 	case VCD_REQ_PERF_LEVEL:
 		vcd_status = VCD_S_SUCCESS;
 		break;
+	case VCD_I_ENABLE_DELIMITER_FLAG:
+	{
+		struct vcd_property_avc_delimiter_enable *delimiter_enable =
+			(struct vcd_property_avc_delimiter_enable *)
+				property_value;
+		if (sizeof(struct vcd_property_avc_delimiter_enable) ==
+			property_hdr->sz &&
+			encoder->codec.codec == VCD_CODEC_H264) {
+			encoder->avc_delimiter_enable =
+			delimiter_enable->avc_delimiter_enable_flag;
+			vcd_status = VCD_S_SUCCESS;
+		}
+		break;
+	}
+	case VCD_I_ENABLE_VUI_TIMING_INFO:
+	{
+		struct vcd_property_vui_timing_info_enable *vui_timing_enable =
+			(struct vcd_property_vui_timing_info_enable *)
+				property_value;
+		if (sizeof(struct vcd_property_vui_timing_info_enable) ==
+			property_hdr->sz &&
+			encoder->codec.codec == VCD_CODEC_H264) {
+			encoder->vui_timinginfo_enable =
+			vui_timing_enable->vui_timing_info;
+			vcd_status = VCD_S_SUCCESS;
+		}
+		break;
+	}
+	case VCD_I_ENABLE_VUI_BITSTREAM_RESTRICT_FLAG:
+	{
+		struct vcd_property_bitstream_restrict_enable *restrict_enable =
+			(struct vcd_property_bitstream_restrict_enable *)
+				property_value;
+		if (sizeof(struct vcd_property_bitstream_restrict_enable) ==
+			property_hdr->sz &&
+			encoder->codec.codec == VCD_CODEC_H264) {
+			encoder->bitstream_restrict_enable =
+			restrict_enable->bitstream_restrict_enable_flag;
+			vcd_status = VCD_S_SUCCESS;
+		}
+		break;
+	}
 	default:
 		DDL_MSG_ERROR("INVALID ID %d\n", (int)property_hdr->prop_id);
 		vcd_status = VCD_ERR_ILLEGAL_OP;
-	break;
+		break;
 	}
 	return vcd_status;
 }
@@ -1218,6 +1322,13 @@ static u32 ddl_get_dec_property(struct ddl_client_context *ddl,
 	case VCD_I_DISABLE_DMX_SUPPORT:
 		if (sizeof(u32) == property_hdr->sz) {
 			*(u32 *)property_value = res_trk_get_disable_dmx();
+			vcd_status = VCD_S_SUCCESS;
+		}
+	break;
+	case VCD_I_ENABLE_SEC_METADATA:
+		if (sizeof(u32) == property_hdr->sz) {
+			*(u32 *)property_value =
+				res_trk_get_enable_sec_metadata();
 			vcd_status = VCD_S_SUCCESS;
 		}
 	break;
@@ -1530,6 +1641,33 @@ static u32 ddl_get_enc_property(struct ddl_client_context *ddl,
 			vcd_status = VCD_S_SUCCESS;
 		}
 		break;
+	case VCD_I_ENABLE_DELIMITER_FLAG:
+		if (sizeof(struct vcd_property_avc_delimiter_enable) ==
+			property_hdr->sz) {
+			((struct vcd_property_avc_delimiter_enable *)
+				property_value)->avc_delimiter_enable_flag =
+					encoder->avc_delimiter_enable;
+			vcd_status = VCD_S_SUCCESS;
+		}
+		break;
+	case VCD_I_ENABLE_VUI_TIMING_INFO:
+		if (sizeof(struct vcd_property_vui_timing_info_enable) ==
+			property_hdr->sz) {
+			((struct vcd_property_vui_timing_info_enable *)
+				property_value)->vui_timing_info =
+					encoder->vui_timinginfo_enable;
+			vcd_status = VCD_S_SUCCESS;
+		}
+		break;
+	case VCD_I_ENABLE_VUI_BITSTREAM_RESTRICT_FLAG:
+		if (sizeof(struct vcd_property_bitstream_restrict_enable) ==
+			property_hdr->sz) {
+			((struct vcd_property_bitstream_restrict_enable *)
+				property_value)->bitstream_restrict_enable_flag
+					= encoder->bitstream_restrict_enable;
+			vcd_status = VCD_S_SUCCESS;
+		}
+		break;
 	default:
 		vcd_status = VCD_ERR_ILLEGAL_OP;
 		break;
@@ -1691,6 +1829,8 @@ static void ddl_set_default_enc_property(struct ddl_client_context *ddl)
 	encoder->slice_delivery_info.enable = 0;
 	encoder->slice_delivery_info.num_slices = 0;
 	encoder->slice_delivery_info.num_slices_enc = 0;
+	encoder->avc_delimiter_enable = 0;
+	encoder->vui_timinginfo_enable = 0;
 }
 
 static void ddl_set_default_enc_profile(struct ddl_encoder_data *encoder)

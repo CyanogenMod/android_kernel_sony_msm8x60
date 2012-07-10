@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -65,13 +65,21 @@
 #define A3XX_RBBM_INT_CLEAR_CMD 0x061
 #define A3XX_RBBM_INT_0_MASK 0x063
 #define A3XX_RBBM_INT_0_STATUS 0x064
+#define A3XX_RBBM_PERFCTR_CTL 0x80
 #define A3XX_RBBM_GPU_BUSY_MASKED 0x88
+#define A3XX_RBBM_PERFCTR_SP_5_LO 0xDC
+#define A3XX_RBBM_PERFCTR_SP_5_HI 0xDD
+#define A3XX_RBBM_PERFCTR_SP_6_LO 0xDE
+#define A3XX_RBBM_PERFCTR_SP_6_HI 0xDF
+#define A3XX_RBBM_PERFCTR_SP_7_LO 0xE0
+#define A3XX_RBBM_PERFCTR_SP_7_HI 0xE1
 #define A3XX_RBBM_RBBM_CTL 0x100
 #define A3XX_RBBM_RBBM_CTL 0x100
 #define A3XX_RBBM_PERFCTR_PWR_1_LO 0x0EC
 #define A3XX_RBBM_PERFCTR_PWR_1_HI 0x0ED
 #define A3XX_RBBM_DEBUG_BUS_CTL             0x111
 #define A3XX_RBBM_DEBUG_BUS_DATA_STATUS     0x112
+
 /* Following two are same as on A2XX, just in a different place */
 #define A3XX_CP_PFP_UCODE_ADDR 0x1C9
 #define A3XX_CP_PFP_UCODE_DATA 0x1CA
@@ -151,10 +159,14 @@
 #define A3XX_GRAS_CL_USER_PLANE_Y5 0xCB5
 #define A3XX_GRAS_CL_USER_PLANE_Z5 0xCB6
 #define A3XX_GRAS_CL_USER_PLANE_W5 0xCB7
+#define A3XX_RB_GMEM_BASE_ADDR 0xCC0
 #define A3XX_VFD_PERFCOUNTER0_SELECT 0xE44
 #define A3XX_VPC_VPC_DEBUG_RAM_SEL 0xE61
 #define A3XX_VPC_VPC_DEBUG_RAM_READ 0xE62
 #define A3XX_UCHE_CACHE_INVALIDATE0_REG 0xEA0
+#define A3XX_SP_PERFCOUNTER5_SELECT 0xEC9
+#define A3XX_SP_PERFCOUNTER6_SELECT 0xECA
+#define A3XX_SP_PERFCOUNTER7_SELECT 0xECB
 #define A3XX_GRAS_CL_CLIP_CNTL 0x2040
 #define A3XX_GRAS_CL_GB_CLIP_ADJ 0x2044
 #define A3XX_GRAS_CL_VPORT_XOFFSET 0x2048
@@ -521,5 +533,11 @@
 
 /* RBBM_CLOCK_CTL default value */
 #define A3XX_RBBM_CLOCK_CTL_DEFAULT 0xBFFFFFFF
+
+/* COUNTABLE FOR SP PERFCOUNTER */
+#define SP_FS_FULL_ALU_INSTRUCTIONS    0x0E
+#define SP_ALU_ACTIVE_CYCLES           0x1D
+#define SP0_ICL1_MISSES                0x1A
+#define SP_FS_CFLOW_INSTRUCTIONS       0x0C
 
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -403,8 +403,6 @@ void ddl_release_client_internal_buffers(struct ddl_client_context *ddl)
 		encoder->dynamic_prop_change = 0;
 		ddl_free_enc_hw_buffers(ddl);
 	}
-	ddl_pmem_free(&ddl->shared_mem[0]);
-	ddl_pmem_free(&ddl->shared_mem[1]);
 }
 
 u32 ddl_codec_type_transact(struct ddl_client_context *ddl,
@@ -779,7 +777,7 @@ u32 ddl_allocate_dec_hw_buffers(struct ddl_client_context *ddl)
 		}
 	}
 	if (buf_size.sz_extnuserdata > 0) {
-		dec_bufs->extnuserdata.mem_type = DDL_FW_MEM;
+		dec_bufs->extnuserdata.mem_type = DDL_CMD_MEM;
 		ptr = ddl_pmem_alloc(&dec_bufs->extnuserdata,
 				buf_size.sz_extnuserdata, DDL_KILO_BYTE(2));
 		if (!ptr)

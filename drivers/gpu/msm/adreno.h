@@ -101,6 +101,10 @@ struct adreno_device {
 	unsigned int fast_hang_detect;
 	unsigned int gpulist_index;
 	struct ocmem_buf *ocmem_hdl;
+	unsigned int ocmem_base;
+	struct kgsl_memdesc on_resume_cmd;
+	unsigned int on_resume_ib[3];
+	bool on_resume_issueib;
 };
 
 struct adreno_gpudev {

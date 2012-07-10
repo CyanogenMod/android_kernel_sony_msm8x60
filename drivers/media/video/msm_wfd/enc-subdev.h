@@ -14,10 +14,16 @@
 #ifndef _WFD_ENC_SUBDEV_
 #define _WFD_ENC_SUBDEV_
 
-#include <linux/ion.h>
+#include <linux/list.h>
+#include <linux/msm_ion.h>
 #include <media/v4l2-subdev.h>
 #include <media/videobuf2-core.h>
 #define VENC_MAGIC_IOCTL 'V'
+
+enum venc_framerate_modes {
+	VENC_MODE_CFR,
+	VENC_MODE_VFR,
+};
 
 struct mem_region {
 	struct list_head list;
@@ -29,6 +35,15 @@ struct mem_region {
 	u32 cookie;
 	struct ion_handle *ion_handle;
 };
+
+/* FIXME: need to come with a less stupid name */
+struct mem_region_map {
+	struct mem_region *mregion;
+	struct ion_client *ion_client;
+	uint32_t flags;
+	void *cookie;
+};
+
 struct bufreq {
 	u32 count;
 	u32 height;
@@ -44,12 +59,26 @@ struct venc_buf_info {
 struct venc_msg_ops {
 	void *cookie;
 	void *cbdata;
-	int secure;
+	bool secure;
 	void (*op_buffer_done)(void *cookie, u32 status,
 			struct vb2_buffer *buf);
 	void (*ip_buffer_done)(void *cookie, u32 status,
 			struct mem_region *mregion);
 };
+
+static inline bool mem_region_equals(struct mem_region *a,
+		struct mem_region *b)
+{
+	if (a == b)
+		return true;
+	else if (a->fd || b->fd)
+		return (a->fd == b->fd) &&
+			(a->offset == b->offset);
+	else if (a->kvaddr || b->kvaddr)
+		return a->kvaddr == b->kvaddr;
+	else
+		return false;
+}
 
 #define OPEN  _IOR('V', 1, void *)
 #define CLOSE  _IO('V', 2)
@@ -75,6 +104,9 @@ struct venc_msg_ops {
 #define FREE_INPUT_BUFFER _IOWR('V', 22, struct mem_region *)
 #define FREE_RECON_BUFFERS _IO('V', 23)
 #define ENCODE_FLUSH _IO('V', 24)
+#define ENC_MMAP _IOWR('V', 25, struct mem_region_map *)
+#define ENC_MUNMAP _IOWR('V', 26, struct mem_region_map *)
+#define SET_FRAMERATE_MODE _IO('V', 27)
 
 extern int venc_init(struct v4l2_subdev *sd, u32 val);
 extern int venc_load_fw(struct v4l2_subdev *sd);
