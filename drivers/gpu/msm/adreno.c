@@ -127,6 +127,12 @@ unsigned int hang_detect_regs[] = {
 	REG_CP_IB1_BUFSZ,
 	REG_CP_IB2_BASE,
 	REG_CP_IB2_BUFSZ,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0
 };
 
 const unsigned int hang_detect_regs_count = ARRAY_SIZE(hang_detect_regs);
@@ -260,7 +266,17 @@ static int adreno_setup_pt(struct kgsl_device *device,
 	if (result)
 		goto unmap_memstore_desc;
 
+	if (adreno_is_a305(adreno_dev)) {
+		result = kgsl_mmu_map_global(pagetable,
+				&adreno_dev->on_resume_cmd,
+				GSL_PT_PAGE_RV | GSL_PT_PAGE_WV);
+		if (result)
+			goto unmap_setstate_desc;
+	}
 	return result;
+
+unmap_setstate_desc:
+	kgsl_mmu_unmap(pagetable, &device->mmu.setstate_memory);
 
 unmap_memstore_desc:
 	kgsl_mmu_unmap(pagetable, &device->memstore);
@@ -1042,7 +1058,7 @@ adreno_ocmem_gmem_malloc(struct adreno_device *adreno_dev)
 		return -ENOMEM;
 
 	adreno_dev->gmem_size = adreno_dev->ocmem_hdl->len;
-	adreno_dev->gmem_base = adreno_dev->ocmem_hdl->addr;
+	adreno_dev->ocmem_base = adreno_dev->ocmem_hdl->addr;
 
 	return 0;
 }
@@ -1101,6 +1117,7 @@ adreno_probe(struct platform_device *pdev)
 		goto error_close_rb;
 
 	adreno_debugfs_init(device);
+	adreno_dev->on_resume_issueib = false;
 
 	kgsl_pwrscale_init(device);
 	kgsl_pwrscale_attach_policy(device, ADRENO_DEFAULT_PWRSCALE_POLICY);
@@ -1126,6 +1143,8 @@ static int __devexit adreno_remove(struct platform_device *pdev)
 
 	kgsl_pwrscale_detach_policy(device);
 	kgsl_pwrscale_close(device);
+	if (adreno_is_a305(adreno_dev))
+		kgsl_sharedmem_free(&adreno_dev->on_resume_cmd);
 
 	adreno_ringbuffer_close(&adreno_dev->ringbuffer);
 	kgsl_device_platform_remove(device);
@@ -1194,6 +1213,28 @@ static int adreno_start(struct kgsl_device *device, unsigned int init_ram)
 	/* Assign correct RBBM status register to hang detect regs
 	 */
 	hang_detect_regs[0] = adreno_dev->gpudev->reg_rbbm_status;
+
+	/* Add A3XX specific registers for hang detection */
+	if (adreno_is_a3xx(adreno_dev)) {
+		hang_detect_regs[6] = A3XX_RBBM_PERFCTR_SP_7_LO;
+		hang_detect_regs[7] = A3XX_RBBM_PERFCTR_SP_7_HI;
+		hang_detect_regs[8] = A3XX_RBBM_PERFCTR_SP_6_LO;
+		hang_detect_regs[9] = A3XX_RBBM_PERFCTR_SP_6_HI;
+		hang_detect_regs[10] = A3XX_RBBM_PERFCTR_SP_5_LO;
+		hang_detect_regs[11] = A3XX_RBBM_PERFCTR_SP_5_HI;
+	}
+
+	/*
+	 * Allocate some memory for A305 to do an extra draw on resume
+	 * from SLUMBER state.
+	 */
+	if (adreno_is_a305(adreno_dev) &&
+			adreno_dev->on_resume_cmd.hostptr == NULL) {
+		status = kgsl_allocate_contiguous(&adreno_dev->on_resume_cmd,
+					PAGE_SIZE);
+		if (status)
+			goto error_clk_off;
+        }
 
 	status = kgsl_mmu_start(device);
 	if (status)
@@ -1708,6 +1749,7 @@ static int adreno_setproperty(struct kgsl_device *device,
 				unsigned int sizebytes)
 {
 	int status = -EINVAL;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
 	switch (type) {
 	case KGSL_PROP_PWRCTRL: {
@@ -1727,10 +1769,11 @@ static int adreno_setproperty(struct kgsl_device *device,
 			if (enable) {
 				if (pdata->nap_allowed)
 					device->pwrctrl.nap_allowed = true;
-
+				adreno_dev->fast_hang_detect = 1;
 				kgsl_pwrscale_enable(device);
 			} else {
 				device->pwrctrl.nap_allowed = false;
+				adreno_dev->fast_hang_detect = 0;
 				kgsl_pwrscale_disable(device);
 			}
 
@@ -1901,6 +1944,8 @@ static int adreno_suspend_context(struct kgsl_device *device)
 		adreno_drawctxt_switch(adreno_dev, NULL, 0);
 		status = adreno_idle(device);
 	}
+	if (adreno_is_a305(adreno_dev))
+		adreno_dev->on_resume_issueib = true;
 
 	return status;
 }
@@ -2196,6 +2241,10 @@ unsigned int adreno_hang_detect(struct kgsl_device *device,
 	}
 
 	for (i = 0; i < hang_detect_regs_count; i++) {
+
+		if (hang_detect_regs[i] == 0)
+			continue;
+
 		adreno_regread(device, hang_detect_regs[i],
 					   &curr_reg_val[i]);
 		if (curr_reg_val[i] != prev_reg_val[i]) {

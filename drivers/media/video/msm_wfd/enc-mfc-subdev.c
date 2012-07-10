@@ -38,6 +38,7 @@ struct venc_inst {
 	int secure;
 	struct mem_region unqueued_op_bufs;
 	bool streaming;
+	enum venc_framerate_modes framerate_mode;
 };
 
 struct venc {
@@ -227,7 +228,7 @@ static void venc_cb(u32 event, u32 status, void *info, u32 size, void *handle,
 					BUFFER_TYPE_OUTPUT, pmem_fd,
 					kvaddr, buffer_index, &ion_handle);
 			else
-				WFD_MSG_ERR("Got an output buffer that we "
+				WFD_MSG_ERR("Got an output buffer that we " \
 						"couldn't recognize!\n");
 
 			if (msm_ion_do_cache_op(client_ctx->user_ion_client,
@@ -295,6 +296,8 @@ static long venc_open(struct v4l2_subdev *sd, void *arg)
 	inst->cbdata = vmops->cbdata;
 	inst->secure = vmops->secure;
 	inst->streaming = false;
+	inst->framerate_mode = VENC_MODE_VFR;
+
 	if (vmops->secure) {
 		WFD_MSG_ERR("OPENING SECURE SESSION\n");
 		flags |= VCD_CP_SESSION;
@@ -547,8 +550,8 @@ static long venc_set_codec_level(struct video_client_ctx *client_ctx,
 
 		if (vcd_property_level.level < VCD_LEVEL_MPEG4_0
 			|| vcd_property_level.level > VCD_LEVEL_MPEG4_X) {
-			WFD_MSG_ERR("Level (%d) out of range"
-					"for codec (%d)\n", level, codec);
+			WFD_MSG_ERR("Level (%d) out of range for codec (%d)\n",
+					level, codec);
 
 			rc = -EINVAL;
 			goto err;
@@ -558,8 +561,8 @@ static long venc_set_codec_level(struct video_client_ctx *client_ctx,
 
 		if (vcd_property_level.level < VCD_LEVEL_H264_1
 			|| vcd_property_level.level > VCD_LEVEL_H264_5p1) {
-			WFD_MSG_ERR("Level (%d) out of range"
-					"for codec (%d)\n", level, codec);
+			WFD_MSG_ERR("Level (%d) out of range for codec (%d)\n",
+					level, codec);
 
 			rc = -EINVAL;
 			goto err;
@@ -678,9 +681,9 @@ static long venc_set_codec_profile(struct video_client_ctx *client_ctx,
 			vcd_property_profile.profile = VCD_PROFILE_MPEG4_ASP;
 			break;
 		default:
-			WFD_MSG_ERR("Profile %d not supported,"
-					"defaulting to simple (%d)",
-					profile, VCD_PROFILE_MPEG4_SP);
+			WFD_MSG_ERR("Profile %d not supported, defaulting " \
+					"to simple (%d)", profile,
+					VCD_PROFILE_MPEG4_SP);
 			vcd_property_profile.profile = VCD_PROFILE_MPEG4_SP;
 			break;
 		}
@@ -697,17 +700,16 @@ static long venc_set_codec_profile(struct video_client_ctx *client_ctx,
 			vcd_property_profile.profile = VCD_PROFILE_H264_HIGH;
 			break;
 		default:
-			WFD_MSG_ERR("Profile %d not supported,"
-					"defaulting to baseline (%d)",
-					profile, VCD_PROFILE_H264_BASELINE);
+			WFD_MSG_ERR("Profile %d not supported, defaulting " \
+					"to baseline (%d)", profile,
+					VCD_PROFILE_H264_BASELINE);
 			vcd_property_profile.profile =
 				VCD_PROFILE_H264_BASELINE;
 			break;
 		}
 	} else {
-		WFD_MSG_ERR("Codec (%d) not supported,"
-				"not setting profile (%d)",
-				codec, profile);
+		WFD_MSG_ERR("Codec (%d) not supported, not "\
+				"setting profile (%d)",	codec, profile);
 		rc = -ENOTSUPP;
 		goto err_set_profile;
 	}
@@ -1118,6 +1120,14 @@ set_framerate_fail:
 	return rc;
 }
 
+static long venc_set_framerate_mode(struct v4l2_subdev *sd,
+				void *arg)
+{
+	struct venc_inst *inst = sd->dev_priv;
+	inst->framerate_mode = *(enum venc_framerate_modes *)arg;
+	return 0;
+}
+
 static long venc_set_qp_value(struct video_client_ctx *client_ctx,
 		__s32 frametype, __s32 qp)
 {
@@ -1353,6 +1363,93 @@ static long venc_set_max_perf_level(struct video_client_ctx *client_ctx,
 err_set_perf_level:
 	return rc;
 }
+
+static long venc_set_avc_delimiter(struct video_client_ctx *client_ctx,
+			__s32 flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_avc_delimiter_enable delimiter_flag;
+	if (!client_ctx)
+		return -EINVAL;
+
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_DELIMITER_FLAG;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_avc_delimiter_enable);
+	delimiter_flag.avc_delimiter_enable_flag = flag;
+	return vcd_set_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &delimiter_flag);
+}
+
+static long venc_get_avc_delimiter(struct video_client_ctx *client_ctx,
+			__s32 *flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_avc_delimiter_enable delimiter_flag;
+	int rc = 0;
+
+	if (!client_ctx || !flag)
+		return -EINVAL;
+
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_DELIMITER_FLAG;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_avc_delimiter_enable);
+	rc = vcd_get_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &delimiter_flag);
+
+	if (rc < 0) {
+		WFD_MSG_ERR("Failed getting property for delimiter");
+		return rc;
+	}
+
+	*flag = delimiter_flag.avc_delimiter_enable_flag;
+	return rc;
+}
+
+static long venc_set_vui_timing_info(struct video_client_ctx *client_ctx,
+			struct venc_inst *inst, __s32 flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_vui_timing_info_enable vui_timing_info_enable;
+
+	if (!client_ctx)
+		return -EINVAL;
+	if (inst->framerate_mode == VENC_MODE_VFR) {
+		WFD_MSG_ERR("VUI timing info not suported in VFR mode ");
+		return -EINVAL;
+	}
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_VUI_TIMING_INFO;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_vui_timing_info_enable);
+	vui_timing_info_enable.vui_timing_info = flag;
+	return vcd_set_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &vui_timing_info_enable);
+}
+
+static long venc_get_vui_timing_info(struct video_client_ctx *client_ctx,
+			__s32 *flag)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	struct vcd_property_vui_timing_info_enable vui_timing_info_enable;
+	int rc = 0;
+
+	if (!client_ctx || !flag)
+		return -EINVAL;
+
+	vcd_property_hdr.prop_id = VCD_I_ENABLE_VUI_TIMING_INFO;
+	vcd_property_hdr.sz =
+			sizeof(struct vcd_property_vui_timing_info_enable);
+	rc = vcd_get_property(client_ctx->vcd_handle,
+				&vcd_property_hdr, &vui_timing_info_enable);
+
+	if (rc < 0) {
+		WFD_MSG_ERR("Failed getting property for VUI timing info");
+		return rc;
+	}
+
+	*flag = vui_timing_info_enable.vui_timing_info;
+	return rc;
+}
+
 static long venc_set_header_mode(struct video_client_ctx *client_ctx,
 		__s32 mode)
 {
@@ -1962,7 +2059,7 @@ static long venc_alloc_recon_buffers(struct v4l2_subdev *sd, void *arg)
 
 			ctrl->kernel_virtual_addr = ion_map_kernel(
 				client_ctx->user_ion_client,
-				client_ctx->recon_buffer_ion_handle[i],	0);
+				client_ctx->recon_buffer_ion_handle[i]);
 
 			if (IS_ERR_OR_NULL(ctrl->kernel_virtual_addr)) {
 				WFD_MSG_ERR("ion map kernel failed\n");
@@ -2233,6 +2330,12 @@ static long venc_set_property(struct v4l2_subdev *sd, void *arg)
 	case V4L2_CID_MPEG_QCOM_SET_PERF_LEVEL:
 		rc = venc_set_max_perf_level(client_ctx, ctrl->value);
 		break;
+	case V4L2_CID_MPEG_VIDC_VIDEO_H264_AU_DELIMITER:
+		rc = venc_set_avc_delimiter(client_ctx, ctrl->value);
+		break;
+	case V4L2_CID_MPEG_VIDC_VIDEO_H264_VUI_TIMING_INFO:
+		rc = venc_set_vui_timing_info(client_ctx, inst, ctrl->value);
+		break;
 	case V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE:
 		rc = venc_set_entropy_mode(client_ctx, ctrl->value);
 		break;
@@ -2304,12 +2407,85 @@ static long venc_get_property(struct v4l2_subdev *sd, void *arg)
 	case V4L2_CID_MPEG_VIDEO_CYCLIC_INTRA_REFRESH_MB:
 		rc = venc_get_cyclic_intra_refresh_mb(client_ctx, &ctrl->value);
 		break;
+	case V4L2_CID_MPEG_VIDC_VIDEO_H264_AU_DELIMITER:
+		rc = venc_get_avc_delimiter(client_ctx, &ctrl->value);
+		break;
+	case V4L2_CID_MPEG_VIDC_VIDEO_H264_VUI_TIMING_INFO:
+		rc = venc_get_vui_timing_info(client_ctx, &ctrl->value);
+		break;
 	default:
 		WFD_MSG_ERR("Get property not suported: %d\n", ctrl->id);
 		rc = -ENOTSUPP;
 		break;
 	}
 	return rc;
+}
+
+long venc_mmap(struct v4l2_subdev *sd, void *arg)
+{
+	struct venc_inst *inst = sd->dev_priv;
+	struct mem_region_map *mmap = arg;
+	struct mem_region *mregion = NULL;
+	unsigned long rc = 0, size = 0;
+	void *paddr = NULL;
+
+	if (!sd) {
+		WFD_MSG_ERR("Subdevice required for %s\n", __func__);
+		return -EINVAL;
+	} else if (!mmap || !mmap->mregion) {
+		WFD_MSG_ERR("Memregion required for %s\n", __func__);
+		return -EINVAL;
+	}
+
+	mregion = mmap->mregion;
+	if (mregion->size % SZ_4K != 0) {
+		WFD_MSG_ERR("Memregion not aligned to %d\n", SZ_4K);
+		return -EINVAL;
+	}
+
+	if (inst->secure) {
+		rc = ion_phys(mmap->ion_client, mregion->ion_handle,
+				(unsigned long *)&paddr,
+				(size_t *)&size);
+	} else {
+		rc = ion_map_iommu(mmap->ion_client, mregion->ion_handle,
+				VIDEO_DOMAIN, VIDEO_MAIN_POOL, SZ_4K,
+				0, (unsigned long *)&paddr,
+				&size, 0, 0);
+	}
+
+	if (rc) {
+		WFD_MSG_ERR("Failed to get physical addr\n");
+		paddr = NULL;
+	} else if (size < mregion->size) {
+		WFD_MSG_ERR("Failed to map enough memory\n");
+		rc = -ENOMEM;
+	}
+
+	mregion->paddr = paddr;
+	return rc;
+}
+
+long venc_munmap(struct v4l2_subdev *sd, void *arg)
+{
+	struct venc_inst *inst = sd->dev_priv;
+	struct mem_region_map *mmap = arg;
+	struct mem_region *mregion = NULL;
+	if (!sd) {
+		WFD_MSG_ERR("Subdevice required for %s\n", __func__);
+		return -EINVAL;
+	} else if (!mregion) {
+		WFD_MSG_ERR("Memregion required for %s\n", __func__);
+		return -EINVAL;
+	}
+
+	mregion = mmap->mregion;
+	if (!inst->secure) {
+		ion_unmap_iommu(mmap->ion_client, mregion->ion_handle,
+				VIDEO_DOMAIN, VIDEO_MAIN_POOL);
+	}
+
+	return 0;
 }
 
 long venc_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
@@ -2374,6 +2550,15 @@ long venc_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 		break;
 	case ENCODE_FLUSH:
 		rc = venc_flush_buffers(sd, arg);
+		break;
+	case ENC_MMAP:
+		rc = venc_mmap(sd, arg);
+		break;
+	case ENC_MUNMAP:
+		rc = venc_munmap(sd, arg);
+		break;
+	case SET_FRAMERATE_MODE:
+		rc = venc_set_framerate_mode(sd, arg);
 		break;
 	default:
 		rc = -1;

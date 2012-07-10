@@ -57,7 +57,6 @@ static int ion_user_to_kernel(struct smem_client *client,
 			struct msm_smem *mem)
 {
 	struct ion_handle *hndl;
-	unsigned long ionflag;
 	unsigned long iova = 0;
 	unsigned long buffer_size = 0;
 	int rc = 0;
@@ -68,9 +67,10 @@ static int ion_user_to_kernel(struct smem_client *client,
 		rc = -ENOMEM;
 		goto fail_import_fd;
 	}
-	rc = ion_handle_get_flags(client->clnt, hndl, &ionflag);
-	if (rc) {
-		dprintk(VIDC_ERR, "Failed to get ion flags: %d", rc);
+	mem->kvaddr = ion_map_kernel(client->clnt, hndl);
+	if (!mem->kvaddr) {
+		pr_err("Failed to map shared mem in kernel\n");
+		rc = -EIO;
 		goto fail_map;
 	}
 	mem->kvaddr = NULL;
@@ -130,17 +130,12 @@ static int alloc_ion_mem(struct smem_client *client, size_t size,
 	mem->smem_priv = hndl;
 	mem->domain = domain;
 	mem->partition_num = partition;
-	if (map_kernel) {
-		mem->kvaddr = ion_map_kernel(client->clnt, hndl, 0);
-		if (!mem->kvaddr) {
-			dprintk(VIDC_ERR,
-				"Failed to map shared mem in kernel\n");
-			rc = -EIO;
-			goto fail_map;
-		}
-	} else
-		mem->kvaddr = NULL;
-
+	mem->kvaddr = ion_map_kernel(client->clnt, hndl);
+	if (!mem->kvaddr) {
+		pr_err("Failed to map shared mem in kernel\n");
+		rc = -EIO;
+		goto fail_map;
+	}
 	rc = get_device_address(client->clnt, hndl, mem->domain,
 		mem->partition_num, align, &iova, &buffer_size, UNCACHED);
 	if (rc) {
