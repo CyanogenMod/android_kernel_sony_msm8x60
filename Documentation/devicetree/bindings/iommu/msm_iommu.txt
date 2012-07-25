@@ -19,6 +19,10 @@ Optional properties:
 - qcom,needs-alt-core-clk : boolean to enable the secondary core clock for
   access to the IOMMU configuration registers
 
+Optional properties:
+- qcom,needs-alt-core-clk : boolean to enable the secondary core clock for
+  access to the IOMMU configuration registers
+
 Example:
 
         qcom,iommu@fda64000 {
