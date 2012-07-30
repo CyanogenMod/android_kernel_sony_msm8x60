@@ -51,6 +51,8 @@ void *wcnss_prealloc_get(unsigned int size);
 int wcnss_prealloc_put(void *ptr);
 
 void wcnss_flush_delayed_boot_votes(void);
+void wcnss_allow_suspend(void);
+void wcnss_prevent_suspend(void);
 #define wcnss_wlan_get_drvdata(dev) dev_get_drvdata(dev)
 #define wcnss_wlan_set_drvdata(dev, data) dev_set_drvdata((dev), (data))
 
