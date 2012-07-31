@@ -29,6 +29,15 @@ struct mem_region {
 	u32 cookie;
 	struct ion_handle *ion_handle;
 };
+
+/* FIXME: need to come with a less stupid name */
+struct mem_region_map {
+	struct mem_region *mregion;
+	struct ion_client *ion_client;
+	uint32_t flags;
+	void *cookie;
+};
+
 struct bufreq {
 	u32 count;
 	u32 height;
@@ -75,6 +84,8 @@ struct venc_msg_ops {
 #define FREE_INPUT_BUFFER _IOWR('V', 22, struct mem_region *)
 #define FREE_RECON_BUFFERS _IO('V', 23)
 #define ENCODE_FLUSH _IO('V', 24)
+#define ENC_MMAP _IOWR('V', 25, struct mem_region_map *)
+#define ENC_MUNMAP _IOWR('V', 26, struct mem_region_map *)
 
 extern int venc_init(struct v4l2_subdev *sd, u32 val);
 extern int venc_load_fw(struct v4l2_subdev *sd);
