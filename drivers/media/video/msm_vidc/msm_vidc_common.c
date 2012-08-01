@@ -1421,23 +1421,6 @@ exit:
 	return rc;
 }
 
-int msm_vidc_decoder_cmd(void *instance, struct v4l2_decoder_cmd *dec)
-{
-	int rc = 0;
-	struct msm_vidc_inst *inst = (struct msm_vidc_inst *)instance;
-	mutex_lock(&inst->sync_lock);
-	if (dec->cmd != V4L2_DEC_CMD_STOP)
-		return -EINVAL;
-	rc = vidc_hal_session_flush((void *)inst->session, HAL_FLUSH_OUTPUT);
-	if (rc) {
-		pr_err("Failed to get property\n");
-		goto exit;
-	}
-exit:
-	mutex_unlock(&inst->sync_lock);
-	return rc;
-}
-
 int msm_comm_set_scratch_buffers(struct msm_vidc_inst *inst)
 {
 	int rc = 0;
