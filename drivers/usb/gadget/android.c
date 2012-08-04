@@ -1541,7 +1541,7 @@ functions_show(struct device *pdev, struct device_attribute *attr, char *buf)
 	mutex_lock(&dev->mutex);
 
 	list_for_each_entry(f, &dev->enabled_functions, enabled_list)
-		buff += sprintf(buff, "%s,", f->name);
+		buff += snprintf(buff, PAGE_SIZE, "%s,", f->name);
 
 	mutex_unlock(&dev->mutex);
 
@@ -1693,7 +1693,7 @@ static ssize_t								\
 field ## _store(struct device *dev, struct device_attribute *attr,	\
 		const char *buf, size_t size)				\
 {									\
-	int value;					       		\
+	int value;							\
 	DONOTHING_FOR_GG_MODE();					\
 	if (sscanf(buf, format_string, &value) == 1) {			\
 		device_desc.field = value;				\
@@ -1716,7 +1716,9 @@ field ## _store(struct device *dev, struct device_attribute *attr,	\
 {									\
 	if (size >= sizeof(buffer)) return -EINVAL;			\
 	DONOTHING_FOR_GG_MODE();					\
-	return strlcpy(buffer, buf, sizeof(buffer));			\
+	strlcpy(buffer, buf, sizeof(buffer));				\
+	strim(buffer);							\
+	return size;							\
 }									\
 static DEVICE_ATTR(field, S_IRUGO | S_IWUSR, field ## _show, field ## _store);
 
