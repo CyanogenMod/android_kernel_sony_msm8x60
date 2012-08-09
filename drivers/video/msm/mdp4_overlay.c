@@ -1600,6 +1600,14 @@ void mdp4_mixer_stage_commit(int mixer)
 		data |= stage;
 	}
 
+	/*
+	 * stage_commit may be called from overlay_unset
+	 * for command panel, mdp clocks may be off at this time.
+	 * so mdp clock enabled is necessary
+	 */
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+	mdp_clk_ctrl(1);
+
 	mdp4_mixer_blend_setup(mixer);
 
 	off = 0;
@@ -1619,7 +1627,6 @@ void mdp4_mixer_stage_commit(int mixer)
 				mixer, data, ctrl->flush[mixer], current->pid);
 	}
 
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	local_irq_save(flags);
 	if (off)
 		outpdw(MDP_BASE + off, data);
@@ -1629,6 +1636,7 @@ void mdp4_mixer_stage_commit(int mixer)
 		ctrl->flush[mixer] = 0;
 	}
 	local_irq_restore(flags);
+	mdp_clk_ctrl(0);
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
@@ -1667,8 +1675,17 @@ void mdp4_mixer_stage_down(struct mdp4_overlay_pipe *pipe, int commit)
 			ctrl->stage[mixer][i] = NULL;  /* clear it */
 	}
 
-	if (commit || (mixer > 0 && !hdmi_prim_display))
+	if (commit || (mixer > 0 && !hdmi_prim_display)) {
+		/*
+		 * stage_down called from overlay_unset
+		 * mdp clock may be disabled for at this time
+		 * mdp clock need to be enabled in case of
+		 * command mode panel
+		 */
+		mdp_clk_ctrl(1);
 		mdp4_mixer_stage_commit(mixer);
+		mdp_clk_ctrl(0);
+	}
 }
 /*
  * mixer0: rgb3: border color at register 0x15004, 0x15008
@@ -3307,7 +3324,6 @@ int mdp4_overlay_play(struct fb_info *info, struct msmfb_overlay_data *req)
 	addr = start + img->offset;
 	pipe->srcp0_addr = addr;
 	pipe->srcp0_ystride = pipe->src_width * pipe->bpp;
-
 
 	pr_debug("%s: mixer=%d ndx=%x addr=%x flags=%x pid=%d\n", __func__,
 		pipe->mixer_num, pipe->pipe_ndx, (int)addr, pipe->flags,
