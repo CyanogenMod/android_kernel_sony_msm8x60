@@ -1513,6 +1513,12 @@ static int __devinit etm_probe(struct platform_device *pdev)
 	int ret;
 	struct resource *res;
 
+	/* Fail probe for Krait v3 until supported */
+	if (cpu_is_krait_v3()) {
+		dev_info(&pdev->dev, "ETM: failing probe for Krait v3\n");
+		return -EINVAL;
+	}
+
 	drvdata = kzalloc(sizeof(*drvdata), GFP_KERNEL);
 	if (!drvdata) {
 		ret = -ENOMEM;
