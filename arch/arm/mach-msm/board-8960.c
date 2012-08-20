@@ -2518,7 +2518,6 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_android_pmem_audio_device,
 #endif
 #endif
-	&msm_device_vidc,
 	&msm_device_bam_dmux,
 	&msm_fm_platform_init,
 #if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
@@ -3136,6 +3135,8 @@ static void __init msm8960_cdp_init(void)
 	}
 
 	platform_add_devices(common_devices, ARRAY_SIZE(common_devices));
+	msm8960_add_vidc_device();
+
 	msm8960_pm8921_gpio_mpp_init();
 	platform_add_devices(cdp_devices, ARRAY_SIZE(cdp_devices));
 	msm8960_init_smsc_hub();
