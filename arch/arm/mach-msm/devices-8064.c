@@ -2331,40 +2331,94 @@ struct platform_device apq8064_cpu_idle_device = {
 	},
 };
 
-static struct msm_dcvs_freq_entry apq8064_freq[] = {
-	{ 384000, 166981,  345600},
-	{ 702000, 213049,  632502},
-	{1026000, 285712,  925613},
-	{1242000, 383945, 1176550},
-	{1458000, 419729, 1465478},
-	{1512000, 434116, 1546674},
+static struct msm_dcvs_sync_rule apq8064_dcvs_sync_rules[] = {
+	{1026000,	400000},
+	{384000,	200000},
+	{0,		128000},
+};
 
+static struct msm_dcvs_platform_data apq8064_dcvs_data = {
+	.sync_rules	= apq8064_dcvs_sync_rules,
+	.num_sync_rules = ARRAY_SIZE(apq8064_dcvs_sync_rules),
+	.gpu_max_nom_khz = 320000,
+};
+
+struct platform_device apq8064_dcvs_device = {
+	.name		= "dcvs",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &apq8064_dcvs_data,
+	},
 };
 
 static struct msm_dcvs_core_info apq8064_core_info = {
-	.freq_tbl = &apq8064_freq[0],
-	.core_param = {
-		.max_time_us = 100000,
-		.num_freq = ARRAY_SIZE(apq8064_freq),
+	.num_cores		= 4,
+	.sensors		= (int[]){7, 8, 9, 10},
+	.thermal_poll_ms	= 60000,
+	.core_param		= {
+		.core_type	= MSM_DCVS_CORE_TYPE_CPU,
 	},
-	.algo_param = {
-		.slack_time_us = 58000,
-		.scale_slack_time = 0,
-		.scale_slack_time_pct = 0,
-		.disable_pc_threshold = 1458000,
-		.em_window_size = 100000,
-		.em_max_util_pct = 97,
-		.ss_window_size = 1000000,
-		.ss_util_pct = 95,
-		.ss_iobusy_conv = 100,
+	.algo_param		= {
+		.disable_pc_threshold		= 1458000,
+		.em_win_size_min_us		= 100000,
+		.em_win_size_max_us		= 300000,
+		.em_max_util_pct		= 97,
+		.group_id			= 1,
+		.max_freq_chg_time_us		= 100000,
+		.slack_mode_dynamic		= 0,
+		.slack_weight_thresh_pct	= 3,
+		.slack_time_min_us		= 45000,
+		.slack_time_max_us		= 45000,
+		.ss_no_corr_below_freq		= 0,
+		.ss_win_size_min_us		= 1000000,
+		.ss_win_size_max_us		= 1000000,
+		.ss_util_pct			= 95,
 	},
+	.energy_coeffs		= {
+		.active_coeff_a		= 336,
+		.active_coeff_b		= 0,
+		.active_coeff_c		= 0,
+
+		.leakage_coeff_a	= -17720,
+		.leakage_coeff_b	= 37,
+		.leakage_coeff_c	= 3329,
+		.leakage_coeff_d	= -277,
+	},
+	.power_param		= {
+		.current_temp	= 25,
+		.num_freq	= 0, /* set at runtime */
+	}
+};
+
+#define APQ8064_LPM_LATENCY  1000 /* >100 usec for WFI */
+
+static struct msm_gov_platform_data gov_platform_data = {
+	.info = &apq8064_core_info,
+	.latency = APQ8064_LPM_LATENCY,
 };
 
 struct platform_device apq8064_msm_gov_device = {
 	.name = "msm_dcvs_gov",
 	.id = -1,
 	.dev = {
-		.platform_data = &apq8064_core_info,
+		.platform_data = &gov_platform_data,
+	},
+};
+
+static struct msm_mpd_algo_param apq8064_mpd_algo_param = {
+	.em_win_size_min_us	= 10000,
+	.em_win_size_max_us	= 100000,
+	.em_max_util_pct	= 90,
+	.online_util_pct_min	= 60,
+	.slack_time_min_us	= 50000,
+	.slack_time_max_us	= 100000,
+};
+
+struct platform_device apq8064_msm_mpd_device = {
+	.name	= "msm_mpdecision",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &apq8064_mpd_algo_param,
 	},
 };
 
