@@ -92,6 +92,16 @@ extern struct mdp_ccs mdp_ccs_yuv2rgb ;
 extern struct mdp_ccs mdp_ccs_rgb2yuv ;
 extern unsigned char hdmi_prim_display;
 
+struct vsync {
+	ktime_t vsync_time;
+	struct device *dev;
+	struct work_struct vsync_work;
+	int vsync_irq_enabled;
+	struct completion vsync_wait;
+};
+
+extern struct vsync vsync_cntrl;
+
 /*
  * MDP Image Structure
  */
@@ -787,6 +797,9 @@ static inline int mdp_bus_scale_update_request(uint32_t index)
 	return 0;
 }
 #endif
+void mdp_dma_vsync_ctrl(int enable);
+void mdp_dma_video_vsync_ctrl(int enable);
+void mdp_dma_lcdc_vsync_ctrl(int enable);
 
 #ifdef MDP_HW_VSYNC
 void vsync_clk_prepare_enable(void);
