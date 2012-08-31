@@ -227,8 +227,10 @@ void mdp4_dsi_cmd_pipe_queue(int cndx, struct mdp4_overlay_pipe *pipe)
 
 	vctrl = &vsync_ctrl_db[cndx];
 
-	if (atomic_read(&vctrl->suspend) > 0)
+	if (atomic_read(&vctrl->suspend)) {
+		pr_err("%s: suspended, no more pipe queue\n", __func__);
 		return;
+	}
 
 	mutex_lock(&vctrl->update_lock);
 	undx =  vctrl->update_ndx;
@@ -368,7 +370,7 @@ int mdp4_dsi_cmd_pipe_commit(void)
 		vsync_irq_enable(INTR_DMA_P_DONE, MDP_DMAP_TERM);
 		vctrl->dmap_koff++;
 	}
-	pr_debug("%s: kickoff\n", __func__);
+	pr_debug("%s: kickoff, pid=%d\n", __func__, current->pid);
 	/* kickoff overlay engine */
 	mdp4_stat.kickoff_ov0++;
 	outpdw(MDP_BASE + 0x0004, 0);
@@ -611,11 +613,11 @@ static void clk_ctrl_work(struct work_struct *work)
 		vctrl->clk_enabled = 0;
 		vctrl->clk_control = 0;
 		spin_unlock_irqrestore(&vctrl->spin_lock, flags);
-		pr_debug("%s: SET_CLK_OFF\n", __func__);
 		/* make sure dsi link is idle */
 		mipi_dsi_mdp_busy_wait();
 		mipi_dsi_clk_cfg(0);
 		mdp_clk_ctrl(0);
+		pr_debug("%s: SET_CLK_OFF, pid=%d\n", __func__, current->pid);
 	} else {
 		spin_unlock_irqrestore(&vctrl->spin_lock, flags);
 	}
@@ -949,7 +951,7 @@ int mdp4_dsi_cmd_on(struct platform_device *pdev)
 	struct msm_fb_data_type *mfd;
 	struct vsycn_ctrl *vctrl;
 
-	pr_debug("%s+:\n", __func__);
+	pr_debug("%s+: pid=%d\n", __func__, current->pid);
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
 	mfd->cont_splash_done = 1;
@@ -967,7 +969,6 @@ int mdp4_dsi_cmd_on(struct platform_device *pdev)
 	atomic_set(&vctrl->suspend, 0);
 	pr_debug("%s-:\n", __func__);
 
-
 	return ret;
 }
 
@@ -978,9 +979,9 @@ int mdp4_dsi_cmd_off(struct platform_device *pdev)
 	struct msm_fb_data_type *mfd;
 	struct vsycn_ctrl *vctrl;
 	struct mdp4_overlay_pipe *pipe;
-	unsigned long flags;
+	int need_wait, cnt;
 
-	pr_debug("%s+:\n", __func__);
+	pr_debug("%s+: pid=%d\n", __func__, current->pid);
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
 
@@ -991,30 +992,32 @@ int mdp4_dsi_cmd_off(struct platform_device *pdev)
 		return ret;
 	}
 
+	need_wait = 0;
+	mutex_lock(&vctrl->update_lock);
 	atomic_set(&vctrl->suspend, 1);
 
-	spin_lock_irqsave(&vctrl->spin_lock, flags);
-	/*
-	 * last pan_display done && clock still enabled,
-	 * force tick = 1 and wait for clock to be
-	 * shutdown gracefully
-	 */
-	if (vctrl->pan_display <= 0) {
-		if (vctrl->expire_tick)
-			vctrl->expire_tick = 1;
-	}
-	spin_unlock_irqrestore(&vctrl->spin_lock, flags);
+	pr_debug("%s: clk=%d pan=%d\n", __func__,
+			vctrl->clk_enabled, vctrl->pan_display);
+	if (vctrl->clk_enabled)
+		need_wait = 1;
+	mutex_unlock(&vctrl->update_lock);
 
-	msleep(20 * vctrl->expire_tick);
+	cnt = 0;
+	if (need_wait) {
+		while (vctrl->clk_enabled) {
+			msleep(20);
+			cnt++;
+		}
+	}
+
+	/* message for system suspnded */
+	pr_info("%s: mdp clocks are disabled with cnt=%d\n", __func__, cnt);
 
 	/* sanity check, free pipes besides base layer */
 	mdp4_overlay_unset_mixer(pipe->mixer_num);
 	mdp4_mixer_stage_down(pipe, 1);
 	mdp4_overlay_pipe_free(pipe);
 	vctrl->base_pipe = NULL;
-
-	if (vctrl->clk_enabled)
-		pr_warn("%s: mdp clock still enabled\n", __func__);
 
 	pr_debug("%s-:\n", __func__);
 	return ret;
@@ -1065,16 +1068,22 @@ void mdp4_dsi_cmd_overlay(struct msm_fb_data_type *mfd)
 	}
 
 	mutex_lock(&vctrl->update_lock);
+	if (atomic_read(&vctrl->suspend)) {
+		mutex_unlock(&vctrl->update_lock);
+		pr_err("%s: suspended, no more pan display\n", __func__);
+		return;
+	}
+
 	spin_lock_irqsave(&vctrl->spin_lock, flags);
 	vctrl->clk_control = 0;
 	vctrl->pan_display++;
 	spin_unlock_irqrestore(&vctrl->spin_lock, flags);
 	if (vctrl->clk_enabled == 0) {
-		pr_debug("%s: SET_CLK_ON\n", __func__);
 		mipi_dsi_clk_cfg(1);
 		mdp_clk_ctrl(1);
 		vctrl->clk_enabled = 1;
 		vsync_irq_enable(INTR_PRIMARY_RDPTR, MDP_PRIM_RDPTR_TERM);
+		pr_debug("%s: SET_CLK_ON, pid=%d\n", __func__, current->pid);
 	}
 	mutex_unlock(&vctrl->update_lock);
 
