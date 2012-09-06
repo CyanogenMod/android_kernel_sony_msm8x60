@@ -50,7 +50,7 @@
 #include <linux/atmel_maxtouch.h>
 #include <linux/fmem.h>
 #include <linux/msm_adc.h>
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #include "devices.h"
 #include "timer.h"
 #include "board-msm7x27a-regulator.h"
