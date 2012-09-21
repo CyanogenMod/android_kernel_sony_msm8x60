@@ -156,8 +156,8 @@ static struct msm_panel_info *get_panel_info(void)
 	pinfo.fb_num = 2;
 	pinfo.clk_rate = 416000000;
 
-	pinfo.mipi.xres_pad = 0;
-	pinfo.mipi.yres_pad = 0;
+	pinfo.lcdc.xres_pad = 0;
+	pinfo.lcdc.yres_pad = 0;
 	pinfo.mipi.mode = DSI_VIDEO_MODE;
 	pinfo.mipi.pulse_mode_hsa_he = TRUE;
 	pinfo.mipi.hfp_power_stop = FALSE;
