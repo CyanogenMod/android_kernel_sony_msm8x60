@@ -381,6 +381,7 @@ static struct msm_panel_info *get_panel_info(void)
 	pinfo.mipi.frame_rate  = 60;
 	pinfo.mipi.dsi_phy_db =
 		(struct mipi_dsi_phy_ctrl *)dsi_video_mode_phy_db;
+	pinfo.mipi.esc_byte_ratio = 4;
 
 	return &pinfo;
 }
