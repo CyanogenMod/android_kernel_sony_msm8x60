@@ -300,11 +300,8 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 
 int mdp4_dsi_video_off(struct platform_device *pdev)
 {
-	struct msm_fb_data_type *mfd;
 	int ret = 0;
 	struct msm_fb_data_type *mfd;
-
-	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
 
