@@ -217,13 +217,13 @@ int mipi_dsi_eco_mode_switch(struct msm_fb_data_type *mfd)
 
 	if (dsi_data->eco_mode_on && pctrl->eco_mode_gamma_cmds) {
 		mipi_dsi_buf_init(&dsi_data->tx_buf);
-		mipi_dsi_cmds_tx(mfd, &dsi_data->tx_buf,
+		mipi_dsi_cmds_tx(&dsi_data->tx_buf,
 			pctrl->eco_mode_gamma_cmds,
 			pctrl->eco_mode_gamma_cmds_size);
 		dev_info(&mfd->panel_pdev->dev, "ECO MODE ON\n");
 	} else if (pctrl->normal_gamma_cmds) {
 		mipi_dsi_buf_init(&dsi_data->tx_buf);
-		mipi_dsi_cmds_tx(mfd, &dsi_data->tx_buf,
+		mipi_dsi_cmds_tx(&dsi_data->tx_buf,
 			pctrl->normal_gamma_cmds,
 			pctrl->normal_gamma_cmds_size);
 		dev_info(&mfd->panel_pdev->dev, "ECO MODE OFF\n");

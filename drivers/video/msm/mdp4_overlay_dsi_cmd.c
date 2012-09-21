@@ -950,7 +950,7 @@ int mdp4_dsi_cmd_off(struct platform_device *pdev)
 	 * after footswitch on later
 	 */
 
-#if 0 FIXME
+#if 0 // FIXME
 	if (pdata && pdata->power_on_panel_at_pan)
 		mdp4_dsi_cmd_dma_busy_wait(mfd);
 #endif

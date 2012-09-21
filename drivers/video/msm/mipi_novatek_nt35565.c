@@ -27,7 +27,7 @@ static int mipi_nt35565_ic_on_disp_off(struct msm_fb_data_type *mfd)
 
 		if (pctrl->display_init_cmds) {
 			mipi_dsi_buf_init(&dsi_data->tx_buf);
-			mipi_dsi_cmds_tx(mfd, &dsi_data->tx_buf,
+			mipi_dsi_cmds_tx(&dsi_data->tx_buf,
 				pctrl->display_init_cmds,
 				pctrl->display_init_cmds_size);
 		}
@@ -51,13 +51,13 @@ static int mipi_nt35565_ic_on_disp_on(struct msm_fb_data_type *mfd)
 
 		if (dsi_data->eco_mode_on && pctrl->display_on_eco_cmds) {
 			mipi_dsi_buf_init(&dsi_data->tx_buf);
-			mipi_dsi_cmds_tx(mfd, &dsi_data->tx_buf,
+			mipi_dsi_cmds_tx(&dsi_data->tx_buf,
 				pctrl->display_on_eco_cmds,
 				pctrl->display_on_eco_cmds_size);
 			dev_info(&mfd->panel_pdev->dev, "ECO MODE ON\n");
 		} else {
 			mipi_dsi_buf_init(&dsi_data->tx_buf);
-			mipi_dsi_cmds_tx(mfd, &dsi_data->tx_buf,
+			mipi_dsi_cmds_tx(&dsi_data->tx_buf,
 				pctrl->display_on_cmds,
 				pctrl->display_on_cmds_size);
 			dev_info(&mfd->panel_pdev->dev, "ECO MODE OFF\n");
@@ -80,7 +80,7 @@ static int mipi_nt35565_disp_off(struct msm_fb_data_type *mfd)
 		mipi_dsi_op_mode_config(DSI_CMD_MODE);
 
 		mipi_dsi_buf_init(&dsi_data->tx_buf);
-		mipi_dsi_cmds_tx(mfd, &dsi_data->tx_buf,
+		mipi_dsi_cmds_tx(&dsi_data->tx_buf,
 			dsi_data->panel->pctrl->display_off_cmds,
 			dsi_data->panel->pctrl->display_off_cmds_size);
 	} else {
