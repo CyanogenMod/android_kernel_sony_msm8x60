@@ -2711,6 +2711,17 @@ static int mdp_probe(struct platform_device *pdev)
 	return rc;
 }
 
+unsigned int mdp_check_suspended(void)
+{
+	unsigned int ret;
+
+	mutex_lock(&mdp_suspend_mutex);
+	ret = mdp_suspended;
+	mutex_unlock(&mdp_suspend_mutex);
+
+	return ret;
+}
+
 void mdp_footswitch_ctrl(boolean on)
 {
 	mutex_lock(&mdp_suspend_mutex);
