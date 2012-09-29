@@ -918,7 +918,6 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 		mdp4_lcdc_pipe_queue(0, pipe);
 	}
 
-	mutex_lock(&mfd->dma->ov_mutex);
 	mdp4_overlay_mdp_perf_upd(mfd, 1);
 
 	cnt = 0;
