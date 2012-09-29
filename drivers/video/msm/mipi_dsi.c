@@ -79,13 +79,14 @@ static int mipi_dsi_off(struct platform_device *pdev)
 
 	mdp4_overlay_dsi_state_set(ST_DSI_SUSPEND);
 
-	/* make sure dsi clk is on so that
-	 * dcs commands can be sent
-	 */
-	mipi_dsi_clk_cfg(1);
+	if (mfd->panel_info.type == MIPI_CMD_PANEL) {
+		mipi_dsi_prepare_clocks();
+		mipi_dsi_ahb_ctrl(1);
+		mipi_dsi_clk_enable();
 
-	/* make sure dsi_cmd_mdp is idle */
-	mipi_dsi_cmd_mdp_busy();
+		/* make sure dsi_cmd_mdp is idle */
+		mipi_dsi_cmd_mdp_busy();
+	}
 
 	/*
 	 * Desctiption: change to DSI_CMD_MODE since it needed to
@@ -307,7 +308,11 @@ static int mipi_dsi_on(struct platform_device *pdev)
 			}
 			mipi_dsi_set_tear_on(mfd);
 		}
+		mipi_dsi_clk_disable();
+		mipi_dsi_ahb_ctrl(0);
+		mipi_dsi_unprepare_clocks();
 	}
+
 
 #ifdef CONFIG_MSM_BUS_SCALING
 	mdp_bus_scale_update_request(2);

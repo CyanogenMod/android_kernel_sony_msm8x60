@@ -45,18 +45,19 @@ int first_pixel_start_y;
 static int lcdc_enabled;
 
 #define MAX_CONTROLLER	1
+#define VSYNC_EXPIRE_TICK 1
 
 static struct vsycn_ctrl {
 	struct device *dev;
 	int inited;
 	int update_ndx;
+	int expire_tick;
 	int ov_koff;
 	int ov_done;
 	atomic_t suspend;
 	int wait_vsync_cnt;
 	int blt_change;
 	int blt_free;
-	int fake_vsync;
 	struct mutex update_lock;
 	struct completion ov_comp;
 	struct completion dmap_comp;
@@ -267,22 +268,15 @@ void mdp4_lcdc_vsync_ctrl(struct fb_info *info, int enable)
 
 	vctrl = &vsync_ctrl_db[cndx];
 
-	if (vctrl->fake_vsync) {
-		vctrl->fake_vsync = 0;
-		schedule_work(&vctrl->vsync_work);
-	}
-
-	if (vctrl->vsync_irq_enabled == enable)
-		return;
-
 	pr_debug("%s: vsync enable=%d\n", __func__, enable);
 
-	vctrl->vsync_irq_enabled = enable;
-
-	if (enable)
+	if (enable && !vctrl->vsync_irq_enabled) {
+		schedule_work(&vctrl->vsync_work);
+		vctrl->vsync_irq_enabled = 1;
+		vctrl->expire_tick = 0;
 		vsync_irq_enable(INTR_PRIMARY_VSYNC, MDP_PRIM_VSYNC_TERM);
-	else
-		vsync_irq_disable(INTR_PRIMARY_VSYNC, MDP_PRIM_VSYNC_TERM);
+		pr_debug("%s: VSYNC_on\n", __func__);
+	}
 }
 
 void mdp4_lcdc_wait4vsync(int cndx, long long *vtime)
@@ -461,7 +455,6 @@ int mdp4_lcdc_on(struct platform_device *pdev)
 
 	vctrl->mfd = mfd;
 	vctrl->dev = mfd->fbi->dev;
-	vctrl->fake_vsync = 1;
 
 	/* mdp clock on */
 	mdp_clk_ctrl(1);
@@ -678,7 +671,7 @@ int mdp4_lcdc_off(struct platform_device *pdev)
 		}
 	}
 
-	vctrl->fake_vsync = 1;
+	vctrl->vsync_irq_enabled = 0;
 
 	/* MDP clock disable */
 	mdp_clk_ctrl(0);
@@ -754,6 +747,15 @@ void mdp4_primary_vsync_lcdc(void)
 		vctrl->wait_vsync_cnt = 0;
 	}
 
+	if (vctrl->expire_tick) {
+		vctrl->expire_tick--;
+		if (vctrl->expire_tick == 0) {
+			pr_debug("%s: VSYNC_off\n", __func__);
+			vctrl->vsync_irq_enabled = 0;
+			vsync_irq_disable(INTR_PRIMARY_VSYNC,
+						MDP_PRIM_VSYNC_TERM);
+		}
+	}
 	spin_unlock(&vctrl->spin_lock);
 }
 
@@ -895,6 +897,7 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	int cnt, cndx = 0;
 	struct vsycn_ctrl *vctrl;
 	struct mdp4_overlay_pipe *pipe;
+	unsigned long flags;
 
 
 	vctrl = &vsync_ctrl_db[cndx];
@@ -917,6 +920,10 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 
 		mdp4_lcdc_pipe_queue(0, pipe);
 	}
+
+	spin_lock_irqsave(&vctrl->spin_lock, flags);
+	vctrl->expire_tick = VSYNC_EXPIRE_TICK;
+	spin_unlock_irqrestore(&vctrl->spin_lock, flags);
 
 	mdp4_overlay_mdp_perf_upd(mfd, 1);
 
