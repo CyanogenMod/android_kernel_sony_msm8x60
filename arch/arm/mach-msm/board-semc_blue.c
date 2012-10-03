@@ -221,10 +221,6 @@ static struct platform_device msm_fm_platform_init = {
 #define MSM_PMEM_SIZE 0x3C00000 /* 60 Mbytes */
 #define MSM_HDMI_PRIM_PMEM_SIZE 0x4000000 /* 64 Mbytes */
 
-#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-#define MSM_PMEM_KERNEL_EBI1_SIZE	0x280000
-#define MSM_ION_SF_SIZE			MSM_PMEM_SIZE
-#define MSM_ION_MM_FW_SIZE     0x200000 /* (2MB) */
 #ifdef CONFIG_SEMC_SWIQI
 #define MSM_ION_SWIQI_SIZE 0x2000000 /* 32MB */
 #else
@@ -234,12 +230,24 @@ static struct platform_device msm_fm_platform_init = {
 #define MSM_ION_SWIQI_SIZE 0
 #endif
 #endif
-#define MSM_ION_MM_SIZE			(MSM_PMEM_ADSP_SIZE + MSM_ION_SWIQI_SIZE)
-#define MSM_ION_CAMERA_SIZE	0x6400000
+
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+#define MSM_PMEM_KERNEL_EBI1_SIZE	0x280000
+#ifdef CONFIG_MSM_IOMMU
+#define MSM_ION_MM_SIZE            (0x3800000 + MSM_ION_SWIQI_SIZE)
+#define MSM_ION_SF_SIZE            0x0
+#define MSM_ION_HEAP_NUM       7
+#else
+#define MSM_ION_MM_SIZE            (MSM_PMEM_ADSP_SIZE + MSM_ION_SWIQI_SIZE)
+#define MSM_ION_SF_SIZE            MSM_PMEM_SIZE
+#define MSM_ION_HEAP_NUM       8
+#endif
+#define MSM_ION_MM_FW_SIZE      0x200000 /* (2MB) */
 #define MSM_ION_QSECOM_SIZE	0x600000 /* (6MB) */
 #define MSM_ION_MFC_SIZE	SZ_8K
-#define MSM_ION_AUDIO_SIZE     0x2B4000
-#define MSM_ION_HEAP_NUM	8
+#define MSM_ION_AUDIO_SIZE      0x2B4000
+#define MSM_ION_CAMERA_SIZE	0x6400000
+
 #define MSM_HDMI_PRIM_ION_SF_SIZE MSM_HDMI_PRIM_PMEM_SIZE
 #define MSM8960_FIXED_AREA_START 0xb0000000
 #define MAX_FIXED_AREA_SIZE	0x10000000
@@ -498,6 +506,7 @@ static struct ion_platform_data ion_pdata = {
 			.memory_type	= ION_EBI_TYPE,
 			.extra_data	= (void *) &cp_mfc_ion_pdata,
 		},
+#ifndef CONFIG_MSM_IOMMU
 		{
 			.id	= ION_SF_HEAP_ID,
 			.type	= ION_HEAP_TYPE_CARVEOUT,
@@ -506,6 +515,7 @@ static struct ion_platform_data ion_pdata = {
 			.memory_type = ION_EBI_TYPE,
 			.extra_data = (void *) &co_ion_pdata,
 		},
+#endif
 		{
 			.id		= ION_IOMMU_HEAP_ID,
 			.type		= ION_HEAP_TYPE_IOMMU,
