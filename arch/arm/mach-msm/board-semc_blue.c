@@ -217,7 +217,6 @@ static struct platform_device msm_fm_platform_init = {
 #define PM8921_MPP_IRQ_BASE		(PM8921_IRQ_BASE + NR_GPIO_IRQS)
 
 #define MSM_PMEM_ADSP_SIZE         0x7800000 /* Need to be multiple of 64K */
-#define MSM_PMEM_CAMERA_SIZE       0x6400000
 #define MSM_PMEM_AUDIO_SIZE        0x1000 /* (4KB) */
 #define MSM_PMEM_SIZE 0x3C00000 /* 60 Mbytes */
 #define MSM_HDMI_PRIM_PMEM_SIZE 0x4000000 /* 64 Mbytes */
@@ -236,7 +235,7 @@ static struct platform_device msm_fm_platform_init = {
 #endif
 #endif
 #define MSM_ION_MM_SIZE			(MSM_PMEM_ADSP_SIZE + MSM_ION_SWIQI_SIZE)
-#define MSM_ION_CAMERA_SIZE	MSM_PMEM_CAMERA_SIZE
+#define MSM_ION_CAMERA_SIZE	0x6400000
 #define MSM_ION_QSECOM_SIZE	0x600000 /* (6MB) */
 #define MSM_ION_MFC_SIZE	SZ_8K
 #define MSM_ION_AUDIO_SIZE     0x2B4000
@@ -279,15 +278,6 @@ static int __init pmem_adsp_size_setup(char *p)
 }
 early_param("pmem_adsp_size", pmem_adsp_size_setup);
 
-static unsigned pmem_camera_size = MSM_PMEM_CAMERA_SIZE;
-
-static int __init pmem_camera_size_setup(char *p)
-{
-	pmem_camera_size = memparse(p, NULL);
-	return 0;
-}
-early_param("pmem_camera_size", pmem_camera_size_setup);
-
 static unsigned pmem_audio_size = MSM_PMEM_AUDIO_SIZE;
 
 static int __init pmem_audio_size_setup(char *p)
@@ -323,20 +313,6 @@ static struct platform_device android_pmem_adsp_device = {
 	.name = "android_pmem",
 	.id = 2,
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
-};
-
-static struct android_pmem_platform_data android_pmem_camera_pdata = {
-	.name = "pmem_camera",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 1,
-	.memory_type = MEMTYPE_EBI1,
-	.map_on_demand = 1,
-};
-
-static struct platform_device android_pmem_camera_device = {
-	.name = "android_pmem",
-	.id = 3,
-	.dev = { .platform_data = &android_pmem_camera_pdata },
 };
 #endif
 
@@ -426,7 +402,6 @@ static void __init size_pmem_devices(void)
 #ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 	android_pmem_adsp_pdata.size = pmem_adsp_size;
 	android_pmem_pdata.size = pmem_size;
-	android_pmem_camera_pdata.size = pmem_camera_size;
 #endif
 	android_pmem_audio_pdata.size = MSM_PMEM_AUDIO_SIZE;
 #endif
@@ -443,7 +418,6 @@ static void __init reserve_pmem_memory(void)
 #ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 	reserve_memory_for(&android_pmem_adsp_pdata);
 	reserve_memory_for(&android_pmem_pdata);
-	reserve_memory_for(&android_pmem_camera_pdata);
 #endif
 	reserve_memory_for(&android_pmem_audio_pdata);
 	msm8960_reserve_table[MEMTYPE_EBI1].size += pmem_kernel_ebi1_size;
@@ -5247,7 +5221,6 @@ static struct platform_device *common_devices[] __initdata = {
 #ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
 	&android_pmem_device,
 	&android_pmem_adsp_device,
-	&android_pmem_camera_device,
 #endif
 	&android_pmem_audio_device,
 #endif
