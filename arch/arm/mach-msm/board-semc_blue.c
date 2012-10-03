@@ -220,7 +220,6 @@ static struct platform_device msm_fm_platform_init = {
 #define MSM_PMEM_CAMERA_SIZE       0x6400000
 #define MSM_PMEM_AUDIO_SIZE        0x1000 /* (4KB) */
 #define MSM_PMEM_SIZE 0x3C00000 /* 60 Mbytes */
-#define MSM_PMEM_TZ_SIZE           0x100000
 #define MSM_HDMI_PRIM_PMEM_SIZE 0x4000000 /* 64 Mbytes */
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
@@ -289,15 +288,6 @@ static int __init pmem_camera_size_setup(char *p)
 }
 early_param("pmem_camera_size", pmem_camera_size_setup);
 
-static unsigned pmem_tz_size = MSM_PMEM_TZ_SIZE;
-
-static int __init pmem_tz_size_setup(char *p)
-{
-	pmem_tz_size = memparse(p, NULL);
-	return 0;
-}
-early_param("pmem_tz_size", pmem_tz_size_setup);
-
 static unsigned pmem_audio_size = MSM_PMEM_AUDIO_SIZE;
 
 static int __init pmem_audio_size_setup(char *p)
@@ -349,20 +339,6 @@ static struct platform_device android_pmem_camera_device = {
 	.dev = { .platform_data = &android_pmem_camera_pdata },
 };
 #endif
-
-static struct android_pmem_platform_data android_pmem_tz_pdata = {
-	.name = "pmem_tz",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 1,
-	.memory_type = MEMTYPE_EBI1,
-	.map_on_demand = 1,
-};
-
-static struct platform_device android_pmem_tz_device = {
-	.name = "android_pmem",
-	.id = 5,
-	.dev = { .platform_data = &android_pmem_tz_pdata },
-};
 
 static struct android_pmem_platform_data android_pmem_audio_pdata = {
 	.name = "pmem_audio",
@@ -453,7 +429,6 @@ static void __init size_pmem_devices(void)
 	android_pmem_camera_pdata.size = pmem_camera_size;
 #endif
 	android_pmem_audio_pdata.size = MSM_PMEM_AUDIO_SIZE;
-	android_pmem_tz_pdata.size = pmem_tz_size;
 #endif
 }
 
@@ -471,7 +446,6 @@ static void __init reserve_pmem_memory(void)
 	reserve_memory_for(&android_pmem_camera_pdata);
 #endif
 	reserve_memory_for(&android_pmem_audio_pdata);
-	reserve_memory_for(&android_pmem_tz_pdata);
 	msm8960_reserve_table[MEMTYPE_EBI1].size += pmem_kernel_ebi1_size;
 #endif
 }
@@ -5276,7 +5250,6 @@ static struct platform_device *common_devices[] __initdata = {
 	&android_pmem_camera_device,
 #endif
 	&android_pmem_audio_device,
-	&android_pmem_tz_device,
 #endif
 	&msm_fb_device,
 	&msm_device_vidc,
