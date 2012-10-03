@@ -236,14 +236,15 @@ static struct platform_device msm_fm_platform_init = {
 #ifdef CONFIG_MSM_IOMMU
 #define MSM_ION_MM_SIZE            (0x3800000 + MSM_ION_SWIQI_SIZE)
 #define MSM_ION_SF_SIZE            0x0
+#define MSM_ION_QSECOM_SIZE        0x780000 /* (7.5MB) */
 #define MSM_ION_HEAP_NUM       7
 #else
 #define MSM_ION_MM_SIZE            (MSM_PMEM_ADSP_SIZE + MSM_ION_SWIQI_SIZE)
 #define MSM_ION_SF_SIZE            MSM_PMEM_SIZE
+#define MSM_ION_QSECOM_SIZE        0x600000 /* (6MB) */
 #define MSM_ION_HEAP_NUM       8
 #endif
 #define MSM_ION_MM_FW_SIZE      0x200000 /* (2MB) */
-#define MSM_ION_QSECOM_SIZE	0x600000 /* (6MB) */
 #define MSM_ION_MFC_SIZE	SZ_8K
 #define MSM_ION_AUDIO_SIZE      0x2B4000
 #define MSM_ION_CAMERA_SIZE	0x6400000
