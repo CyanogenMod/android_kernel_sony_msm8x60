@@ -33,6 +33,9 @@
 #define LC898300_REG_BRAKE      0x04
 #define LC898300_MIN_ON      10
 
+static unsigned long intensity;
+static int gIntensity = VIB_CMD_PWM_8_15;
+
 enum vib_cmd_conf {
 	VIB_CMD_PROBE,
 	VIB_CMD_SUSPEND,
@@ -49,6 +52,8 @@ struct lc898300_data {
 	struct mutex lock;
 	bool on;
 };
+
+static int lc898300_set_intensity(struct lc898300_data *data, int val);
 
 static const struct i2c_device_id lc898300_id[] = {
 	{ LC898300_I2C_NAME, 0 },
@@ -77,6 +82,9 @@ static void lc898300_vib_enable(struct timed_output_dev *dev, int value)
 {
 	struct lc898300_data *data = container_of(dev, struct lc898300_data,
 					 timed_dev);
+
+	/* set intensity */
+	lc898300_set_intensity(data, gIntensity);
 
 	mutex_lock(&data->lock);
 	hrtimer_cancel(&data->vib_timer);
@@ -180,11 +188,80 @@ static enum hrtimer_restart vibrator_timer_func(struct hrtimer *timer)
 	return HRTIMER_NORESTART;
 }
 
+static ssize_t attr_intensity_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int count;
+
+	count = sprintf(buf, "%d\n", gIntensity);
+	pr_info("[lc898300] current intensity: %d\n", gIntensity);
+
+	return count;
+}
+
+ssize_t attr_intensity_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t size)
+{
+	if (kstrtoul(buf, 0, &intensity))
+		pr_err("[lc898300] error while storing new intensity\n");
+
+	/* make sure new intensity is in range */
+	if(intensity > VIB_CMD_PWM_15_15) {
+		intensity = VIB_CMD_PWM_15_15;
+	} else if (intensity < VIB_CMD_PWM_OFF) {
+		intensity = VIB_CMD_PWM_OFF;
+	}
+	gIntensity = intensity;
+	pr_info("[lc898300] new intensity: %d\n", gIntensity);
+
+	return size;
+}
+
+static int lc898300_set_intensity(struct lc898300_data *data, int val)
+{
+	struct lc898300_platform_data *pdata = data->pdata;
+	struct lc898300_vib_cmd *vib_cmd_info = pdata->vib_cmd_info;
+	int rc = 0;
+
+	vib_cmd_info->vib_cmd_intensity = val;
+	rc = i2c_smbus_write_byte_data(data->client, LC898300_REG_HBPW,
+					vib_cmd_info->vib_cmd_intensity);
+
+	if (rc)
+		dev_err(data->dev, "Failed to set intensity\n");
+
+	return rc;
+}
+
+static struct device_attribute attributes[] = {
+	__ATTR(intensity, 0660,
+		attr_intensity_show, attr_intensity_store),
+};
+
+static int lc898300_create_sysfs_interfaces(struct device *dev)
+{
+	int i;
+	int result;
+
+	for (i = 0; i < ARRAY_SIZE(attributes); i++) {
+		result = device_create_file(dev, &attributes[i]);
+		if (result) {
+			for (; i >= 0; i--)
+				device_remove_file(dev, &attributes[i]);
+			dev_err(dev, "%s(): Failed to create sysfs I/F\n", __func__);
+			return result;
+		}
+	}
+
+	return result;
+}
+
 static int __devinit lc898300_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
 	struct lc898300_data *data;
-	int rc;
+	int rc, rcsfs;
 
 	if (!i2c_check_functionality(client->adapter,
 				I2C_FUNC_SMBUS_BYTE_DATA))
@@ -221,6 +298,11 @@ static int __devinit lc898300_probe(struct i2c_client *client,
 	rc = timed_output_dev_register(&data->timed_dev);
 	if (rc < 0)
 		goto error;
+
+	rcsfs = lc898300_create_sysfs_interfaces(&client->dev);
+	if (rcsfs) {
+		dev_err(&data->client->dev, "%s(): create sysfs failed", __func__);
+	}
 
 	return rc;
 
