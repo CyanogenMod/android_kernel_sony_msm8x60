@@ -2,7 +2,6 @@
  * This is the new netlink-based wireless configuration interface.
  *
  * Copyright 2006-2010	Johannes Berg <johannes@sipsolutions.net>
- * Copyright (C) 2012 Sony Mobile Communications AB.
  */
 
 #include <linux/if.h>
@@ -3864,12 +3863,7 @@ static bool nl80211_valid_auth_type(enum nl80211_auth_type auth_type)
 static bool nl80211_valid_wpa_versions(u32 wpa_versions)
 {
 	return !(wpa_versions & ~(NL80211_WPA_VERSION_1 |
-#ifdef CONFIG_MACH_BCM_DRIVER
-				NL80211_WPA_VERSION_2 |
-				NL80211_WAPI_VERSION_1 ));
-#else
-				NL80211_WPA_VERSION_2 ));
-#endif
+				  NL80211_WPA_VERSION_2));
 }
 
 static bool nl80211_valid_akm_suite(u32 akm)
