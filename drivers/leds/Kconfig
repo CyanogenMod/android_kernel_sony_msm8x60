@@ -450,6 +450,13 @@ config LEDS_AS3676_HW_BLINK
 	  This option enables support for HW blinking of LEDs connected to
 	  an AS3676 chip. Say Y. Just do it.
 
+config LEDS_AS3676_LCD_DIM
+	bool "LCD dim support for AS3676 chips"
+	default n
+	depends on LEDS_AS3676
+	help
+	  This option enables support for LCD dimming
+
 config LEDS_QCIBL
 	tristate "LED Support for Quanta LCD backlight"
 	depends on SENSORS_WPCE775X && ARCH_MSM_SCORPION
