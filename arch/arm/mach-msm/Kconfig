@@ -593,6 +593,48 @@ config MACH_MSM8X60_DRAGON
 	help
 	  Support for the Qualcomm MSM8x60 Dragon board.
 
+config MACH_SEMC_NOZOMI
+	depends on ARCH_MSM8X60
+	default n
+	bool "SEMC Nozomi"
+	help
+	  Support for the Sony Ericsson Nozomi.
+
+config MACH_SEMC_NOZOMI_DCM
+	depends on ARCH_MSM8X60
+	default n
+	bool "SEMC Nozomi_dcm"
+	help
+	  Support for the Sony Ericsson Nozomi_dcm.
+
+config MACH_SEMC_HIKARI
+	depends on ARCH_MSM8X60
+	default n
+	bool "SEMC Hikari"
+	help
+	  Support for the Sony Ericsson Hikari.
+
+config MACH_SEMC_HIKARI_ROW
+	depends on ARCH_MSM8X60
+	default n
+	bool "SEMC Hikari_row"
+	help
+	  Support for the Sony Ericsson Hikari_row.
+
+config MACH_SEMC_HAYATE
+	depends on ARCH_MSM8X60
+	default n
+	bool "SEMC Hayate"
+	help
+	  Support for the Sony Ericsson Hayate.
+
+config MACH_SEMC_AOBA
+	depends on ARCH_MSM8X60
+	default n
+	bool "SEMC Aoba"
+	help
+	  Support for the Sony Ericsson Aoba.
+
 config MACH_MSM8960_SIM
 	depends on ARCH_MSM8960
 	bool "MSM8960 Simulator"
@@ -2118,7 +2160,6 @@ config PM8921_MIC_BIAS
 choice
     prompt "SWIQI"
     optional
-    default n
     config SEMC_SWIQI
         bool "Enable SWIQI"
         help
@@ -2170,6 +2211,20 @@ config SEMC_CHARGER_CRADLE_ARCH
        default n
        help
 	  This enables cradle for charging.
+
+config FUJI_PMIC_KEYPAD
+	bool "Fuji PMIC Keypad"
+	depends on ARCH_MSM8X60
+	default n
+	help
+	  This enables Fuji PMIC Keypad support.
+
+config FUJI_GPIO_KEYPAD
+	bool "Enable Fuji gpio keypad support"
+	depends on ARCH_MSM8X60
+	default n
+	help
+	  This enables the Fuji gpio keypad support.
 
 config PMIC8058_MIC_BIAS
 	bool "pmic8058 mic bias driver"

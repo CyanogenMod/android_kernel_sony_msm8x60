@@ -2733,10 +2733,7 @@ void mmc_pm_keeppwr_control(struct mmc_host *mmc, int pwr)
 					writel_relaxed(host->mci_irqenable,
 							host->base + MMCIMASK0);
 					dsb();
-					if (host->plat->cfg_mpm_sdiowakeup &&
-						(mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ))
-						host->plat->cfg_mpm_sdiowakeup(
-							mmc_dev(mmc), SDC_DAT1_DISWAKE);
+					msmsdcc_cfg_mpm_sdiowakeup(host, SDC_DAT1_DISWAKE);
 					msmsdcc_disable_irq_wake(host);
 				} else if (!(mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ)) {
 					writel_relaxed(host->mci_irqenable,
@@ -2796,10 +2793,7 @@ void mmc_pm_keeppwr_control(struct mmc_host *mmc, int pwr)
 				writel_relaxed(MCI_SDIOINTMASK,
 						host->base + MMCIMASK0);
 				mb();
-				if (host->plat->cfg_mpm_sdiowakeup &&
-					(mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ))
-					host->plat->cfg_mpm_sdiowakeup(
-						mmc_dev(mmc), SDC_DAT1_ENWAKE);
+				msmsdcc_cfg_mpm_sdiowakeup(host, SDC_DAT1_ENWAKE);
 				msmsdcc_enable_irq_wake(host);
 			} else if (mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ) {
 				writel_relaxed(0, host->base + MMCIMASK0);

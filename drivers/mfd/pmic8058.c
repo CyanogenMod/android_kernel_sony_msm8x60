@@ -407,6 +407,13 @@ static struct mfd_cell gpio_cell __devinitdata = {
 	.num_resources	= ARRAY_SIZE(gpio_cell_resources),
 };
 
+#ifdef CONFIG_FUJI_PMIC_KEYPAD
+static struct mfd_cell keypad_pmic_cell __devinitdata = {
+	.name = KP_NAME,
+	.id = -1,
+};
+#endif /* CONFIG_FUJI_PMIC_KEYPAD */
+
 #ifdef CONFIG_PMIC8058_MIC_BIAS
 static struct mfd_cell mic_bias_cell __devinitdata = {
 	.name = PM8058_MIC_BIAS_NAME,
@@ -697,6 +704,21 @@ pm8058_add_subdevices(const struct pm8058_platform_data *pdata,
 			goto bail;
 		}
 	}
+
+#ifdef CONFIG_FUJI_PMIC_KEYPAD
+	if (pdata->keypad_pmic_pdata) {
+		keypad_pmic_cell.platform_data = pdata->keypad_pmic_pdata;
+		keypad_pmic_cell.pdata_size =
+			sizeof(struct keypad_pmic_fuji_platform_data);
+		rc = mfd_add_devices(pmic->dev, 0, &keypad_pmic_cell,
+						1, NULL, irq_base);
+		if (rc) {
+			pr_err("Failed to add keypad pmic subdevice"
+				"ret=%d\n", rc);
+			goto bail;
+		}
+	}
+#endif
 
 #ifdef CONFIG_PMIC8058_MIC_BIAS
 	if (pdata->mic_bias_pdata) {
