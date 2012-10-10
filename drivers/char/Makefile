@@ -64,5 +64,9 @@ obj-$(CONFIG_RAMOOPS)		+= ramoops.o
 obj-$(CONFIG_JS_RTC)		+= js-rtc.o
 js-rtc-y = rtc.o
 
+ifndef CONFIG_ARCH_MSM8X60
 obj-$(CONFIG_MSM_ROTATOR)	+= msm_rotator.o
+else
+obj-$(CONFIG_MSM_ROTATOR)	+= msm_rotator_8660.o
+endif
 obj-$(CONFIG_MMC_GENERIC_CSDIO)	+= csdio.o
