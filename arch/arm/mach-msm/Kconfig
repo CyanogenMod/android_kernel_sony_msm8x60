@@ -2318,6 +2318,13 @@ config MSM_CACHE_DUMP
 	  This allows for analysis of the caches in case cache corruption is
 	  suspected.
 
+
+config MSM8960_CPU_OVERCLOCK
+	bool "Enable CPU Overclocking option"
+	default y
+	help
+	  Krait overclocking up to 1.84 GHz
+
 config MSM_DCVS
 	bool "Use MSM DCVS for CPU/GPU Frequency control"
 	depends on MSM_SCM
