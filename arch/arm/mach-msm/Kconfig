@@ -737,6 +737,14 @@ config MACH_SEMC_MINT
 	help
 	  Support for the Sony Ericsson Mint
 
+config SEMC_MSM8960_CPU_OVERCLOCK
+	depends on MACH_SEMC_HAYABUSA || MACH_SEMC_MINT
+	bool "Sony MSM8960 CPU Overclocking"
+	default n
+	help
+	  Allow user to OC Sony Xperia T and TX
+	  up to 1.84 GHz
+
 config MACH_APQ8064_SIM
 	depends on ARCH_APQ8064
 	bool "APQ8064 Simulator"
@@ -2324,13 +2332,6 @@ config MSM_L2_ERP_2BIT_PANIC
 
 	  For production builds, it may be acceptable to say 'N' here, since
 	  an uncorrectable error might not necessarily cause further problems.
-
-config MSM_CACHE_DUMP
-	bool "Cache dumping support"
-	help
-	  Add infrastructure to dump the L1 and L2 caches to an allocated buffer.
-	  This allows for analysis of the caches in case cache corruption is
-	  suspected.
 
 config MSM_DCVS
 	bool "Use MSM DCVS for CPU/GPU Frequency control"
