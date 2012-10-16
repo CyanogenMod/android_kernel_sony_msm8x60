@@ -1164,7 +1164,7 @@ static void __init hfpll_init(struct scalable *sc, struct core_speed *tgt_s)
 }
 
 /* Voltage regulator initialization. */
-static void __init regulator_init(int set_vdd)
+static void __init regulator_init(void)
 {
 	int cpu, ret;
 	struct scalable *sc;
@@ -1181,7 +1181,7 @@ static void __init regulator_init(int set_vdd)
 		}
 
 		ret = regulator_set_voltage(sc->vreg[VREG_CORE].reg,
-					    set_vdd,
+					    sc->vreg[VREG_CORE].max_vdd,
 					    sc->vreg[VREG_CORE].max_vdd);
 		if (ret)
 			pr_err("regulator_set_voltage(%s) failed"
@@ -1235,7 +1235,7 @@ static void __init per_cpu_init(void *data)
 }
 
 /* Register with bus driver. */
-static void __init bus_init(unsigned int init_bw)
+static void __init bus_init(void)
 {
 	int ret;
 
@@ -1245,7 +1245,8 @@ static void __init bus_init(unsigned int init_bw)
 		BUG();
 	}
 
-	ret = msm_bus_scale_client_update_request(bus_perf_client, init_bw);
+	ret = msm_bus_scale_client_update_request(bus_perf_client,
+		(ARRAY_SIZE(bw_level_tbl)-1));
 	if (ret)
 		pr_err("initial bandwidth request failed (%d)\n", ret);
 }
@@ -1449,13 +1450,11 @@ static struct acpuclk_data acpuclk_8960_data = {
 static int __init acpuclk_8960_init(struct acpuclk_soc_data *soc_data)
 {
 	struct acpu_level *max_acpu_level = select_freq_plan();
-
-	regulator_init(max_acpu_level->vdd_core);
-	bus_init(max_acpu_level->l2_level->bw_level);
-
 	init_clock_sources(&scalable[L2], &max_acpu_level->l2_level->speed);
 	on_each_cpu(per_cpu_init, max_acpu_level, true);
 
+	regulator_init();
+	bus_init();
 	cpufreq_table_init();
 
 	acpuclk_register(&acpuclk_8960_data);
