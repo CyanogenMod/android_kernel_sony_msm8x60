@@ -4495,6 +4495,7 @@ static DEFINE_MUTEX(sensor_status_lock);
 #define VREGL9_IDDIO_LCURRENT 1000
 #define VREGL9_IDDIO_HCURRENT 30000
 
+#if defined(CONFIG_INPUT_APDS9702) || defined(CONFIG_SENSORS_MPU6050) || defined(CONFIG_SENSORS_MPU3050) || defined(CONFIG_INPUT_AKM8972) || defined(CONFIG_INPUT_BMA250_NG) || defined(CONFIG_INPUT_BMA250)
 static void sensor_power(bool enable, struct regulator **reg, const char *id)
 {
 	int rc;
@@ -4518,6 +4519,7 @@ err:
 
 	return;
 }
+#endif
 
 #if defined CONFIG_INPUT_BMA250_NG || defined CONFIG_INPUT_BMA250
 #define BMA250_GPIO 10
