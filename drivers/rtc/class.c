@@ -100,8 +100,9 @@ static int rtc_resume(struct device *dev)
 	rtc_tm_to_time(&tm, &new_rtc.tv_sec);
 	new_rtc.tv_nsec = 0;
 
-	if (new_rtc.tv_sec < old_rtc.tv_sec) {
-		pr_debug("%s:  time travel!\n", dev_name(&rtc->dev));
+	if (new_rtc.tv_sec <= old_rtc.tv_sec) {
+		if (new_rtc.tv_sec < old_rtc.tv_sec)
+			pr_debug("%s:  time travel!\n", dev_name(&rtc->dev));
 		return 0;
 	}
 
