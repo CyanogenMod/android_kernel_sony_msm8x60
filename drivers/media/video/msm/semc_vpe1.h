@@ -151,7 +151,11 @@ struct msm_vpe_pmem_region {
 	struct list_head		list;
 	unsigned long			paddr;
 	unsigned long			len;
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	struct ion_handle		*ion_handle;
+#else
 	struct file			*file;
+#endif
 	struct msm_pmem_info		info;
 	struct msm_vpe_crop_info	crop;
 };

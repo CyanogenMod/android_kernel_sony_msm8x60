@@ -16,7 +16,11 @@
 #define CONFIG_MSM_CAMERA_DEBUG
 #include "semc_vpe1.h"
 #include <linux/pm_qos_params.h>
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+#include <linux/ion.h>
+#else
 #include <linux/android_pmem.h>
+#endif
 #include <linux/clk.h>
 #include <linux/slab.h>
 #include <mach/clk.h>
@@ -34,6 +38,9 @@ static dev_t msm_vpe_devno;
 static struct msm_vpe_device vpe_device_data;
 static struct msm_vpe_device *vpe_device;
 static struct vpe_ctrl_type *vpe_ctrl;
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+static struct ion_client *vpe_client;
+#endif
 
 #define ERR_USER_COPY(to) pr_err("%s(%d): copy %s user\n", \
 				__func__, __LINE__, ((to) ? "to" : "from"))
@@ -568,12 +575,17 @@ static int msm_vpe_start_transfer(struct msm_vpe_transfer_cfg *transfercmd,
 	struct msm_vpe_crop_info *src_crop;
 	struct msm_vpe_crop_info *dst_crop;
 	struct video_crop_t crop_info;
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	struct ion_handle *src_ionhandle;
+	struct ion_handle *dst_ionhandle;
+#else
 	unsigned long src_kvstart;
-	unsigned long src_len;
 	struct file *src_file;
 	unsigned long dst_kvstart;
-	unsigned long dst_len;
 	struct file *dst_file;
+#endif
+	unsigned long src_len;
+	unsigned long dst_len;
 	bool put_pmem = false;
 	unsigned long timeout = 2000;
 
@@ -598,11 +610,21 @@ static int msm_vpe_start_transfer(struct msm_vpe_transfer_cfg *transfercmd,
 	} else {
 		put_pmem = true;
 		/* get pmem file for source */
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+		src_ionhandle = ion_import_fd(vpe_client, src_info->fd);
+		if (IS_ERR_OR_NULL(src_ionhandle))
+			return 0;
+		rc = ion_phys(vpe_client,
+			      src_ionhandle,
+			      &src_paddr,
+			      (size_t *)&src_len);
+#else
 		rc = get_pmem_file(src_info->fd,
 				   &src_paddr,
 				   &src_kvstart,
 				   &src_len,
 				   &src_file);
+#endif
 		if (rc < 0) {
 			pr_err("%s: get_pmem_file fd %d error %d\n",
 				__func__,
@@ -619,11 +641,21 @@ static int msm_vpe_start_transfer(struct msm_vpe_transfer_cfg *transfercmd,
 		     (unsigned long)src_info->vaddr);
 
 	  /* get pmem file for destination */
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+		dst_ionhandle = ion_import_fd(vpe_client, dst_info->fd);
+		if (IS_ERR_OR_NULL(src_ionhandle))
+			return 0;
+		rc = ion_phys(vpe_client,
+			      dst_ionhandle,
+			      &dst_paddr,
+			      (size_t *)&dst_len);
+#else
 	  rc = get_pmem_file(dst_info->fd,
 			     &dst_paddr,
 			     &dst_kvstart,
 			     &dst_len,
 			     &dst_file);
+#endif
 	  if (rc < 0) {
 		pr_err("%s: get_pmem_file fd %d error %d\n",
 				__func__,
@@ -634,7 +666,7 @@ static int msm_vpe_start_transfer(struct msm_vpe_transfer_cfg *transfercmd,
 	  CDBG("%s:dst type %d, paddr 0x%lx, vaddr 0x%lx\n",
 			__func__,
 			dst_info->type,
-			dst_paddr,
+        dst_paddr,
 			(unsigned long)dst_info->vaddr);
 	}
 
@@ -677,9 +709,13 @@ static int msm_vpe_start_transfer(struct msm_vpe_transfer_cfg *transfercmd,
 	CDBG("Waiting over for vpe end\n");
 
 	if (put_pmem) {
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+		ion_free(vpe_client, dst_ionhandle);
+		ion_free(vpe_client, src_ionhandle);
+#else
 		put_pmem_file(dst_file);
 		put_pmem_file(src_file);
-
+#endif
 	}
 	return rc;
 }
@@ -706,15 +742,26 @@ static int msm_vpe_pmem_register(struct msm_vpe_register_cfg *registercmd,
 				 void *data)
 {
 	int rc = 0;
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	struct ion_handle *ionhandle;
+#else
 	struct file *file;
-	unsigned long paddr;
 	unsigned long kvstart;
+#endif
+	unsigned long paddr;
 	unsigned long len;
 	struct msm_vpe_pmem_region *region;
 
 	CDBG("=== msm_vpe_pmem_register start ===\n");
 
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	ionhandle = ion_import_fd(vpe_client, registercmd->inf.fd);
+	if (IS_ERR_OR_NULL(ionhandle))
+		return 0;
+	rc = ion_phys(vpe_client, ionhandle, &paddr, (size_t *)&len);
+#else
 	rc = get_pmem_file(registercmd->inf.fd, &paddr, &kvstart, &len, &file);
+#endif
 	if (rc < 0) {
 		pr_err("%s: get_pmem_file fd %d error %d\n",
 			__func__,
@@ -732,7 +779,11 @@ static int msm_vpe_pmem_register(struct msm_vpe_register_cfg *registercmd,
 
 	region->paddr = paddr;
 	region->len = len;
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	region->ion_handle = ionhandle;
+#else
 	region->file = file;
+#endif
 	memcpy(&region->info, &registercmd->inf, sizeof(region->info));
 	memcpy(&region->crop, &registercmd->crop, sizeof(region->crop));
 
@@ -754,7 +805,11 @@ static int msm_vpe_pmem_unregister(struct msm_vpe_unregister_cfg *unregistercmd,
 		list_for_each_entry(region, &vpe_ctrl->pmem_buf, list) {
 			if (region->info.vaddr == unregistercmd->baseAddr) {
 				list_del(&region->list);
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+				ion_free(vpe_client, region->ion_handle);
+#else
 				put_pmem_file(region->file);
+#endif
 				kfree(region);
 				break;
 			}
@@ -1035,7 +1090,9 @@ static int semc_vpe_probe(struct platform_device *pdev)
 		rc = -ENODEV;
 		goto vpe_device_destroy;
 	}
-
+#ifdef CONFIG_MSM_MULTIMEDIA_
+	vpe_client = msm_ion_client_create(-1, "msm_vpe_standalone");
+#endif
 	return rc;  /* this rc should be zero.*/
 
 	/* cdev_del(&vpe_device->cdev); */ /* this path should never occur */
