@@ -368,8 +368,14 @@ extern void mmc_request_done(struct mmc_host *, struct mmc_request *);
 
 static inline void mmc_signal_sdio_irq(struct mmc_host *host)
 {
-	host->ops->enable_sdio_irq(host, 0);
-	wake_up_process(host->sdio_irq_thread);
+#ifdef CONFIG_MACH_SDCC_BCM_DRIVER
+	if (host->sdio_irq_thread) {
+#endif
+		host->ops->enable_sdio_irq(host, 0);
+		wake_up_process(host->sdio_irq_thread);
+#ifdef CONFIG_MACH_SDCC_BCM_DRIVER
+	}
+#endif
 }
 
 struct regulator;
