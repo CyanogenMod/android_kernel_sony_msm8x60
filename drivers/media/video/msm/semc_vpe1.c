@@ -1125,6 +1125,11 @@ static int semc_vpe_remove(struct platform_device *pdev)
 	iounmap(vpe_device->vpebase);
 	release_mem_region(vpemem->start,
 			   (vpemem->end - vpemem->start) + 1);
+
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+	ion_client_destroy(vpe_client);
+#endif
+
 	return 0;
 }
 
