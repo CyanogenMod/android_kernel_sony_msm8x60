@@ -1,6 +1,7 @@
 /* drivers/video/msm/mipi_r63306_panels/mipi_tmd_mdx80.c
  *
  * Copyright (C) [2011] Sony Ericsson Mobile Communications AB.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  * Author: Yosuke Hatanaka <yosuke.hatanaka@sonyericsson.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,15 +21,26 @@ static char mcap[] = {
 	0xB0, 0x00
 };
 
+/* Display ON Sequence */
 static char cabc_on_off[] = {
 	0xBB, 0x0B
 };
-
-static char cabc_user_param[] = {
-	0xBE, 0xFF, 0x0F, 0x00, 0x0C, 0x10, 0x02
+static char pwm_dimming_control[] = {
+	0xBC, 0x00
 };
-
-/* Display ON Sequence */
+static char pwm_setting_1[] = {
+	0xB7, 0x18, 0x00, 0x18, 0x18, 0x0C, 0x14,
+	0xAC, 0x14, 0x6C, 0x14, 0x0C, 0x14, 0x00,
+	0x10, 0x00
+};
+static char pwm_setting_2[] = {
+	0xB8, 0xF8, 0xDA, 0x6D, 0xFB, 0xFF, 0xFF,
+	0xCF, 0x1F, 0x37, 0x5A, 0x87, 0xBE, 0xFF
+};
+static char cabc_user_param[] = {
+	0xBE, 0xFF, 0x0F, 0x00, 0x0C, 0x10, 0x02,
+	0x00, 0x5D, 0x00, 0x00, 0x80, 0x32
+};
 static char exit_sleep[] = {
 	0x11
 };
@@ -49,15 +61,23 @@ static char read_ddb_start[] = {
 static struct dsi_cmd_desc tmd_display_init_cmds[] = {
 	{DTYPE_GEN_WRITE2, 1, 0, 0, 0,
 		sizeof(mcap), mcap},
-	{DTYPE_GEN_WRITE2, 1, 0, 0, 0,
-		sizeof(cabc_on_off), cabc_on_off},
-	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
-		sizeof(cabc_user_param), cabc_user_param},
 };
 
 static struct dsi_cmd_desc tmd_display_on_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 120,
 		sizeof(exit_sleep), exit_sleep},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0,
+		sizeof(mcap), mcap},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0,
+		sizeof(cabc_on_off), cabc_on_off},
+	{DTYPE_GEN_WRITE2, 1, 0, 0, 0,
+		sizeof(pwm_dimming_control), pwm_dimming_control},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
+		sizeof(pwm_setting_1), pwm_setting_1},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
+		sizeof(pwm_setting_2), pwm_setting_2},
+	{DTYPE_GEN_LWRITE, 1, 0, 0, 0,
+		sizeof(cabc_user_param), cabc_user_param},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 0,
 		sizeof(display_on), display_on},
 };

@@ -766,10 +766,13 @@ static int mhl_rap_recv(struct mhl_device *mhl_dev, u8 action_code)
 	case MHL_RAP_POLL:
 	case MHL_RAP_CONTENT_ON:
 	case MHL_RAP_CONTENT_OFF:
-		mhl_rap_action(mhl_dev, action_code);
-		error_code = MHL_RAPK_NO_ERROR;
-		/* notify userspace */
-		mhl_notify_rap_recv(mhl_dev, action_code);
+		if (mhl_dev->full_operation) {
+			mhl_rap_action(mhl_dev, action_code);
+			error_code = MHL_RAPK_NO_ERROR;
+			/* notify userspace */
+			mhl_notify_rap_recv(mhl_dev, action_code);
+		} else
+			error_code = MHL_RAPK_UNSUPPORTED_ACTION_CODE;
 		break;
 	default:
 		error_code = MHL_RAPK_UNRECOGNIZED_ACTION_CODE;
