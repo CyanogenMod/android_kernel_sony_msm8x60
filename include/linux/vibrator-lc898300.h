@@ -79,10 +79,10 @@ enum vib_cmd_brake {
 };
 
 struct lc898300_vib_cmd {
-	enum vib_cmd_intensity vib_cmd_intensity;
-	enum vib_cmd_resonance vib_cmd_resonance;
-	enum vib_cmd_startup vib_cmd_startup;
-	enum vib_cmd_brake vib_cmd_brake;
+	u8 vib_cmd_intensity;
+	u8 vib_cmd_resonance;
+	u8 vib_cmd_startup;
+	u8 vib_cmd_brake;
 };
 
 struct lc898300_platform_data {

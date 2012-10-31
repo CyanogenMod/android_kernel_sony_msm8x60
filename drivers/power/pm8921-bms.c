@@ -20,6 +20,7 @@
 #include <linux/errno.h>
 #include <linux/power_supply.h>
 #include <linux/mfd/pm8xxx/pm8921-bms.h>
+#include <linux/mfd/pm8xxx/pm8921-charger.h>
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #include <linux/mfd/pm8xxx/ccadc.h>
@@ -48,6 +49,9 @@
 #define ADC_ARB_BMS_CNTRL	0x18D
 #define AMUX_TRIM_2		0x322
 #define TEST_PROGRAM_REV	0x339
+
+#define TEMP_SOC_STORAGE	0x107
+#define TEMP_ERROR_CODE	1000
 
 enum pmic_bms_interrupts {
 	PM8921_BMS_SBI_WRITE_OK,
@@ -131,7 +135,10 @@ struct pm8921_bms_chip {
 	uint16_t		prev_last_good_ocv_raw;
 	unsigned int		rconn_mohm;
 	int			enable_fcc_learning;
+	int			shutdown_est_ocv_mv;
+	int			pmic_boot_ocv;
 	bool			allow_soc_increase;
+	bool			is_first_boot;
 };
 
 static struct pm8921_bms_chip *the_chip;
@@ -168,6 +175,7 @@ static int read_total_ratio_for_readjust_fcc_param = -EINVAL;
 static int ratio_to_default_rbatt = DEFAULT_RATIO;
 static int read_soc_original_param;
 static int read_soc_expand_param = -EINVAL;
+static int is_warm_boot_flag;
 
 static int bms_ops_set(const char *val, const struct kernel_param *kp)
 {
@@ -1018,6 +1026,22 @@ int pm8921_bms_get_simultaneous_battery_voltage_and_current(int *ibat_ua,
 }
 EXPORT_SYMBOL(pm8921_bms_get_simultaneous_battery_voltage_and_current);
 
+static int
+pm8921_bms_get_battery_temp(struct pm8921_bms_chip *chip)
+{
+	struct pm8xxx_adc_chan_result result;
+	int rc = 0;
+
+	rc = pm8xxx_adc_read(chip->batt_temp_channel, &result);
+	if (rc) {
+		pr_err("error reading adc channel = %d, rc = %d\n",
+			   chip->batt_temp_channel, rc);
+		return TEMP_ERROR_CODE;
+	}
+
+	return (int) result.physical;
+}
+
 static int read_rbatt_params_raw(struct pm8921_bms_chip *chip,
 				struct pm8921_rbatt_params *raw)
 {
@@ -1089,10 +1113,15 @@ static int read_soc_params_raw(struct pm8921_bms_chip *chip,
 
 	if (chip->prev_last_good_ocv_raw == 0) {
 		chip->prev_last_good_ocv_raw = raw->last_good_ocv_raw;
-		adjust_pon_ocv_raw(chip, raw);
-		convert_vbatt_raw_to_uv(chip, usb_chg,
-			raw->last_good_ocv_raw, &raw->last_good_ocv_uv);
-		last_ocv_uv = raw->last_good_ocv_uv;
+
+		if (chip->shutdown_est_ocv_mv) {
+			raw->last_good_ocv_uv = last_ocv_uv;
+		} else {
+			adjust_pon_ocv_raw(chip, raw);
+			convert_vbatt_raw_to_uv(chip, usb_chg,
+				raw->last_good_ocv_raw, &raw->last_good_ocv_uv);
+			last_ocv_uv = raw->last_good_ocv_uv;
+		}
 	} else if (chip->prev_last_good_ocv_raw != raw->last_good_ocv_raw) {
 		chip->prev_last_good_ocv_raw = raw->last_good_ocv_raw;
 		convert_vbatt_raw_to_uv(chip, usb_chg,
@@ -1268,6 +1297,17 @@ static int calculate_pc(struct pm8921_bms_chip *chip, int ocv_uv, int batt_temp,
 	pc = (pc * scalefactor) / 100;
 	return pc;
 }
+/**
+ * pm8921_bms_get_soc_by_vbat - returns SOC corresponding to vbat in argument.
+ */
+int pm8921_bms_get_soc_by_vbat(int ocv_uv, int batt_temp, int chargecycles)
+{
+	if (the_chip == NULL) {
+		pr_err("Called to early\n");
+		return -EINVAL;
+	}
+	return calculate_pc(the_chip, ocv_uv, batt_temp, chargecycles);
+}
 
 /**
  * calculate_cc_uah -
@@ -1411,6 +1451,119 @@ static int calculate_real_fcc_uah(struct pm8921_bms_chip *chip,
 			real_fcc_uah, remaining_charge_uah, cc_uah, fcc_uah);
 	return real_fcc_uah;
 }
+
+static int
+pc_to_ocv_voltage_mv(struct pm8921_bms_chip *chip, int pc, int batt_temp)
+{
+	int vbat_mv = 0;
+	int rows;
+	int cols;
+	int i, j;
+	int a, b;
+
+	rows = chip->pc_temp_ocv_lut->rows;
+	cols = chip->pc_temp_ocv_lut->cols;
+	batt_temp = batt_temp / 10;
+
+	for (j = 0; j < cols; j++) {
+		if (batt_temp < chip->pc_temp_ocv_lut->temp[j]) {
+			if (j > 0) {
+				a = chip->pc_temp_ocv_lut->temp[j - 1];
+				b = chip->pc_temp_ocv_lut->temp[j];
+
+				if (batt_temp < ((a + b) / 2))
+					j--;
+			}
+
+			break;
+		}
+	}
+
+	for (i = 0; i < rows; i++) {
+		if (pc >= chip->pc_temp_ocv_lut->percent[i]) {
+			if (pc == chip->pc_temp_ocv_lut->percent[i]) {
+				vbat_mv = chip->pc_temp_ocv_lut->ocv[i][j];
+				break;
+			}
+
+			vbat_mv = linear_interpolate(
+				chip->pc_temp_ocv_lut->ocv[i][j],
+				chip->pc_temp_ocv_lut->percent[i],
+				chip->pc_temp_ocv_lut->ocv[i - 1][j],
+				chip->pc_temp_ocv_lut->percent[i - 1],
+				pc);
+
+			break;
+		}
+	}
+
+	return vbat_mv;
+}
+
+static void
+read_shutdown_est_pc(struct pm8921_bms_chip *chip)
+{
+	int temp;
+	int rc;
+	u8 pc;
+
+	/* clean it */
+	chip->shutdown_est_ocv_mv = 0;
+
+	/*
+	 * if PMIC loses all power (reset code 1), 0x107 register
+	 * is restored to its default value, zero. In that case, we
+	 * use OCV value from PMIC.
+	 */
+	rc = pm8xxx_readb(chip->dev->parent, TEMP_SOC_STORAGE, &pc);
+	if (rc) {
+		pr_err("failed to read addr = %d %d\n", TEMP_SOC_STORAGE, rc);
+		goto out;
+	}
+
+	temp = pm8921_bms_get_battery_temp(chip);
+	if (temp == TEMP_ERROR_CODE)
+		goto out;
+
+	if (is_between(1, 100, pc))
+		chip->shutdown_est_ocv_mv =
+			pc_to_ocv_voltage_mv(chip, pc, temp);
+
+out:
+	pr_info("shutdown_est_pc: %d, estimated OCV voltage: %d\n",
+		pc, chip->shutdown_est_ocv_mv);
+}
+
+static void
+do_backup_est_soc(struct pm8921_bms_chip *chip, int pc)
+{
+	if (is_between(1, 100, pc))
+		pm8xxx_writeb(the_chip->dev->parent, TEMP_SOC_STORAGE, pc);
+}
+
+static void
+backup_est_soc(struct pm8921_bms_chip *chip,
+		int rc_uah,
+		int cc_uah,
+		int fcc_uah,
+		int temp)
+{
+	int ocv_est_pc;
+	int ocv_est_mv;
+
+	/* OCV +/- CC */
+	ocv_est_pc = DIV_ROUND_CLOSEST(((rc_uah - cc_uah) * 100), fcc_uah);
+
+	/* convert percent to OCV */
+	ocv_est_mv = pc_to_ocv_voltage_mv(chip, ocv_est_pc, temp);
+	do_backup_est_soc(chip, ocv_est_pc);
+
+	pr_debug("ocv_est_pc: %d, estimated OCV: %dmV, last good OCV: %dmV "
+			 "remaining_charge_uah: %d, cc_uah: %d, fcc_uah: %d\n",
+			 ocv_est_pc, ocv_est_mv, last_ocv_uv,
+			 rc_uah, cc_uah, fcc_uah);
+}
+
 /*
  * Remaining Usable Charge = remaining_charge (charge at ocv instance)
  *				- coloumb counter charge
@@ -1483,6 +1636,8 @@ static int calculate_state_of_charge(struct pm8921_bms_chip *chip,
 		update_userspace = 0;
 		soc = 0;
 	}
+
+	backup_est_soc(chip, remaining_charge_uah, cc_uah, fcc_uah, batt_temp);
 
 	if (last_soc == -EINVAL || soc <= last_soc) {
 		last_soc = update_userspace ? soc : last_soc;
@@ -2095,30 +2250,102 @@ static int __devinit pm8921_bms_hw_init(struct pm8921_bms_chip *chip)
 	return 0;
 }
 
+static int
+get_ocv_est_soc_uv(struct pm8921_bms_chip *chip)
+{
+	int ibat_ua = 0;
+	int vbat_uv = 0;
+	int rbatt;
+	int rv;
+
+	rv = pm8921_bms_get_simultaneous_battery_voltage_and_current(&ibat_ua,
+					&vbat_uv);
+	if (rv)
+		return rv;
+
+	rbatt = pm8921_bms_get_rbatt();
+	return vbat_uv + ((ibat_ua * rbatt) / 1000);
+}
+
+static int
+pm8921_bms_read_ocv_from_pmic(struct pm8921_bms_chip *chip)
+{
+	struct pm8921_soc_params raw;
+	int usb_chg;
+
+	usb_chg = usb_chg_plugged_in();
+	pm_bms_read_output_data(chip, LAST_GOOD_OCV_VALUE,
+							&raw.last_good_ocv_raw);
+	adjust_pon_ocv_raw(chip, &raw);
+
+	(void) convert_vbatt_raw_to_uv(chip, usb_chg,
+		raw.last_good_ocv_raw, &raw.last_good_ocv_uv);
+
+	return raw.last_good_ocv_uv;
+}
+
 static void check_initial_ocv(struct pm8921_bms_chip *chip)
 {
 	int ocv_uv, rc;
-	int16_t ocv_raw;
-	int usb_chg;
+	int batt_temp;
 
 	/*
 	 * Check if a ocv is available in bms hw,
 	 * if not compute it here at boot time and save it
 	 * in the last_ocv_uv.
 	 */
-	ocv_uv = 0;
-	pm_bms_read_output_data(chip, LAST_GOOD_OCV_VALUE, &ocv_raw);
-	usb_chg = usb_chg_plugged_in();
-	rc = convert_vbatt_raw_to_uv(chip, usb_chg, ocv_raw, &ocv_uv);
-	if (rc || ocv_uv == 0) {
+	ocv_uv = pm8921_bms_read_ocv_from_pmic(chip);
+	if (ocv_uv == 0) {
 		rc = adc_based_ocv(chip, &ocv_uv);
 		if (rc) {
 			pr_err("failed to read adc based ocv_uv rc = %d\n", rc);
 			ocv_uv = DEFAULT_OCV_MICROVOLTS;
 		}
-		last_ocv_uv = ocv_uv;
 	}
-	pr_debug("ocv_uv = %d last_ocv_uv = %d\n", ocv_uv, last_ocv_uv);
+
+	/*
+	 * save it on the early boot step
+	 */
+	chip->pmic_boot_ocv = ocv_uv;
+
+	batt_temp = pm8921_bms_get_battery_temp(chip);
+	if (batt_temp == TEMP_ERROR_CODE)
+		goto use_pmic_ocv;
+
+	/*
+	 * Here we try to find out whether the handset is rebooting
+	 * or not. If yes, we should use last good OCV value from
+	 * PMIC, because CC still keeps going and is not clean.
+	 */
+	if (is_warm_boot_flag) {
+		pr_info("warm boot, continue to use OCV from PMIC\n");
+		goto use_pmic_ocv;
+	}
+
+	if (chip->shutdown_est_ocv_mv) {
+		int pc_1, pc_2, pc_3;
+		int est_ocv;
+
+		est_ocv = get_ocv_est_soc_uv(chip);
+		if (est_ocv < 0)
+			goto use_pmic_ocv;
+
+		pc_1 = calculate_pc(chip, est_ocv, batt_temp,
+						last_chargecycles);
+		pc_2 = calculate_pc(chip, ocv_uv, batt_temp, last_chargecycles);
+		pc_3 = calculate_pc(chip, chip->shutdown_est_ocv_mv * 1000,
+						batt_temp, last_chargecycles);
+
+		last_ocv_uv = chip->shutdown_est_ocv_mv * 1000;
+		pr_info("found saved SOC, OCV = %dmV (%d, %d(%dmV), %d)\n",
+				last_ocv_uv, pc_1, pc_2, ocv_uv, pc_3);
+
+		return;
+	}
+
+use_pmic_ocv:
+	last_ocv_uv = ocv_uv;
+	pr_info("ocv_uv = %d last_ocv_uv = %d\n", ocv_uv, last_ocv_uv);
 }
 
 static int64_t read_battery_id(struct pm8921_bms_chip *chip)
@@ -2590,6 +2817,42 @@ static ssize_t pm8921_bms_write_i_test(struct device *dev,
 	return strnlen(buf, PAGE_SIZE);
 }
 
+static ssize_t
+pm8921_bms_set_first_boot(struct device *dev,
+						  struct device_attribute *attr,
+						  const char *buf, size_t count)
+{
+	unsigned long arg;
+	struct pm8921_bms_chip *chip = dev_get_drvdata(dev);
+	int rc;
+
+	if (chip->is_first_boot)
+		goto out;
+
+	rc = strict_strtoul(buf, 10, &arg);
+	if (!rc && arg == 1) {
+		/*
+		 * start to calculate SOC from scratch
+		 * using PMIC's OCV value
+		 */
+		chip->shutdown_est_ocv_mv = 0;
+		read_soc_expand_param = -EINVAL;
+		last_soc = -EINVAL;
+
+		/* set new start point */
+		last_ocv_uv = chip->pmic_boot_ocv;
+		pm8921_update_soc_on_demand();
+
+		chip->is_first_boot = true;
+		pr_info("It's first boot after flash, therefore "
+				"use OCV (%dmV) value from PMIC\n",
+				last_ocv_uv);
+	}
+
+out:
+	return strnlen(buf, PAGE_SIZE);
+}
+
 static struct device_attribute pm8921_bms_attrs[] = {
 	__ATTR(read_cc, 0444, pm8921_bms_read_cc, NULL),
 	__ATTR(read_last_good_ocv, 0444, pm8921_bms_read_last_good_ocv, NULL),
@@ -2609,6 +2872,7 @@ static struct device_attribute pm8921_bms_attrs[] = {
 	__ATTR(read_soc_original, 0444, pm8921_read_soc_original, NULL),
 	__ATTR(read_soc_expand, 0444, pm8921_read_soc_expand, NULL),
 	__ATTR(i_test, 0644, pm8921_bms_read_i_test, pm8921_bms_write_i_test),
+	__ATTR(first_boot, 0200, NULL, pm8921_bms_set_first_boot),
 };
 
 static int create_sysfs_entries(struct pm8921_bms_chip *chip)
@@ -2771,6 +3035,8 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 		goto free_irqs;
 	}
 
+	read_shutdown_est_pc(chip);
+
 	platform_set_drvdata(pdev, chip);
 	the_chip = chip;
 	create_debugfs_entries(chip);
@@ -2845,6 +3111,21 @@ static void __exit pm8921_bms_exit(void)
 	platform_driver_unregister(&pm8921_bms_driver);
 }
 
+static int __init handle_warm_boot_param(char *str)
+{
+	int arg;
+
+	if (get_option(&str, &arg)) {
+		if (arg)
+			is_warm_boot_flag = 1;
+
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+early_param("warmboot", handle_warm_boot_param);
 late_initcall(pm8921_bms_init);
 module_exit(pm8921_bms_exit);
 

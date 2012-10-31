@@ -44,6 +44,7 @@
 	do {} while (0)
 #endif
 
+#define MSC_COMMAND_TIME_OUT 2010
 #define CHARGER_INIT_WAIT 30
 #define CHARGER_INIT_DELAYED_TIME 20
 enum {
@@ -271,7 +272,8 @@ static int mhl_sii_send_msc_command(struct msc_command_struct *req)
 	init_completion(&mhl_state->msc_command_done);
 	MHL_SII_CBUS_REG_WRITE(0x12, start_bit);
 	timeout = wait_for_completion_interruptible_timeout
-		(&mhl_state->msc_command_done, HZ);
+		(&mhl_state->msc_command_done,
+		msecs_to_jiffies(MSC_COMMAND_TIME_OUT));
 	if (!timeout) {
 		pr_err("%s: cbus_command_send timed out!\n", __func__);
 		goto cbus_command_send_out;
@@ -1214,9 +1216,10 @@ static int mhl_sii_remove(struct i2c_client *client)
 }
 
 #ifdef CONFIG_PM
-static int mhl_sii_i2c_suspend(struct i2c_client *client, pm_message_t msg)
+static int mhl_sii_i2c_suspend(struct device *dev)
 {
-	enable_irq_wake(mhl_state->irq);
+	/* this is needed isr not to be executed before i2c resume */
+	disable_irq(mhl_state->irq);
 
 	/* sii8334 power shoule be keep enbaled and sii8334 shoule be in D3 */
 	/* and if low_power_mode operation exist, call it for some reason. */
@@ -1226,16 +1229,18 @@ static int mhl_sii_i2c_suspend(struct i2c_client *client, pm_message_t msg)
 	return 0;
 }
 
-static int mhl_sii_i2c_resume(struct i2c_client *client)
+static int mhl_sii_i2c_resume(struct device *dev)
 {
 	/* exit from low_power_mode */
 	if (mhl_state->low_power_mode)
 		mhl_state->low_power_mode(0);
 
-	disable_irq_wake(mhl_state->irq);
+	enable_irq(mhl_state->irq);
 
 	return 0;
 }
+
+SIMPLE_DEV_PM_OPS(mhl_sii_pm_ops, mhl_sii_i2c_suspend, mhl_sii_i2c_resume);
 #endif /* CONFIG_PM */
 
 static const struct i2c_device_id mhl_sii_id[] = {
@@ -1247,13 +1252,12 @@ static struct i2c_driver mhl_sii_i2c_driver = {
 	.driver = {
 		.name = SII_DEV_NAME,
 		.owner = THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm = &mhl_sii_pm_ops,
+#endif /* CONFIG_PM */
 	},
 	.probe = mhl_sii_probe,
 	.remove = mhl_sii_remove,
-#ifdef CONFIG_PM
-	.suspend = mhl_sii_i2c_suspend,
-	.resume = mhl_sii_i2c_resume,
-#endif /* CONFIG_PM */
 	.id_table = mhl_sii_id,
 };
 

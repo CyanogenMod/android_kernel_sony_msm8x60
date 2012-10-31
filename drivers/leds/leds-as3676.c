@@ -2555,7 +2555,7 @@ static int as3676_configure(struct i2c_client *client,
 	if (err)
 		goto exit;
 
-	for (i = 0; i < 6; i++) {
+	for (i = 0; i < ARRAY_SIZE(data->leds); i++) {
 		struct as3676_led *led = &data->leds[i];
 		if (led->pled->startup_current_uA) {
 			as3676_set_brightness(data, led,

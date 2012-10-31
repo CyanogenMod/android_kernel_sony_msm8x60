@@ -235,6 +235,10 @@ int pm8921_bms_get_simultaneous_battery_voltage_and_current(int *ibat_ua,
  * pm8921_bms_get_rbatt - function to get the battery resistance in mOhm.
  */
 int pm8921_bms_get_rbatt(void);
+/**
+ * pm8921_bms_get_soc_by_vbat - returns SOC corresponding to vbat in argument.
+ */
+int pm8921_bms_get_soc_by_vbat(int ocv_uv, int batt_temp, int chargecycles);
 #else
 static inline int pm8921_bms_get_vsense_avg(int *result)
 {
@@ -271,6 +275,11 @@ static inline int pm8921_bms_get_simultaneous_battery_voltage_and_current(
 	return -ENXIO;
 }
 static inline int pm8921_bms_get_rbatt(void)
+{
+	return -EINVAL;
+}
+static inline int pm8921_bms_get_soc_by_vbat(int ocv_uv, int batt_temp,
+	int chargecycles)
 {
 	return -EINVAL;
 }
