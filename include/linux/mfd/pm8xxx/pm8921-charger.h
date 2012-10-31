@@ -65,6 +65,7 @@ enum pm8921_usb_debounce_time {
  *				after the battery has been fully charged
  * @resume_soc:		the state of charge (%) to wait for resume charging
  *			after the battery has been fully charged
+ * @delta_soc:		the state of charge (%) to recover charging
  * @term_current:	the charger current (mA) at which EOC happens
  * @cool_temp:		the temperature (degC) at which the battery is
  *			considered cool charging current and voltage is reduced.
@@ -109,6 +110,7 @@ enum pm8921_usb_debounce_time {
  *			with the battery terminals shorted. This indicates
  *			resistance of the pads, connectors, battery terminals
  *			and rsense.
+ * @eoc_warm_batt:	enable End Of Charge when battery is warm
  */
 struct pm8921_charger_platform_data {
 	struct pm8xxx_charger_core_data	charger_cdata;
@@ -120,6 +122,7 @@ struct pm8921_charger_platform_data {
 	unsigned int			min_voltage;
 	unsigned int			resume_voltage_delta;
 	unsigned int			resume_soc;
+	unsigned int			delta_soc;
 	unsigned int			term_current;
 	int				cold_temp;
 	int				cool_temp;
@@ -147,6 +150,7 @@ struct pm8921_charger_platform_data {
 	enum pm8921_chg_cold_thr	cold_thr;
 	enum pm8921_chg_hot_thr		hot_thr;
 	int				rconn_mohm;
+	bool				eoc_warm_batt;
 };
 
 enum pm8921_charger_source {
@@ -265,6 +269,7 @@ int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms);
  *
  */
 int pm8921_usb_ovp_disable(int disable);
+void pm8921_update_soc_on_demand(void);
 #else
 static inline void pm8921_charger_vbus_draw(unsigned int mA)
 {
@@ -329,6 +334,12 @@ static inline int pm8921_usb_ovp_disable(int disable)
 {
 	return -ENXIO;
 }
+
+static inline void pm8921_update_soc_on_demand(void)
+{
+	return;
+}
+
 #endif
 
 #endif

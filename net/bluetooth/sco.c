@@ -2,6 +2,7 @@
    BlueZ - Bluetooth protocol stack for Linux
    Copyright (C) 2000-2001 Qualcomm Incorporated
    Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+   Copyright (C) 2012 Sony Mobile Communications AB.
 
    Written 2000,2001 by Maxim Krasnyansky <maxk@qualcomm.com>
 
@@ -236,8 +237,10 @@ static int sco_connect(struct sock *sk, __s8 is_wbs)
 	bacpy(src, conn->src);
 
 	err = sco_chan_add(conn, sk, NULL);
-	if (err)
+	if (err) {
+		hci_conn_put(hcon);
 		goto done;
+	}
 
 	if (hcon->state == BT_CONNECTED) {
 		sco_sock_clear_timer(sk);
