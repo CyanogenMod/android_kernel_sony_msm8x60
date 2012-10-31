@@ -332,6 +332,7 @@ struct bms_notify {
  * @resume_voltage_delta:	the voltage delta from vdd max at which the
  *				battery should resume charging
  * @term_current:		The charging based term current
+ * @eoc_warm_batt:		enable End Of Charge when battery is warm
  *
  */
 struct pm8921_chg_chip {
@@ -364,6 +365,9 @@ struct pm8921_chg_chip {
 	unsigned int			is_bat_warm;
 	unsigned int			resume_voltage_delta;
 	unsigned int			resume_soc;
+	unsigned int			resume_soc_default;
+	unsigned int			delta_soc;
+	bool				eoc_warm_batt;
 	unsigned int			term_current;
 	unsigned int			vbat_channel;
 	unsigned int			batt_temp_channel;
@@ -2747,6 +2751,7 @@ static void temp_hot_func(void)
 
 static bool is_temp_condition(struct pm8921_chg_chip *chip, int temp)
 {
+	int max_warm_soc;
 	enum temp_condition now_condition = chip->temp_state.condition;
 
 	if (temp <= chip->temp_state.data[now_condition].low)
@@ -2761,6 +2766,22 @@ static bool is_temp_condition(struct pm8921_chg_chip *chip, int temp)
 	chip->is_bat_warm =
 	temp_condition_flg_data[chip->temp_state.condition].is_bat_warm;
 
+	if (chip->eoc_warm_batt) {
+		if (chip->temp_state.condition != TEMP_WARM) {
+			chip->resume_soc = chip->resume_soc_default;
+		} else {
+			max_warm_soc = pm8921_bms_get_soc_by_vbat(
+				the_chip->warm_bat_voltage * 1000, temp, 0);
+			chip->resume_soc = max_warm_soc - chip->delta_soc;
+			/* If soc > (max_warm_soc-5) at the moment when btemp
+			 * switched to warm, then stop charging and wait until
+			 * soc < (max_warm_soc-5)
+			 */
+			if (chip->soc > max_warm_soc - chip->delta_soc)
+				update_charge_state(BIT(DIS_BIT_EOC),
+					DIS_BIT_EOC_MASK);
+		}
+	}
 	return false;
 }
 
@@ -2851,6 +2872,11 @@ static void pm_batt_external_power_changed(struct power_supply *psy)
 	if (!the_chip->ext_psy)
 		class_for_each_device(power_supply_class, NULL, psy,
 					 __pm_batt_external_power_changed_work);
+
+	if (power_supply_am_i_supplied(psy))
+		pm8921_chg_enable_irq(the_chip, BAT_TEMP_OK_IRQ);
+	else
+		pm8921_chg_disable_irq(the_chip, BAT_TEMP_OK_IRQ);
 }
 
 static void
@@ -2986,6 +3012,7 @@ static int is_charging_finished(struct pm8921_chg_chip *chip)
 	int regulation_loop, fast_chg, vcp;
 	int rc;
 	static int last_vbat_programmed = -EINVAL;
+	int max_vbat;
 
 	if (!is_ext_charging(chip)) {
 		/* return if the battery is not being fastcharged */
@@ -2999,10 +3026,13 @@ static int is_charging_finished(struct pm8921_chg_chip *chip)
 		if (vcp == 1)
 			return CHG_IN_PROGRESS;
 
-		vbatdet_low = pm_chg_get_rt_status(chip, VBATDET_LOW_IRQ);
-		pr_debug("vbatdet_low = %d\n", vbatdet_low);
-		if (vbatdet_low == 1)
-			return CHG_IN_PROGRESS;
+		if (!chip->eoc_warm_batt) {
+			vbatdet_low = pm_chg_get_rt_status(chip,
+				VBATDET_LOW_IRQ);
+			pr_debug("vbatdet_low = %d\n", vbatdet_low);
+			if (vbatdet_low == 1)
+				return CHG_IN_PROGRESS;
+		}
 
 		/* reset count if battery is hot/cold */
 		rc = pm_chg_get_rt_status(chip, BAT_TEMP_OK_IRQ);
@@ -3011,11 +3041,12 @@ static int is_charging_finished(struct pm8921_chg_chip *chip)
 			return CHG_IN_PROGRESS;
 
 		/* reset count if battery is warm */
-		if (chip->temp_state.condition == TEMP_WARM) {
-			pr_info("battery is warm\n");
-			return CHG_IN_PROGRESS;
+		if (!chip->eoc_warm_batt) {
+			if (chip->temp_state.condition == TEMP_WARM) {
+				pr_info("battery is warm\n");
+				return CHG_IN_PROGRESS;
+			}
 		}
-
 		/* reset count if battery voltage is less than vddmax */
 		vbat_meas_uv = get_prop_battery_uvolts(chip);
 		if (vbat_meas_uv < 0)
@@ -3040,13 +3071,19 @@ static int is_charging_finished(struct pm8921_chg_chip *chip)
 			return CHG_IN_PROGRESS;
 		}
 
-		if (vbat_meas_mv <= the_chip->max_voltage_mv -
-				the_chip->resume_voltage_delta) {
+
+		if ((chip->eoc_warm_batt) &&
+			(chip->temp_state.condition == TEMP_WARM))
+			max_vbat = the_chip->warm_bat_voltage;
+		else
+			max_vbat = the_chip->max_voltage_mv;
+
+		if (vbat_meas_mv <= max_vbat - the_chip->resume_voltage_delta) {
 			pr_debug("Voltage is lower than %d mV\n",
-				the_chip->max_voltage_mv -
-				the_chip->resume_voltage_delta);
+				max_vbat - the_chip->resume_voltage_delta);
 			return CHG_IN_PROGRESS;
 		}
+
 
 		regulation_loop = pm_chg_get_regulation_loop(chip);
 		if (regulation_loop < 0) {
@@ -3127,12 +3164,23 @@ static void eoc_worker(struct work_struct *work)
 		count = 0;
 		pr_info("End of Charging\n");
 
+		if ((chip->eoc_warm_batt) &&
+			(chip->temp_state.condition == TEMP_WARM)) {
+			chip->resume_soc = chip->soc - chip->delta_soc;
+			pr_debug("Warm EOC! resume_soc= %d\n",
+				chip->resume_soc);
+		}
+
 		update_charge_state(BIT(DIS_BIT_EOC), DIS_BIT_EOC_MASK);
 
 		if (is_ext_charging(chip))
 			chip->ext_charge_done = true;
 
-		chip->bms_notify.is_battery_full = 1;
+		if (chip->is_bat_warm)
+			chip->bms_notify.is_battery_full = 0;
+		else
+			chip->bms_notify.is_battery_full = 1;
+
 		/* declare end of charging by invoking chgdone interrupt */
 		chgdone_irq_handler(chip->pmic_chg_irq[CHGDONE_IRQ], chip);
 		wake_unlock(&chip->eoc_wake_lock);
@@ -3385,6 +3433,9 @@ static void __devinit determine_initial_state(struct pm8921_chg_chip *chip)
 		pm8921_chg_enable_irq(chip, CHG_GONE_IRQ);
 	}
 
+	if (chip->usb_present || chip->dc_present)
+		pm8921_chg_enable_irq(chip, BAT_TEMP_OK_IRQ);
+
 	pm8921_chg_enable_irq(chip, DCIN_VALID_IRQ);
 	pm8921_chg_enable_irq(chip, USBIN_VALID_IRQ);
 	pm8921_chg_enable_irq(chip, BATT_REMOVED_IRQ);
@@ -3392,7 +3443,6 @@ static void __devinit determine_initial_state(struct pm8921_chg_chip *chip)
 	pm8921_chg_enable_irq(chip, DCIN_UV_IRQ);
 	pm8921_chg_enable_irq(chip, CHGFAIL_IRQ);
 	pm8921_chg_enable_irq(chip, FASTCHG_IRQ);
-	pm8921_chg_enable_irq(chip, BAT_TEMP_OK_IRQ);
 	pm8921_chg_enable_irq(chip, VBATDET_LOW_IRQ);
 
 	spin_lock_irqsave(&vbus_lock, flags);
@@ -4335,11 +4385,16 @@ static int pm8921_update_thread(void *__chip)
 	return 0;
 }
 
-static void pm8921_update_at_resume(struct pm8921_chg_chip *chip)
+void pm8921_update_soc_on_demand(void)
 {
 	struct task_struct *th;
 
-	th = kthread_create(pm8921_update_thread, chip, "pm8921_update_thread");
+	if (!the_chip)
+		goto err_out;
+
+	th = kthread_create(pm8921_update_thread,
+				the_chip, "pm8921_update_thread");
+
 	if (IS_ERR(th)) {
 		pr_err("failed to create kthread\n");
 		goto err_out;
@@ -4371,7 +4426,7 @@ static int pm8921_charger_resume(struct device *dev)
 	}
 
 	/* update soc and power supply at resume */
-	pm8921_update_at_resume(chip);
+	pm8921_update_soc_on_demand();
 
 	return 0;
 }
@@ -4423,7 +4478,9 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	chip->max_voltage_mv = pdata->max_voltage;
 	chip->min_voltage_mv = pdata->min_voltage;
 	chip->resume_voltage_delta = pdata->resume_voltage_delta;
-	chip->resume_soc = pdata->resume_soc;
+	chip->resume_soc_default = pdata->resume_soc;
+	chip->resume_soc = chip->resume_soc_default;
+	chip->delta_soc = pdata->delta_soc;
 	chip->term_current = pdata->term_current;
 	chip->vbat_channel = pdata->charger_cdata.vbat_channel;
 	chip->batt_temp_channel = pdata->charger_cdata.batt_temp_channel;
@@ -4462,6 +4519,7 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	chip->cold_thr = pdata->cold_thr;
 	chip->hot_thr = pdata->hot_thr;
 	chip->rconn_mohm = pdata->rconn_mohm;
+	chip->eoc_warm_batt = pdata->eoc_warm_batt;
 
 	rc = pm8921_chg_hw_init(chip);
 	if (rc) {

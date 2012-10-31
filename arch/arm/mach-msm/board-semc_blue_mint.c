@@ -90,6 +90,7 @@ struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.min_voltage		= 3200,
 	.resume_voltage_delta	= 60,
 	.resume_soc		= 99,
+	.delta_soc		= 5,
 	.term_current		= 70,
 	.cold_temp		= 5,
 	.cool_temp		= 10,
@@ -108,6 +109,7 @@ struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.cold_thr		= PM_SMBC_BATT_TEMP_COLD_THR__HIGH,
 	.hot_thr		= PM_SMBC_BATT_TEMP_HOT_THR__HIGH,
 	.rconn_mohm		= 18,
+	.eoc_warm_batt		= true,
 };
 
 struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
@@ -369,6 +371,19 @@ struct as3676_platform_data as3676_platform_data = {
 	},
 };
 
+#define VBUS_BIT 0x04
+static int __init startup_rgb(char *str)
+{
+	int vbus;
+	if (get_option(&str, &vbus)) {
+		if (vbus & VBUS_BIT)
+			as3676_platform_data.leds[6].startup_current_uA = 1000;
+		return 0;
+	}
+	return -EINVAL;
+}
+
+early_param("startup", startup_rgb);
 #endif
 
 /* Section: PMIC GPIO */
@@ -674,6 +689,12 @@ VREG_CONSUMERS(LVS6) = {
 VREG_CONSUMERS(LVS7) = {
 	REGULATOR_SUPPLY("8921_lvs7",		NULL),
 };
+VREG_CONSUMERS(USB_OTG) = {
+	REGULATOR_SUPPLY("8921_usb_otg",	NULL),
+};
+VREG_CONSUMERS(HDMI_MVS) = {
+	REGULATOR_SUPPLY("8921_hdmi_mvs",	NULL),
+};
 
 #define PM8XXX_VREG_INIT(_id, _name, _min_uV, _max_uV, _modes, _ops, \
 			 _apply_uV, _pull_down, _always_on, _supply_regulator, \
@@ -912,6 +933,10 @@ msm_pm8921_regulator_pdata[] __devinitdata = {
 		0, 3),
 	PM8XXX_LDO(L29,      "8921_l29", 0, 1, 1800000, 1800000, 200, "8921_s8",
 		0, 4),
+
+	/*	     ID        name      always_on pd en_t supply reg_ID */
+	PM8XXX_VS300(USB_OTG,  "8921_usb_otg",  0, 1, 0,   NULL,  5),
+	PM8XXX_VS300(HDMI_MVS, "8921_hdmi_mvs", 0, 1, 0,   NULL,  6),
 };
 
 static struct rpm_regulator_init_data

@@ -1,6 +1,11 @@
-/*
+/* arch/arm/kernel/crash_notes.c
+ *
  * Copyright (C) 2012 Sony Mobile Communications AB.
- * All rights, including trade secrets rights, reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2, as
+ * published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
  */
 
 #include <linux/capability.h>
@@ -38,7 +43,18 @@
  * and completed if CRASH_NOTE_MAGIC_FLAG_REGISTERS is set */
 #define CRASH_NOTE_MAGIC_FLAG_BUILDINFO		0x04
 
-struct crash_extras {
+#define CRASH_NOTE_SIZE (ALIGN(sizeof(struct elf_note), 4) + \
+			 ALIGN(sizeof(CRASH_NOTE_NAME), 4) + \
+			 ALIGN(sizeof(struct elf_prstatus), 4))
+
+#define CRASH_NOTE_BYTES sizeof(struct crash_extras_t)
+
+typedef u32 note_buf_t[CRASH_NOTE_SIZE / 4];
+note_buf_t *crash_notes;
+
+struct crash_extras_t  {
+  /* This for be backwards compatible */
+	u32 dummy_note[(2 * CRASH_NOTE_SIZE) / 4];
 	u32 magic_part1;
 	u32 magic_part2;
 	/* Size of the note field */
@@ -59,17 +75,38 @@ struct crash_extras {
 	/* Simple XOR of this block minus this entry */
 	u32 checksum;
 };
-#define CRASH_NOTE_MAGIC_BYTES (sizeof(struct crash_extras))
 
-#define CRASH_NOTE_SIZE (ALIGN(sizeof(struct elf_note), 4) + \
-			 ALIGN(sizeof(CRASH_NOTE_NAME), 4) + \
-			 ALIGN(sizeof(struct elf_prstatus), 4))
-
-#define CRASH_NOTE_BYTES (2 * (CRASH_NOTE_SIZE) + (CRASH_NOTE_MAGIC_BYTES))
-
-typedef u32 note_buf_t[CRASH_NOTE_BYTES / 4];
-
-note_buf_t *crash_notes;
+static struct crash_extras_t build_info = {
+	{ 0 },
+	CRASH_NOTE_MAGIC1,
+	CRASH_NOTE_MAGIC2,
+	CRASH_NOTE_SIZE,
+	CRASH_NOTE_BYTES,
+	CRASH_NOTE_MAGIC_FLAG_BUILDINFO |
+		CRASH_NOTE_MAGIC_FLAG_CRASHING_CPU |
+		CRASH_NOTE_MAGIC_FLAG_VM,
+	CONFIG_PAGE_OFFSET,
+	0
+#ifdef CONFIG_SPARSEMEM
+	| CRASH_NOTE_VM_FLAG_SPARSEMEM
+#endif
+#ifdef CONFIG_VMSPLIT_1G
+	| CRASH_NOTE_VM_FLAG_13SPLIT
+#endif
+#ifdef CONFIG_VMSPLIT_2G
+	| CRASH_NOTE_VM_FLAG_22SPLIT
+#endif
+#ifdef CONFIG_VMSPLIT_3G
+	| CRASH_NOTE_VM_FLAG_31SPLIT
+#endif
+	,
+	"",
+	INFO_BUILDID,
+	INFO_PRODUCT,
+	INFO_VARIANT,
+	/* This is a default magic checksum that always will be accepted */
+	0x98A1108A
+};
 
 static inline void dump_regs(struct pt_regs *regs)
 {
@@ -108,7 +145,6 @@ void crash_notes_save_this_cpu(enum crash_note_save_type type,
 	u32 *start;
 	char process_name[TASK_COMM_LEN];
 	u32 c;
-	struct crash_extras *extras;
 
 	buf = (u32 *)per_cpu_ptr(crash_notes, cpu);
 	if (!buf)
@@ -134,7 +170,7 @@ void crash_notes_save_this_cpu(enum crash_note_save_type type,
 	}
 
 	note = (struct elf_note *)buf;
-	note->n_namesz = strnlen(CRASH_NOTE_NAME, 5) + 1;
+	note->n_namesz = sizeof(CRASH_NOTE_NAME);
 	note->n_descsz = sizeof(prstatus);
 	note->n_type = NT_PRSTATUS;
 	buf += (sizeof(struct elf_note) + 3) / 4;
@@ -143,49 +179,17 @@ void crash_notes_save_this_cpu(enum crash_note_save_type type,
 	memcpy(buf, &prstatus, sizeof(prstatus));
 	buf += (note->n_descsz + 3) / 4;
 
-	note = (struct elf_note *)buf;
-	note->n_namesz = 0;
-	note->n_descsz = 0;
-	note->n_type   = 0;
+	if (type == CRASH_NOTE_CRASHING) {
+		strlcpy(build_info.process_name, process_name,
+			sizeof(build_info.process_name));
+		build_info.process_name[sizeof(build_info.process_name)-1] = 0;
 
-	extras = (struct crash_extras *)(((u8 *)start) + CRASH_NOTE_BYTES -
-						CRASH_NOTE_MAGIC_BYTES);
-	memset(extras, 0, CRASH_NOTE_MAGIC_BYTES);
-	extras->magic_note_size = CRASH_NOTE_SIZE;
-	extras->magic_total_size = CRASH_NOTE_BYTES;
-	extras->magic_part1 = CRASH_NOTE_MAGIC1;
-	extras->magic_part2 = CRASH_NOTE_MAGIC2;
-	if (type != CRASH_NOTE_INIT) {
-		if (type == CRASH_NOTE_CRASHING)
-			extras->magic_flags |=
-				CRASH_NOTE_MAGIC_FLAG_CRASHING_CPU;
-		strncpy(extras->process_name, process_name,
-			sizeof(extras->process_name));
-		extras->process_name[sizeof(extras->process_name)-1] = 0;
-	}
-	strncpy(extras->build_id, INFO_BUILDID, sizeof(extras->build_id));
-	strncpy(extras->product, INFO_PRODUCT, sizeof(extras->product));
-	strncpy(extras->variant, INFO_VARIANT, sizeof(extras->variant));
-	extras->magic_flags |= (CRASH_NOTE_MAGIC_FLAG_BUILDINFO
-			| CRASH_NOTE_MAGIC_FLAG_VM);
-	extras->vm_start = CONFIG_PAGE_OFFSET;
-#ifdef CONFIG_SPARSEMEM
-	extras->vm_flags |= CRASH_NOTE_VM_FLAG_SPARSEMEM;
-#endif
-#ifdef CONFIG_VMSPLIT_1G
-	extras->vm_flags |= CRASH_NOTE_VM_FLAG_13SPLIT;
-#endif
-#ifdef CONFIG_VMSPLIT_2G
-	extras->vm_flags |= CRASH_NOTE_VM_FLAG_22SPLIT;
-#endif
-#ifdef CONFIG_VMSPLIT_3G
-	extras->vm_flags |= CRASH_NOTE_VM_FLAG_31SPLIT;
-#endif
-
-	/* Calculate an XOR checksum of all data in the elf_note_extra */
-	for (c = 0; c != (CRASH_NOTE_BYTES - sizeof(u32)) / sizeof(u32);
-	     ++c) {
-		extras->checksum ^= start[c];
+		build_info.checksum = 0;
+		start = (u32 *)&build_info;
+		for (c = 0;
+		     c != (CRASH_NOTE_BYTES - sizeof(u32)) / sizeof(u32);
+		     ++c)
+			build_info.checksum ^= start[c];
 	}
 
 	/* Make sure we have crash_notes in ram before reset */

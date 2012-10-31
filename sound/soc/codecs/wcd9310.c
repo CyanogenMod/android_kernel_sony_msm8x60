@@ -1985,9 +1985,9 @@ static int tabla_hph_pa_event(struct snd_soc_dapm_widget *w,
 		tabla_codec_switch_micbias(codec, 0);
 		TABLA_RELEASE_LOCK(tabla->cdc_resource_lock);
 
-		pr_debug("%s: sleep 10 ms after %s PA disable.\n", __func__,
+		pr_debug("%s: sleep 50 ms after %s PA disable.\n", __func__,
 				w->name);
-		usleep_range(10000, 10000);
+		usleep_range(50000, 50000);
 		break;
 	}
 	return 0;
