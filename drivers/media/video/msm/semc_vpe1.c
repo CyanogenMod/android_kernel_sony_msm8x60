@@ -1090,7 +1090,7 @@ static int semc_vpe_probe(struct platform_device *pdev)
 		rc = -ENODEV;
 		goto vpe_device_destroy;
 	}
-#ifdef CONFIG_MSM_MULTIMEDIA_
+#ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 	vpe_client = msm_ion_client_create(-1, "msm_vpe_standalone");
 #endif
 	return rc;  /* this rc should be zero.*/
