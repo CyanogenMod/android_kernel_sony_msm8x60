@@ -446,7 +446,7 @@ void gsdio_write_complete(struct usb_ep *ep, struct usb_request *req)
 void gsdio_read_pending(struct gsdio_port *port)
 {
 	struct sdio_channel *ch;
-	char buf[1024];
+	char *buf = kmalloc(1024, GFP_KERNEL);
 	int avail;
 
 	if (!port) {
@@ -466,6 +466,7 @@ void gsdio_read_pending(struct gsdio_port *port)
 
 		pr_debug("%s: flushed out %d bytes\n", __func__, avail);
 	}
+	kfree(buf);
 }
 
 void gsdio_tx_pull(struct work_struct *w)
