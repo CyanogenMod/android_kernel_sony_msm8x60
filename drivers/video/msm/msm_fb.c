@@ -1459,7 +1459,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	     mfd->panel_info.type != WRITEBACK_PANEL)) {
 		mfd->early_suspend.suspend = msmfb_early_suspend;
 		mfd->early_suspend.resume = msmfb_early_resume;
-		mfd->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB - 2;
+		mfd->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB - 10;
 		register_early_suspend(&mfd->early_suspend);
 	}
 #endif

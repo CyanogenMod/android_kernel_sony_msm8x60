@@ -437,7 +437,7 @@ static int mddi_probe(struct platform_device *pdev)
 	pdev_list[pdev_list_cnt++] = pdev;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	mfd->mddi_early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
+	mfd->mddi_early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB - 10;
 	mfd->mddi_early_suspend.suspend = mddi_early_suspend;
 	mfd->mddi_early_suspend.resume = mddi_early_resume;
 	register_early_suspend(&mfd->mddi_early_suspend);
