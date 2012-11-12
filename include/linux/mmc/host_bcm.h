@@ -217,7 +217,7 @@ struct mmc_host {
 	unsigned int		caps2;		/* More host capabilities */
 
 #define MMC_CAP2_BOOTPART_NOACC	(1 << 0)	/* Boot partition no access */
-#define MMC_CAP2_DETECT_ON_ERR	(1 << 8)	/* On I/O err check card removal */
+
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 
 	int			clk_requests;	/* internal reference counter */
@@ -280,7 +280,6 @@ struct mmc_host {
 
 	unsigned int		sdio_irqs;
 	struct task_struct	*sdio_irq_thread;
-	bool			sdio_irq_pending;
 	atomic_t		sdio_irq_thread_abort;
 
 	mmc_pm_flag_t		pm_flags;	/* requested pm features */
@@ -369,9 +368,10 @@ extern void mmc_request_done(struct mmc_host *, struct mmc_request *);
 
 static inline void mmc_signal_sdio_irq(struct mmc_host *host)
 {
-	host->ops->enable_sdio_irq(host, 0);
-	host->sdio_irq_pending = true;
-	wake_up_process(host->sdio_irq_thread);
+	if (host->sdio_irq_thread) {
+		host->ops->enable_sdio_irq(host, 0);
+		wake_up_process(host->sdio_irq_thread);
+	}
 }
 
 struct regulator;

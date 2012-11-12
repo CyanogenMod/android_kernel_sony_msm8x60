@@ -98,7 +98,11 @@ obj-$(CONFIG_EISA)		+= eisa/
 obj-y				+= lguest/
 obj-$(CONFIG_CPU_FREQ)		+= cpufreq/
 obj-$(CONFIG_CPU_IDLE)		+= cpuidle/
+ifndef CONFIG_MACH_SDCC_BCM_DRIVER
 obj-$(CONFIG_MMC)		+= mmc/
+else
+obj-$(CONFIG_MMC)		+= mmc_bcm/
+endif
 obj-$(CONFIG_MEMSTICK)		+= memstick/
 obj-$(CONFIG_SWITCH)		+= switch/
 obj-$(CONFIG_INFINIBAND)	+= infiniband/

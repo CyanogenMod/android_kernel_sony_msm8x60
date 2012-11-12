@@ -148,7 +148,11 @@ struct mmc_platform_data {
 	unsigned int msmsdcc_fmax;
 	bool nonremovable;
 	bool pclk_src_dfab;
+#ifndef CONFIG_MACH_SDCC_BCM_DRIVER
 	unsigned int mpm_sdiowakeup_int;
+#else
+	int (*cfg_mpm_sdiowakeup)(struct device *, unsigned);
+#endif
 	unsigned int wpswitch_gpio;
 	unsigned char wpswitch_polarity;
 	struct msm_mmc_slot_reg_data *vreg_data;
