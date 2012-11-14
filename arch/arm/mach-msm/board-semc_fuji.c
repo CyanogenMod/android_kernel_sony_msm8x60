@@ -4148,6 +4148,7 @@ static struct platform_device *fuji_devices[] __initdata = {
 #endif
 	&msm8660_device_watchdog,
 	&msm_rtb_device,
+	&msm8660_iommu_domain_device,
 #ifdef CONFIG_USB_NCP373
 	&ncp373_device,
 #endif
