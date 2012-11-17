@@ -132,6 +132,7 @@
 
 #include <linux/ion.h>
 #include <mach/ion.h>
+#include <mach/msm_rtb.h>
 
 #ifdef CONFIG_MSM_GSBI7_UART
 #include <linux/tty.h>
@@ -3695,6 +3696,29 @@ static struct platform_device msm_adc_device = {
 	},
 };
 
+static struct msm_rtb_platform_data msm_rtb_pdata = {
+	.size = SZ_1M,
+};
+
+static int __init msm_rtb_set_buffer_size(char *p)
+{
+	int s;
+
+	s = memparse(p, NULL);
+	msm_rtb_pdata.size = ALIGN(s, SZ_4K);
+	return 0;
+}
+early_param("msm_rtb_size", msm_rtb_set_buffer_size);
+
+
+static struct platform_device msm_rtb_device = {
+	.name           = "msm_rtb",
+	.id             = -1,
+	.dev            = {
+		.platform_data = &msm_rtb_pdata,
+	},
+};
+
 static void pmic8058_xoadc_mpp_config(void)
 {
 	int rc, i;
@@ -4123,6 +4147,8 @@ static struct platform_device *fuji_devices[] __initdata = {
 	&ion_dev,
 #endif
 	&msm8660_device_watchdog,
+	&msm_rtb_device,
+	&msm8660_iommu_domain_device,
 #ifdef CONFIG_USB_NCP373
 	&ncp373_device,
 #endif
@@ -4384,12 +4410,20 @@ static void __init reserve_pmem_memory(void)
 
 static void __init reserve_mdp_memory(void);
 
+static void __init reserve_rtb_memory(void)
+{
+#if defined(CONFIG_MSM_RTB)
+	msm8x60_reserve_table[MEMTYPE_EBI1].size += msm_rtb_pdata.size;
+#endif
+}
+
 static void __init msm8x60_calculate_reserve_sizes(void)
 {
 	size_pmem_devices();
 	reserve_pmem_memory();
 	reserve_ion_memory();
 	reserve_mdp_memory();
+	reserve_rtb_memory();
 }
 
 static int msm8x60_paddr_to_memtype(unsigned int paddr)
@@ -7541,6 +7575,7 @@ static struct msm_panel_common_pdata mdp_pdata = {
 #else
 	.mem_hid = MEMTYPE_EBI1,
 #endif
+	.mdp_iommu_split_domain = 0,
 };
 
 static void __init reserve_mdp_memory(void)
