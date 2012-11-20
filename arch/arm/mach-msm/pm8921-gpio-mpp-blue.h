@@ -68,4 +68,10 @@ struct pm8xxx_mpp_init {
 			PM_GPIO_STRENGTH_HIGH, \
 			_func, 0, 0)
 
+#define PM8XXX_GPIO_OUTPUT_STRENGTH(_gpio, _val, _out_strength) \
+	PM8XXX_GPIO_INIT(_gpio, PM_GPIO_DIR_OUT, PM_GPIO_OUT_BUF_CMOS, _val, \
+			PM_GPIO_PULL_NO, PM_GPIO_VIN_S4, \
+			_out_strength, \
+			PM_GPIO_FUNC_NORMAL, 0, 0)
+
 extern void __init pm8921_gpio_mpp_init(void);
