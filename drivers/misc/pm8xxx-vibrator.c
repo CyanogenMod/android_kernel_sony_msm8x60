@@ -156,8 +156,10 @@ retry:
 	if (value == 0)
 		vib->state = 0;
 	else {
+#ifned CONFIG_MACH_SEMC_TSUBASA
 		value = (value > vib->pdata->max_timeout_ms ?
 				 vib->pdata->max_timeout_ms : value);
+#endif
 		vib->state = 1;
 		hrtimer_start(&vib->vib_timer,
 			      ktime_set(value / 1000, (value % 1000) * 1000000),

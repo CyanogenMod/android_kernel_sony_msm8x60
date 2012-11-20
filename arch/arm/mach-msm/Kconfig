@@ -738,6 +738,13 @@ config MACH_SEMC_MINT
 	help
 	  Support for the Sony Ericsson Mint
 
+config MACH_SEMC_TSUBASA
+	depends on ARCH_MSM8960
+	default n
+	bool "SONY Tsubasa KDDI"
+	help
+	  Support for the Sony Tsubasa KDDI
+
 config MACH_APQ8064_SIM
 	depends on ARCH_APQ8064
 	bool "APQ8064 Simulator"
