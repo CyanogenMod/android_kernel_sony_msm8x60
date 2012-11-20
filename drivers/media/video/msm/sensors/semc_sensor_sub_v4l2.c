@@ -55,6 +55,7 @@
 #define MODULE_STW01BM0		"STW01BM0"
 #define MODULE_APT01BM0		"APT01BM0"
 #define MODULE_APT00YP1		"APT00YP1"
+#define MODULE_STW00YP1		"STW00YP1"
 #define SENSOR_NAME_LEN		8
 
 struct semc_sensor_data {
@@ -427,8 +428,44 @@ static int semc_eeprom_load(struct msm_camera_eeprom_client *ectrl,
 		else
 			memcpy(d, MODULE_APT01BM0, 8);
 	} else if (((uint16_t)d[0] << 8 | d[1]) == SENSOR_ID_MT9V115) {
+		d[0] = 0x00;
+		d[1] = 0x00;
+		rc = semc_cam_i2c_write(&sensor_s_ctrl,
+			semc_sensor_sub_eeprom_addr,
+			0x0018, SENSOR_I2C_ADDR_2BYTE, 2, d);
+		if (rc < 0)
+			goto exit;
+
+		i = 0;
+		do {
+			msleep(20);
+			i++;
+			rc = semc_cam_i2c_read(&sensor_s_ctrl,
+				semc_sensor_sub_eeprom_addr,
+				0x0018, SENSOR_I2C_ADDR_2BYTE, 2, d);
+			if (rc < 0)
+				goto exit;
+		} while ((d[1] & 0x40) && i < 100);
+
+		if (i >= 100) {
+			rc = -ENODEV;
+			goto exit;
+		}
+
+		rc = semc_cam_i2c_read(&sensor_s_ctrl,
+			semc_sensor_sub_eeprom_addr,
+			0x001A, SENSOR_I2C_ADDR_2BYTE, 2, d);
+		if (rc < 0)
+			goto exit;
+
+		if ((d[0] & 0xF0) == 0xB0)
 			memcpy(d, MODULE_APT00YP1, 8);
-			LOGV("%s Sodium is found\n", __func__);
+		else if ((d[0] & 0xF0) == 0xE0 || (d[0] & 0xF0) == 0x00)
+			memcpy(d, MODULE_STW00YP1, 8);
+		else {
+			LOGE("%s Module ID is irregular\n", __func__);
+			memcpy(d, MODULE_APT00YP1, 8);
+		}
 	} else {
 		LOGV("%s Wrong sub camera module.\n", __func__);
 	}

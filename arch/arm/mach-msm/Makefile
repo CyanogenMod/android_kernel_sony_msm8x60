@@ -287,6 +287,9 @@ obj-$(CONFIG_MACH_SEMC_HAYABUSA) += gyro-semc_common.o battery-blue_falk.o
 obj-$(CONFIG_MACH_SEMC_MINT) += board-semc_blue.o devices-8960.o board-semc_blue_mint.o
 obj-$(CONFIG_MACH_SEMC_MINT) += gyro-semc_common.o battery-blue_mentos.o
 
+obj-$(CONFIG_MACH_SEMC_TSUBASA) += board-semc_blue.o devices-8960.o board-semc_blue_tsubasa.o
+obj-$(CONFIG_MACH_SEMC_TSUBASA) += gyro-semc_common.o battery-blue_august.o
+
 obj-$(CONFIG_PM8921_BMS) += bms-batterydata.o bms-batterydata-desay.o
 obj-$(CONFIG_MACH_APQ8064_SIM) += board-8064-all.o board-8064-regulator.o
 obj-$(CONFIG_MACH_APQ8064_RUMI3) += board-8064-all.o board-8064-regulator.o
