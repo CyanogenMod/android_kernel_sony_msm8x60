@@ -767,6 +767,7 @@ static void fusb300_rdfifo(struct fusb300_ep *ep,
 	} while (!reg);
 }
 
+#if 0
 /* write data to fifo */
 static void fusb300_wrfifo(struct fusb300_ep *ep,
 			   struct fusb300_request *req)
@@ -816,6 +817,7 @@ static void fusb300_wrfifo(struct fusb300_ep *ep,
 		i++;
 	} while (!reg);
 }
+#endif
 
 static u8 fusb300_get_epnstall(struct fusb300 *fusb300, u8 ep)
 {
@@ -980,10 +982,12 @@ static void set_address(struct fusb300 *fusb300, struct usb_ctrlrequest *ctrl)
 		} \
 	} while (0)
 
+#if 0
 static void fusb300_ep0_complete(struct usb_ep *ep,
 				struct usb_request *req)
 {
 }
+#endif
 
 static int setup_packet(struct fusb300 *fusb300, struct usb_ctrlrequest *ctrl)
 {
@@ -1029,6 +1033,7 @@ static int setup_packet(struct fusb300 *fusb300, struct usb_ctrlrequest *ctrl)
 	return ret;
 }
 
+#if 0
 static void fusb300_set_ep_bycnt(struct fusb300_ep *ep, u32 bycnt)
 {
 	struct fusb300 *fusb300 = ep->fusb300;
@@ -1039,6 +1044,7 @@ static void fusb300_set_ep_bycnt(struct fusb300_ep *ep, u32 bycnt)
 
 	iowrite32(reg, fusb300->reg + FUSB300_OFFSET_EPFFR(ep->epnum));
 }
+#endif
 
 static void done(struct fusb300_ep *ep, struct fusb300_request *req,
 		 int status)
