@@ -5992,7 +5992,9 @@ static void __init msm8960_init(void)
 	msm_device_hsic_host.dev.platform_data = &msm_hsic_pdata;
 	gpiomux_init();
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
+#ifndef CONFIG_MACH_SEMC_TSUBASA
 	pm8921_platform_data.keypad_pdata = get_keypad_data();
+#endif
 	msm8960_device_ssbi_pmic.dev.platform_data =
 				&msm8960_ssbi_pm8921_pdata;
 	pm8921_platform_data.num_regulators = msm_pm8921_regulator_pdata_len;
