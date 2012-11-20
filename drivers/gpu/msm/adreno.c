@@ -540,7 +540,7 @@ static void adreno_setstate(struct kgsl_device *device,
 static unsigned int
 a3xx_getchipid(struct kgsl_device *device)
 {
-	unsigned int majorid, minorid, patchid;
+	unsigned int majorid = 0, minorid = 0, patchid = 0;
 
 	/*
 	 * We could detect the chipID from the hardware but it takes multiple
