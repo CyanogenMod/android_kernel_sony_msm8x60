@@ -5751,16 +5751,7 @@ out:
 }
 EXPORT_SYMBOL(peripheral_disconnect);
 
-
 static struct i2c_registry msm8960_i2c_devices[] __initdata = {
-#if !defined(CONFIG_SEMC_CAM_MAIN_V4L2) && !defined(CONFIG_SEMC_CAM_SUB_V4L2)
-	{
-		0,
-		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
-		msm_camera_boardinfo,
-		ARRAY_SIZE(msm_camera_boardinfo),
-	},
-#endif
 	{
 		0,
 		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
