@@ -287,6 +287,15 @@ obj-$(CONFIG_MACH_SEMC_HAYABUSA) += gyro-semc_common.o battery-blue_falk.o
 obj-$(CONFIG_MACH_SEMC_MINT) += board-semc_blue.o devices-8960.o board-semc_blue_mint.o
 obj-$(CONFIG_MACH_SEMC_MINT) += gyro-semc_common.o battery-blue_mentos.o
 
+#blue
+board-blue-all-objs += board-blue.o board-blue-display.o board-blue-storage.o
+
+obj-$(CONFIG_MACH_BLUE_TSUBASA_KDDI) += board-blue-all.o board-blue_tsubasa_kddi-pmic.o board-blue_tsubasa_kddi-gpiomux.o board-blue_tsubasa-regulator.o battery-blue_august.o
+obj-$(CONFIG_MACH_BLUE_TSUBASA_KDDI) += gyro-sony_common.o board-sony_blue-gyro.o board-blue_tsubasa-camera.o
+obj-$(CONFIG_MACH_BLUE_TSUBASA_KDDI) += irda-blue_common.o
+obj-$(CONFIG_MACH_BLUE_TSUBASA_KDDI) += oneseg-blue_common.o
+obj-$(CONFIG_MACH_BLUE_TSUBASA_KDDI) += felica-blue_common.o
+
 obj-$(CONFIG_PM8921_BMS) += bms-batterydata.o bms-batterydata-desay.o
 obj-$(CONFIG_MACH_APQ8064_SIM) += board-8064-all.o board-8064-regulator.o
 obj-$(CONFIG_MACH_APQ8064_RUMI3) += board-8064-all.o board-8064-regulator.o

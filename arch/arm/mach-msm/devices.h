@@ -54,6 +54,7 @@ extern struct platform_device msm_device_uart_dm12;
 extern struct platform_device msm_device_uart_gsbi5;
 extern struct platform_device *msm_device_uart_gsbi9;
 extern struct platform_device msm_device_uart_dm6;
+extern struct platform_device msm_device_uart_dm9;
 extern struct platform_device msm_device_uart_dm10;
 
 extern struct platform_device msm8960_device_uart_gsbi2;
@@ -177,6 +178,8 @@ extern struct platform_device msm_multi_ch_pcm;
 extern struct platform_device msm_pcm_routing;
 extern struct platform_device msm_cpudai0;
 extern struct platform_device msm_cpudai1;
+extern struct platform_device msm8960_cpudai_slimbus_2_rx;
+extern struct platform_device msm8960_cpudai_slimbus_2_tx;
 extern struct platform_device msm_cpudai_hdmi_rx;
 extern struct platform_device msm_cpudai_bt_rx;
 extern struct platform_device msm_cpudai_bt_tx;
@@ -261,6 +264,8 @@ extern struct platform_device led_pdev;
 
 extern struct platform_device msm_rpm_device;
 extern struct platform_device msm_rpm_stat_device;
+extern struct platform_device msm8960_rpm_log_device;
+
 extern struct platform_device msm_device_rng;
 extern struct platform_device apq8064_device_rng;
 

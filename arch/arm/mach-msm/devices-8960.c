@@ -39,6 +39,7 @@
 #include "devices-msm8x60.h"
 #include "footswitch.h"
 #include "msm_watchdog.h"
+#include "rpm_log.h"
 #include "rpm_stats.h"
 #include "pil-q6v4.h"
 #include "scm-pas.h"
@@ -71,6 +72,7 @@
 #define MSM_UART5DM_PHYS	(MSM_GSBI5_PHYS + 0x40000)
 #define MSM_UART6DM_PHYS	(MSM_GSBI6_PHYS + 0x40000)
 #define MSM_UART8DM_PHYS	(MSM_GSBI8_PHYS + 0x40000)
+#define MSM_UART9DM_PHYS	(MSM_GSBI9_PHYS + 0x40000)
 #define MSM_UART10DM_PHYS	(MSM_GSBI10_PHYS + 0x40000)
 #define MSM_UART12DM_PHYS	(MSM_GSBI12_PHYS + 0x10000)
 
@@ -306,6 +308,53 @@ struct platform_device msm_device_uart_dm6 = {
 	.resource	= msm_uart_dm6_resources,
 	.dev	= {
 		.dma_mask		= &msm_uart_dm6_dma_mask,
+		.coherent_dma_mask	= DMA_BIT_MASK(32),
+	},
+};
+
+/*
+ * GSBI 9 used into UARTDM Mode
+ * For 8960 Fusion 2.2 Primary IPC
+ */
+static struct resource msm_uart_dm9_resources[] = {
+	{
+		.start	= MSM_UART9DM_PHYS,
+		.end	= MSM_UART9DM_PHYS + PAGE_SIZE - 1,
+		.name	= "uartdm_resource",
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= GSBI9_UARTDM_IRQ,
+		.end	= GSBI9_UARTDM_IRQ,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= MSM_GSBI9_PHYS,
+		.end	= MSM_GSBI9_PHYS + 4 - 1,
+		.name	= "gsbi_resource",
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= DMOV_HSUART_GSBI9_TX_CHAN,
+		.end	= DMOV_HSUART_GSBI9_RX_CHAN,
+		.name	= "uartdm_channels",
+		.flags	= IORESOURCE_DMA,
+	},
+	{
+		.start	= DMOV_HSUART_GSBI9_TX_CRCI,
+		.end	= DMOV_HSUART_GSBI9_RX_CRCI,
+		.name	= "uartdm_crci",
+		.flags	= IORESOURCE_DMA,
+	},
+};
+static u64 msm_uart_dm9_dma_mask = DMA_BIT_MASK(32);
+struct platform_device msm_device_uart_dm9 = {
+	.name	= "msm_serial_hs",
+	.id	= 1,
+	.num_resources	= ARRAY_SIZE(msm_uart_dm9_resources),
+	.resource	= msm_uart_dm9_resources,
+	.dev	= {
+		.dma_mask		= &msm_uart_dm9_dma_mask,
 		.coherent_dma_mask	= DMA_BIT_MASK(32),
 	},
 };
@@ -1725,6 +1774,16 @@ struct platform_device msm_cpudai1 = {
 	.id	= 0x4001,
 };
 
+struct platform_device msm8960_cpudai_slimbus_2_rx = {
+	.name = "msm-dai-q6",
+	.id = 0x4004,
+};
+
+struct platform_device msm8960_cpudai_slimbus_2_tx = {
+	.name = "msm-dai-q6",
+	.id = 0x4005,
+};
+
 struct platform_device msm_cpudai_hdmi_rx = {
 	.name	= "msm-dai-q6-hdmi",
 	.id	= 8,
@@ -2954,6 +3013,25 @@ struct platform_device msm_rpm_device = {
 	.id     = -1,
 };
 
+static struct msm_rpm_log_platform_data msm_rpm_log_pdata = {
+	.phys_addr_base = 0x0010C000,
+	.reg_offsets = {
+		[MSM_RPM_LOG_PAGE_INDICES] = 0x00000080,
+		[MSM_RPM_LOG_PAGE_BUFFER]  = 0x000000A0,
+	},
+	.phys_size = SZ_8K,
+	.log_len = 4096,		  /* log's buffer length in bytes */
+	.log_len_mask = (4096 >> 2) - 1,  /* length mask in units of u32 */
+};
+
+struct platform_device msm8960_rpm_log_device = {
+	.name	= "msm_rpm_log",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &msm_rpm_log_pdata,
+	},
+};
+
 static struct msm_rpmstats_platform_data msm_rpm_stat_pdata = {
 	.phys_addr_base = 0x0010D204,
 	.phys_size = SZ_8K,
@@ -3330,5 +3408,28 @@ struct platform_device msm8960_iommu_domain_device = {
 	.id = -1,
 	.dev = {
 		.platform_data = &msm8960_iommu_domain_pdata,
+	},
+};
+
+struct msm_rtb_platform_data msm8960_rtb_pdata = {
+	.size = SZ_1M,
+};
+
+static int __init msm_rtb_set_buffer_size(char *p)
+{
+	int s;
+
+	s = memparse(p, NULL);
+	msm8960_rtb_pdata.size = ALIGN(s, SZ_4K);
+	return 0;
+}
+early_param("msm_rtb_size", msm_rtb_set_buffer_size);
+
+
+struct platform_device msm8960_rtb_device = {
+	.name           = "msm_rtb",
+	.id             = -1,
+	.dev            = {
+		.platform_data = &msm8960_rtb_pdata,
 	},
 };
