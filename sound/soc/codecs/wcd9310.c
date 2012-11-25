@@ -49,6 +49,8 @@ MODULE_PARM_DESC(cfilt_adjust_ms, "delay after adjusting cfilt voltage in ms");
 #define BITS_PER_REG 8
 #define TABLA_CFILT_FAST_MODE 0x00
 #define TABLA_CFILT_SLOW_MODE 0x40
+#define TABLA_HP_AMP_ENABLE   0x41
+#define TABLA_HP_AMP_DISABLE  0x48
 #define MBHC_FW_READ_ATTEMPTS 15
 #define MBHC_FW_READ_TIMEOUT 2000000
 
@@ -344,6 +346,8 @@ struct tabla_priv {
 	struct dentry *debugfs_mbhc;
 #endif
 };
+
+struct snd_soc_codec *wcd_codec;
 
 static const u32 comp_shift[] = {
 	0,
@@ -2973,9 +2977,15 @@ static int tabla_hph_pa_event(struct snd_soc_dapm_widget *w,
 		tabla_codec_switch_micbias(codec, 0);
 		TABLA_RELEASE_LOCK(tabla->codec_resource_lock);
 
+#ifndef CONFIG_MACH_SONY
 		pr_debug("%s: sleep 10 ms after %s PA disable.\n", __func__,
 				w->name);
 		usleep_range(10000, 10000);
+#else
+		pr_debug("%s: sleep 50 ms after %s PA disable.\n", __func__,
+				w->name);
+		usleep_range(50000, 50000);
+#endif
 		break;
 	}
 	return 0;
@@ -7413,6 +7423,22 @@ int tabla_hs_detect(struct snd_soc_codec *codec,
 }
 EXPORT_SYMBOL_GPL(tabla_hs_detect);
 
+int tabla_codec_hp_amp_enable(u8 enable)
+{
+	int rc = 0;
+
+	if (!wcd_codec)
+		return -EINVAL;
+
+	rc = snd_soc_write(wcd_codec, TABLA_A_MBHC_HPH,
+			enable ? TABLA_HP_AMP_ENABLE : TABLA_HP_AMP_DISABLE);
+	if (rc)
+		pr_err("%s: Failed to write MBHC_HPH register\n", __func__);
+
+	return rc;
+}
+EXPORT_SYMBOL_GPL(tabla_codec_hp_amp_enable);
+
 static irqreturn_t tabla_slimbus_irq(int irq, void *data)
 {
 	struct tabla_priv *priv = data;
@@ -8136,6 +8162,9 @@ static int tabla_codec_probe(struct snd_soc_codec *codec)
 					NULL, tabla, &codec_mbhc_debug_ops);
 	}
 #endif
+
+	wcd_codec = codec;
+
 	codec->ignore_pmdown_time = 1;
 	return ret;
 

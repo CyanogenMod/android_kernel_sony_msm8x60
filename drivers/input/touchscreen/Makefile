@@ -82,3 +82,7 @@ obj-$(CONFIG_TOUCHSCREEN_CYTTSP_I2C_QC)       += cyttsp-i2c-qc.o
 obj-$(CONFIG_TOUCHSCREEN_LGE_COMMON)	+= lge_touch_core.o
 obj-$(CONFIG_TOUCHSCREEN_LGE_SYNAPTICS) += touch_synaptics.o
 obj-$(CONFIG_TOUCHSCREEN_LGE_SYNAPTICS) += touch_synaptics_ds4_fw_upgrade.o
+
+obj-$(CONFIG_TOUCHSCREEN_CLEARPAD_RMI_DEV)      += clearpad_rmi_dev.o
+obj-$(CONFIG_TOUCHSCREEN_CLEARPAD)      += clearpad_core.o
+obj-$(CONFIG_TOUCHSCREEN_CLEARPAD_I2C)  += clearpad_i2c.o

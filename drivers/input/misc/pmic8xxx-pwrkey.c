@@ -44,6 +44,9 @@ static irqreturn_t pwrkey_press_irq(int irq, void *_pwrkey)
 {
 	struct pmic8xxx_pwrkey *pwrkey = _pwrkey;
 
+#ifdef CONFIG_PMIC8XXX_FORCECRASH
+	pmic8xxx_forcecrash_timer_setup(1);
+#endif
 	if (pwrkey->press == true) {
 		pwrkey->press = false;
 		return IRQ_HANDLED;
@@ -61,6 +64,9 @@ static irqreturn_t pwrkey_release_irq(int irq, void *_pwrkey)
 {
 	struct pmic8xxx_pwrkey *pwrkey = _pwrkey;
 
+#ifdef CONFIG_PMIC8XXX_FORCECRASH
+	pmic8xxx_forcecrash_timer_setup(0);
+#endif
 	if (pwrkey->press == false) {
 		input_report_key(pwrkey->pwr, KEY_POWER, 1);
 		input_sync(pwrkey->pwr);
@@ -213,6 +219,10 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
 
+#ifdef CONFIG_PMIC8XXX_FORCECRASH
+	pmic8xxx_forcecrash_init(pdev);
+#endif
+
 	return 0;
 
 free_press_irq:
@@ -234,6 +244,9 @@ static int __devexit pmic8xxx_pwrkey_remove(struct platform_device *pdev)
 	int key_release_irq = platform_get_irq(pdev, 0);
 	int key_press_irq = platform_get_irq(pdev, 1);
 
+#ifdef CONFIG_PMIC8XXX_FORCECRASH
+	pmic8xxx_forcecrash_exit(pdev);
+#endif
 	device_init_wakeup(&pdev->dev, 0);
 
 	free_irq(key_press_irq, pwrkey);

@@ -2,6 +2,7 @@
  * ci13xxx_udc.c - MIPS USB IP core family device controller
  *
  * Copyright (C) 2008 Chipidea - MIPS Technologies, Inc. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * Author: David Lopo
  *
@@ -2332,6 +2333,30 @@ dequeue:
 	return retval;
 }
 
+static int ep_set_halt_force(struct usb_ep *ep, int value)
+{
+	struct ci13xxx_ep *mEp = container_of(ep, struct ci13xxx_ep, ep);
+	int direction, retval = 0;
+
+	if (ep == NULL || mEp->desc == NULL)
+		return -EINVAL;
+
+	direction = mEp->dir;
+	do {
+		dbg_event(_usb_addr(mEp), "HALT", value);
+		retval |= hw_ep_set_halt(mEp->num, mEp->dir, value);
+
+		if (!value)
+			mEp->wedge = 0;
+
+		if (mEp->type == USB_ENDPOINT_XFER_CONTROL)
+			mEp->dir = (mEp->dir == TX) ? RX : TX;
+
+	} while (mEp->dir != direction);
+
+	return retval;
+}
+
 /**
  * isr_tr_complete_handler: transaction complete interrupt handler
  * @udc: UDC descriptor
@@ -2419,10 +2444,8 @@ __acquires(udc->lock)
 				if (dir) /* TX */
 					num += hw_ep_max/2;
 				if (!udc->ci13xxx_ep[num].wedge) {
-					spin_unlock(udc->lock);
-					err = usb_ep_clear_halt(
-						&udc->ci13xxx_ep[num].ep);
-					spin_lock(udc->lock);
+					err = ep_set_halt_force(
+						&udc->ci13xxx_ep[num].ep, 0);
 					if (err)
 						break;
 				}
@@ -2461,6 +2484,8 @@ __acquires(udc->lock)
 		case USB_REQ_SET_CONFIGURATION:
 			if (type == (USB_DIR_OUT|USB_TYPE_STANDARD))
 				udc->configured = !!req.wValue;
+			if (udc->configured)
+				otg_stop_recheck_chgtype(udc->transceiver);
 			goto delegate;
 		case USB_REQ_SET_FEATURE:
 			if (type == (USB_DIR_OUT|USB_RECIP_ENDPOINT) &&
@@ -2474,9 +2499,8 @@ __acquires(udc->lock)
 				if (dir) /* TX */
 					num += hw_ep_max/2;
 
-				spin_unlock(udc->lock);
-				err = usb_ep_set_halt(&udc->ci13xxx_ep[num].ep);
-				spin_lock(udc->lock);
+				err = ep_set_halt_force(
+					&udc->ci13xxx_ep[num].ep, 1);
 				if (!err)
 					isr_setup_status_phase(udc);
 			} else if (type == (USB_DIR_OUT|USB_RECIP_DEVICE)) {
@@ -2870,7 +2894,7 @@ static int is_sps_req(struct ci13xxx_req *mReq)
 static int ep_set_halt(struct usb_ep *ep, int value)
 {
 	struct ci13xxx_ep *mEp = container_of(ep, struct ci13xxx_ep, ep);
-	int direction, retval = 0;
+	int retval = 0;
 	unsigned long flags;
 
 	trace("%p, %i", ep, value);
@@ -2891,18 +2915,7 @@ static int ep_set_halt(struct usb_ep *ep, int value)
 	}
 #endif
 
-	direction = mEp->dir;
-	do {
-		dbg_event(_usb_addr(mEp), "HALT", value);
-		retval |= hw_ep_set_halt(mEp->num, mEp->dir, value);
-
-		if (!value)
-			mEp->wedge = 0;
-
-		if (mEp->type == USB_ENDPOINT_XFER_CONTROL)
-			mEp->dir = (mEp->dir == TX) ? RX : TX;
-
-	} while (mEp->dir != direction);
+	retval = ep_set_halt_force(ep, value);
 
 	spin_unlock_irqrestore(mEp->lock, flags);
 	return retval;
@@ -2998,6 +3011,8 @@ static int ci13xxx_vbus_session(struct usb_gadget *_gadget, int is_active)
 			hw_device_reset(udc);
 			if (udc->softconnect)
 				hw_device_state(udc->ep0out.qh.dma);
+			otg_start_recheck_chgtype(udc->transceiver,
+						msecs_to_jiffies(1000));
 		} else {
 			hw_device_state(0);
 			_gadget_stop_activity(&udc->gadget);
@@ -3032,16 +3047,23 @@ static int ci13xxx_pullup(struct usb_gadget *_gadget, int is_active)
 		spin_unlock_irqrestore(udc->lock, flags);
 		return 0;
 	}
-	spin_unlock_irqrestore(udc->lock, flags);
 
 	if (is_active) {
 		hw_device_state(udc->ep0out.qh.dma);
 		if (udc->udc_driver->notify_event)
 			udc->udc_driver->notify_event(udc,
 				CI13XXX_CONTROLLER_CONNECT_EVENT);
-	}
-	else
+	} else {
+		/*
+		 * Flush transactions of ep0 to make sure a empty
+		 * queue at next connection.
+		 */
+		_ep_nuke(&udc->ep0out);
+		_ep_nuke(&udc->ep0in);
 		hw_device_state(0);
+	}
+
+	spin_unlock_irqrestore(udc->lock, flags);
 
 	return 0;
 }
@@ -3201,6 +3223,11 @@ static int ci13xxx_start(struct usb_gadget_driver *driver,
 	spin_unlock_irqrestore(udc->lock, flags);
 	if (retval || put)
 		pm_runtime_put_sync(&udc->gadget.dev);
+
+	if (udc->udc_driver->notify_event)
+			udc->udc_driver->notify_event(udc,
+				CI13XXX_CONTROLLER_UDC_STARTED_EVENT);
+
 	return retval;
 }
 

@@ -183,6 +183,7 @@ void wcd9xxx_unlock_sleep(struct wcd9xxx *wcd9xxx);
 enum wcd9xxx_pm_state wcd9xxx_pm_cmpxchg(struct wcd9xxx *wcd9xxx,
 				enum wcd9xxx_pm_state o,
 				enum wcd9xxx_pm_state n);
+int tabla_codec_hp_amp_enable(u8 enable);
 
 static inline int wcd9xxx_request_irq(struct wcd9xxx *wcd9xxx, int irq,
 				     irq_handler_t handler, const char *name,

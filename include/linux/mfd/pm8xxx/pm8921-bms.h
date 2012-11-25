@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +15,7 @@
 #define __PM8XXX_BMS_H
 
 #include <linux/errno.h>
+#include <linux/types.h>
 
 #define PM8921_BMS_DEV_NAME	"pm8921-bms"
 
@@ -27,6 +29,9 @@
 #define PC_TEMP_COLS		8
 
 #define MAX_SINGLE_LUT_COLS	20
+
+#define MAX_DOUBLE_LUT_ROWS	20
+#define MAX_DOUBLE_LUT_COLS	20
 
 struct single_row_lut {
 	int x[MAX_SINGLE_LUT_COLS];
@@ -72,6 +77,22 @@ struct pc_temp_ocv_lut {
 };
 
 /**
+ * struct double_row_lut -
+ * @rows:	number of rows should be <= MAX_DOUBLE_LUT_ROWS
+ * @cols:	number of columns should be <= MAX_DOUBLE_LUT_COLS
+ * @in_1:	The 1st input parameter for lut and must be in increasing order
+ * @in_2:	The 2nd input parameter for lut and must be in decreasing order
+ * @out:	The output parameter for lut
+ */
+struct double_row_lut {
+	int rows;
+	int cols;
+	int in_1[MAX_DOUBLE_LUT_COLS];
+	int in_2[MAX_DOUBLE_LUT_ROWS][MAX_DOUBLE_LUT_COLS];
+	int out[MAX_DOUBLE_LUT_ROWS];
+};
+
+/**
  * struct pm8921_bms_battery_data -
  * @fcc:		full charge capacity (mAmpHour)
  * @fcc_temp_lut:	table to get fcc at a given temp
@@ -80,6 +101,7 @@ struct pc_temp_ocv_lut {
  *			and percent charge
  * @rbatt_sf_lut:	table to get battery resistance scaling factor given
  *			temperature and percent charge
+ * @rbatt_temp_soc_lut:	table to get rbatt given batt temp and soc
  * @default_rbatt_mohm:	the default value of battery resistance to use when
  *			readings from bms are not available.
  * @delta_rbatt_mohm:	the resistance to be added towards lower soc to
@@ -92,6 +114,7 @@ struct pm8921_bms_battery_data {
 	struct pc_temp_ocv_lut	*pc_temp_ocv_lut;
 	struct sf_lut		*pc_sf_lut;
 	struct sf_lut		*rbatt_sf_lut;
+	struct double_row_lut	*rbatt_temp_soc_lut;
 	int			default_rbatt_mohm;
 	int			delta_rbatt_mohm;
 };
@@ -108,7 +131,6 @@ enum battery_type {
 	BATT_UNKNOWN = 0,
 	BATT_PALLADIUM,
 	BATT_DESAY,
-	BATT_LGE,
 };
 
 /**
@@ -117,36 +139,29 @@ enum battery_type {
  * @r_sense:		sense resistor value in (mOhms)
  * @i_test:		current at which the unusable charger cutoff is to be
  *			calculated or the peak system current (mA)
- * @v_cutoff:		the loaded voltage at which the battery
- *			is considered empty(mV)
+ * @v_failure:		the voltage at which the battery is considered empty(mV)
  * @enable_fcc_learning:	if set the driver will learn full charge
  *				capacity of the battery upon end of charge
+ * @allow_soc_increase:	allow soc increase without charger attached
+ * @enable_remember_soc:allow to remember state of charge between restarts
  */
 struct pm8921_bms_platform_data {
 	struct pm8xxx_bms_core_data	bms_cdata;
+	struct pm8921_bms_battery_data	*battery_data;
 	enum battery_type		battery_type;
 	unsigned int			r_sense;
 	unsigned int			i_test;
-	unsigned int			v_cutoff;
+	unsigned int			v_failure;
 	unsigned int			max_voltage_uv;
 	unsigned int			rconn_mohm;
 	int				enable_fcc_learning;
-	int				shutdown_soc_valid_limit;
-	int				ignore_shutdown_soc;
-	int				adjust_soc_low_threshold;
-	int				chg_term_ua;
-	int				eoc_check_soc;
-	int				bms_support_wlc;
-	int				wlc_term_ua;
-	int				wlc_max_voltage_uv;
-	int				(*wlc_is_plugged)(void);
-	int				first_fixed_iavg_ma;
+	bool				allow_soc_increase;
+	bool				enable_remember_soc;
 };
 
 #if defined(CONFIG_PM8921_BMS) || defined(CONFIG_PM8921_BMS_MODULE)
 extern struct pm8921_bms_battery_data  palladium_1500_data;
 extern struct pm8921_bms_battery_data  desay_5200_data;
-extern struct pm8921_bms_battery_data  lge_2100_mako_data;
 /**
  * pm8921_bms_get_vsense_avg - return the voltage across the sense
  *				resitor in microvolts
@@ -181,6 +196,12 @@ int pm8921_bms_get_battery_current(int *result);
 int pm8921_bms_get_percent_charge(void);
 
 /**
+ * pm8921_bms_get_init_fcc - returns initial fcc in mAh of the battery
+ *
+ */
+int pm8921_bms_get_init_fcc(void);
+
+/**
  * pm8921_bms_get_fcc - returns fcc in mAh of the battery depending on its age
  *			and temperature
  *
@@ -199,6 +220,11 @@ void pm8921_bms_charging_began(void);
  *				track of chargecycles
  */
 void pm8921_bms_charging_end(int is_battery_full);
+
+/**
+ * pm8921_bms_cc_uah - function to get the coulomb counter value (uah)
+ */
+int pm8921_bms_cc_uah(int *cc_uah);
 
 void pm8921_bms_calibrate_hkadc(void);
 /**
@@ -233,7 +259,15 @@ static inline int pm8921_bms_get_percent_charge(void)
 {
 	return -ENXIO;
 }
+static inline int pm8921_bms_get_init_fcc(void)
+{
+	return -ENXIO;
+}
 static inline int pm8921_bms_get_fcc(void)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_cc_uah(int *cc_uah)
 {
 	return -ENXIO;
 }

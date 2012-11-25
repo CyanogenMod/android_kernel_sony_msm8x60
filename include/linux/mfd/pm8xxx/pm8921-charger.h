@@ -48,14 +48,6 @@ enum pm8921_usb_debounce_time {
 	PM_USB_DEBOUNCE_80P5MS,
 };
 
-enum pm8921_chg_led_src_config {
-	LED_SRC_GND,
-	LED_SRC_VPH_PWR,
-	LED_SRC_5V,
-	LED_SRC_MIN_VPH_5V,
-	LED_SRC_BYPASS,
-};
-
 /**
  * struct pm8921_charger_platform_data -
  * @safety_time:	max charging time in minutes incl. fast and trkl
@@ -63,14 +55,16 @@ enum pm8921_chg_led_src_config {
  * @ttrkl_time:		max trckl charging time in minutes
  *			valid range 1 to 64 mins. PON default 15 min
  * @update_time:	how often the userland be updated of the charging (msec)
- * @alarm_voltage:	the voltage (mV) when lower battery alarm is triggered
+ * @update_time_at_low_bat: how often the Fuel Gauge algorithm is updated
+ *			when 'low_bat' condition is reached (msec)
  * @max_voltage:	the max voltage (mV) the battery should be charged up to
  * @min_voltage:	the voltage (mV) where charging method switches from
  *			trickle to fast. This is also the minimum voltage the
  *			system operates at
- * @uvd_thresh_voltage:	the USB falling UVD threshold (mV) (PM8917 only)
  * @resume_voltage_delta:	the (mV) drop to wait for before resume charging
  *				after the battery has been fully charged
+ * @resume_soc:		the state of charge (%) to wait for resume charging
+ *			after the battery has been fully charged
  * @term_current:	the charger current (mA) at which EOC happens
  * @cool_temp:		the temperature (degC) at which the battery is
  *			considered cool charging current and voltage is reduced.
@@ -81,6 +75,7 @@ enum pm8921_chg_led_src_config {
  * @temp_check_period:	The polling interval in seconds to check battery
  *			temeperature if it has gone to cool or warm temperature
  *			area
+ * @safe_current:		writeable value of max charge current in mA
  * @max_bat_chg_current:	Max charge current of the battery in mA
  *				Usually 70% of full charge capacity
  * @cool_bat_chg_current:	chg current (mA) when the battery is cool
@@ -90,10 +85,7 @@ enum pm8921_chg_led_src_config {
  * @get_batt_capacity_percent:
  *			a board specific function to return battery
  *			capacity. If null - a default one will be used
- * @dc_unplug_check:	enables the reverse boosting fix for the DC_IN line
- *			however, this should only be enabled for devices which
- *			control the DC OVP FETs otherwise this option should
- *			remain disabled
+ * @ibat_calib_enable:	enables the ibatmax calibration algorithm
  * @trkl_voltage:	the trkl voltage in (mV) below which hw controlled
  *			 trkl charging happens with linear charger
  * @weak_voltage:	the weak voltage (mV) below which hw controlled
@@ -118,32 +110,35 @@ enum pm8921_chg_led_src_config {
  *			with the battery terminals shorted. This indicates
  *			resistance of the pads, connectors, battery terminals
  *			and rsense.
- * @led_src_config:	Power source for anode of charger indicator LED.
  */
 struct pm8921_charger_platform_data {
 	struct pm8xxx_charger_core_data	charger_cdata;
 	unsigned int			safety_time;
 	unsigned int			ttrkl_time;
 	unsigned int			update_time;
+	unsigned int			update_time_at_low_bat;
 	unsigned int			max_voltage;
 	unsigned int			min_voltage;
-	unsigned int			uvd_thresh_voltage;
-	unsigned int			alarm_voltage;
 	unsigned int			resume_voltage_delta;
+	unsigned int			resume_soc;
 	unsigned int			term_current;
+	int				cold_temp;
 	int				cool_temp;
 	int				warm_temp;
+	int				hot_temp;
+	int				hysterisis_temp;
 	unsigned int			temp_check_period;
+	unsigned int			safe_current;
 	unsigned int			max_bat_chg_current;
 	unsigned int			cool_bat_chg_current;
 	unsigned int			warm_bat_chg_current;
-	int				ext_batt_temp_monitor;
 	unsigned int			cool_bat_voltage;
 	unsigned int			warm_bat_voltage;
 	unsigned int			(*get_batt_capacity_percent) (void);
 	int64_t				batt_id_min;
 	int64_t				batt_id_max;
 	bool				keep_btm_on_suspend;
+	bool				ibat_calib_enable;
 	bool				dc_unplug_check;
 	int				trkl_voltage;
 	int				weak_voltage;
@@ -155,8 +150,6 @@ struct pm8921_charger_platform_data {
 	enum pm8921_chg_cold_thr	cold_thr;
 	enum pm8921_chg_hot_thr		hot_thr;
 	int				rconn_mohm;
-	enum pm8921_chg_led_src_config	led_src_config;
-	int				eoc_check_soc;
 };
 
 enum pm8921_charger_source {
@@ -169,16 +162,6 @@ enum pm8921_charger_source {
 void pm8921_charger_vbus_draw(unsigned int mA);
 int pm8921_charger_register_vbus_sn(void (*callback)(int));
 void pm8921_charger_unregister_vbus_sn(void (*callback)(int));
-/**
- * pm8921_charger_enable -
- *
- * @enable: 1 means enable charging, 0 means disable
- *
- * Enable/Disable battery charging current, the device will still draw current
- * from the charging source
- */
-int pm8921_charger_enable(bool enable);
-
 /**
  * pm8921_is_usb_chg_plugged_in - is usb plugged in
  *
@@ -285,22 +268,6 @@ int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms);
  *
  */
 int pm8921_usb_ovp_disable(int disable);
-#ifdef CONFIG_WIRELESS_CHARGER
-int set_wireless_power_supply_control(int value);
-#endif
-
-int pm8921_set_ext_battery_health(int health, int i_limit);
-int pm8921_get_batt_state(void);
-int pm8921_force_start_charging(void);
-int pm8921_get_batt_health(void);
-
-/**
- * pm8921_is_batfet_closed - battery fet status
- *
- * Returns 1 if batfet is closed 0 if open. On configurations without
- * batfet this will return 0.
- */
-int pm8921_is_batfet_closed(void);
 #else
 static inline void pm8921_charger_vbus_draw(unsigned int mA)
 {
@@ -312,10 +279,6 @@ static inline int pm8921_charger_register_vbus_sn(void (*callback)(int))
 static inline void pm8921_charger_unregister_vbus_sn(void (*callback)(int))
 {
 }
-static inline int pm8921_charger_enable(bool enable)
-{
-	return -ENXIO;
-}
 static inline int pm8921_is_usb_chg_plugged_in(void)
 {
 	return -ENXIO;
@@ -325,10 +288,6 @@ static inline int pm8921_is_dc_chg_plugged_in(void)
 	return -ENXIO;
 }
 static inline int pm8921_is_battery_present(void)
-{
-	return -ENXIO;
-}
-static inline int pm8917_set_under_voltage_detection_threshold(int mv)
 {
 	return -ENXIO;
 }
@@ -372,10 +331,6 @@ static inline int pm8921_usb_ovp_set_hystersis(enum pm8921_usb_debounce_time ms)
 static inline int pm8921_usb_ovp_disable(int disable)
 {
 	return -ENXIO;
-}
-static inline int pm8921_is_batfet_closed(void)
-{
-	return 1;
 }
 #endif
 

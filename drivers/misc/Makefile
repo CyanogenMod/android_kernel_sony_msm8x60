@@ -75,3 +75,13 @@ obj-$(CONFIG_QFP_FUSE) += qfp_fuse.o
 obj-y += tspdrv/
 obj-$(CONFIG_BU52031NVX) += pm8xxx-cradle.o
 obj-$(CONFIG_SLIMPORT_ANX7808)	+= slimport_anx7808/
+
+# Sony
+obj-$(CONFIG_RAMDUMP_CRASH_LOGS) += ramdumplogs.o
+obj-$(CONFIG_LM3560_FLASHLED) += lm3560.o
+obj-$(CONFIG_LM3561_FLASHLED) += lm3561.o
+obj-$(CONFIG_SENSORS_MPU3050) += mpu3050/
+obj-$(CONFIG_NFC_PN544) += pn544.o
+obj-$(CONFIG_SONY_ONESEG_TUNER_PM) += oneseg_tunerpm.o
+obj-$(CONFIG_SONY_FELICA_SUPPORT) += felica.o
+obj-$(CONFIG_SONY_FELICA_NFC_SUPPORT) += felica_vdev.o

@@ -3,6 +3,9 @@
  * Copyright (C) 2008 Google, Inc.
  * Author: Brian Swetland <swetland@google.com>
  * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Ericsson Mobile Communications AB.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
+ *
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -106,6 +109,9 @@ enum msm_usb_phy_type {
  * USB_CHG_STATE_SECONDARY_DONE	Secondary detection is completed (Detects
  *                              between DCP and CDP).
  * USB_CHG_STATE_DETECTED	USB charger type is determined.
+ * USB_CHG_STATE_RECHECK	DCP can be miss-detected as SDP when user
+ *				insert USB cable very slowly. Rechecking chager
+ *				type after a while.
  *
  */
 enum usb_chg_state {
@@ -115,6 +121,7 @@ enum usb_chg_state {
 	USB_CHG_STATE_PRIMARY_DONE,
 	USB_CHG_STATE_SECONDARY_DONE,
 	USB_CHG_STATE_DETECTED,
+	USB_CHG_STATE_RECHECK,
 };
 
 /**
@@ -202,6 +209,7 @@ enum usb_vdd_value {
  *              USB enters LPM.
  * @bus_scale_table: parameters for bus bandwidth requirements
  * @mhl_dev_name: MHL device name used to register with MHL driver.
+ * @chg_drawable_ida: Drawable current value when ID_A.
  */
 struct msm_otg_platform_data {
 	int *phy_init_seq;
@@ -221,6 +229,7 @@ struct msm_otg_platform_data {
 	bool core_clk_always_on_workaround;
 	struct msm_bus_scale_pdata *bus_scale_table;
 	const char *mhl_dev_name;
+	unsigned chg_drawable_ida;
 };
 
 /* Timeout (in msec) values (min - max) associated with OTG timers */
@@ -284,6 +293,8 @@ struct msm_otg_platform_data {
  * @chg_type: The type of charger attached.
  * @dcd_retires: The retry count used to track Data contact
  *               detection process.
+ * @chg_recheck_stop_work: Work to stop rechecking charger type
+ * @chg_recheck_retries: The retry count used to recheck charger type
  * @wlock: Wake lock struct to prevent system suspend when
  *               USB is active.
  * @usbdev_nb: The notifier block used to know about the B-device
@@ -293,6 +304,7 @@ struct msm_otg_platform_data {
  * @id_timer: The timer used for polling ID line to detect ACA states.
  * @xo_handle: TCXO buffer handle
  * @bus_perf_client: Bus performance client handle to request BUS bandwidth
+ * @wq: Work queue for sm_work, chg_work and id_work.
  * @mhl_enabled: MHL driver registration successful and MHL enabled.
  */
 struct msm_otg {
@@ -323,19 +335,24 @@ struct msm_otg {
 #define A_CONN		15
 #define B_BUS_REQ	16
 #define MHL	        17
+#define VBUS_DROP_DET	18
 	unsigned long inputs;
 	struct work_struct sm_work;
 	bool sm_work_pending;
 	atomic_t pm_suspended;
 	atomic_t in_lpm;
+	atomic_t suspend_work_pending;
 	int async_int;
 	unsigned cur_power;
 	struct delayed_work chg_work;
 	struct delayed_work pmic_id_status_work;
+	struct delayed_work suspend_work;
 	struct delayed_work check_ta_work;
 	enum usb_chg_state chg_state;
 	enum usb_chg_type chg_type;
 	u8 dcd_retries;
+	struct work_struct chg_recheck_stop_work;
+	u8 chg_recheck_retries;
 	struct wake_lock wlock;
 	struct notifier_block usbdev_nb;
 	unsigned mA_port;
@@ -347,7 +364,7 @@ struct msm_otg {
 	/*
 	 * Allowing PHY power collpase turns off the HSUSB 3.3v and 1.8v
 	 * analog regulators while going to low power mode.
-	 * Currently only 8960(28nm PHY) has the support to allowing PHY
+	 * Currently only 28nm PHY has the support to allowing PHY
 	 * power collapse since it doesn't have leakage currents while
 	 * turning off the power rails.
 	 */
@@ -361,18 +378,25 @@ struct msm_otg {
 	   * Allow putting the core in Low Power mode, when
 	   * USB bus is suspended but cable is connected.
 	   */
-#define ALLOW_LPM_ON_DEV_SUSPEND	    BIT(2)
+#define ALLOW_LPM_ON_DEV_SUSPEND	BIT(2)
+	/*
+	 * Allowing PHY regulators LPM puts the HSUSB 3.3v and 1.8v
+	 * analog regulators into LPM while going to USB low power mode.
+	 */
+#define ALLOW_PHY_REGULATORS_LPM	BIT(3)
 	unsigned long lpm_flags;
 #define PHY_PWR_COLLAPSED		BIT(0)
 #define PHY_RETENTIONED			BIT(1)
 #define XO_SHUTDOWN			BIT(2)
 #define CLOCKS_DOWN			BIT(3)
+#define PHY_REGULATORS_LPM		BIT(4)
 	int reset_counter;
 	unsigned long b_last_se0_sess;
 	unsigned long tmouts;
 	u8 active_tmout;
 	struct hrtimer timer;
 	enum usb_vdd_type vdd_type;
+	struct workqueue_struct *wq;
 };
 
 struct msm_hsic_host_platform_data {
@@ -380,6 +404,7 @@ struct msm_hsic_host_platform_data {
 	unsigned data;
 	struct msm_bus_scale_pdata *bus_scale_table;
 	unsigned log2_irq_thresh;
+	u32 swfi_latency;
 };
 
 struct msm_usb_host_platform_data {
@@ -468,4 +493,7 @@ static inline int msm_ep_unconfig(struct usb_ep *ep)
 	return -ENODEV;
 }
 #endif
+
+void msm_otg_notify_vbus_drop(void);
+
 #endif

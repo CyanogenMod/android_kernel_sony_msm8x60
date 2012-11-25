@@ -642,6 +642,22 @@ config PMIC8058_XOADC
 	  PMIC8058. Driver interface to program registers of the ADC over
 	  AMUX channels, devices on programmable MPP's and xotherm.
 
+config LM3560_FLASHLED
+	tristate "LED driver for LM3560"
+	default n
+	depends on I2C
+	help
+	  This option enables support for LM3560
+	  led controller with lm3560 driver.
+
+config LM3561_FLASHLED
+	tristate "LED driver for LM3561"
+	default n
+	depends on I2C
+	help
+	  This option enables support for LM3561
+	  led controller with lm3561 driver.
+
 config QSEECOM
 	tristate "Qualcomm Secure Execution Communicator driver"
 	help
@@ -690,5 +706,6 @@ source "drivers/misc/lis3lv02d/Kconfig"
 source "drivers/misc/carma/Kconfig"
 source "drivers/misc/altera-stapl/Kconfig"
 source "drivers/misc/slimport_anx7808/Kconfig"
+source "drivers/misc/mpu3050/Kconfig"
 
 endmenu

@@ -142,6 +142,8 @@ struct pm8921_platform_data {
 	struct pm8xxx_vibrator_platform_data	*vibrator_pdata;
 	struct pm8xxx_ccadc_platform_data	*ccadc_pdata;
 	struct pm8xxx_pwm_platform_data		*pwm_pdata;
+	struct simple_remote_platform_data	*simple_remote_pdata;
+	struct pm8921_mic_bias_platform_data	*mic_bias_pdata;
 };
 
 #endif
