@@ -1,4 +1,5 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,19 +15,23 @@
 #define __PM8XXX_BMS_H
 
 #include <linux/errno.h>
+#include <linux/types.h>
 
 #define PM8921_BMS_DEV_NAME	"pm8921-bms"
 
 #define FCC_CC_COLS		5
 #define FCC_TEMP_COLS		8
 
-#define PC_CC_ROWS		10
-#define PC_CC_COLS		5
+#define PC_CC_ROWS             29
+#define PC_CC_COLS             13
 
 #define PC_TEMP_ROWS		29
 #define PC_TEMP_COLS		8
 
 #define MAX_SINGLE_LUT_COLS	20
+
+#define MAX_DOUBLE_LUT_ROWS	20
+#define MAX_DOUBLE_LUT_COLS	20
 
 struct single_row_lut {
 	int x[MAX_SINGLE_LUT_COLS];
@@ -35,19 +40,20 @@ struct single_row_lut {
 };
 
 /**
- * struct pc_sf_lut -
+ * struct sf_lut -
  * @rows:	number of percent charge entries should be <= PC_CC_ROWS
  * @cols:	number of charge cycle entries should be <= PC_CC_COLS
- * @cycles:	the charge cycles at which sf data is available in the table.
+ * @row_entries:	the charge cycles/temperature at which sf data
+ *			is available in the table.
  *		The charge cycles must be in increasing order from 0 to rows.
  * @percent:	the percent charge at which sf data is available in the table
  *		The  percentcharge must be in decreasing order from 0 to cols.
  * @sf:		the scaling factor data
  */
-struct pc_sf_lut {
+struct sf_lut {
 	int rows;
 	int cols;
-	int cycles[PC_CC_COLS];
+	int row_entries[PC_CC_COLS];
 	int percent[PC_CC_ROWS];
 	int sf[PC_CC_ROWS][PC_CC_COLS];
 };
@@ -71,20 +77,46 @@ struct pc_temp_ocv_lut {
 };
 
 /**
+ * struct double_row_lut -
+ * @rows:	number of rows should be <= MAX_DOUBLE_LUT_ROWS
+ * @cols:	number of columns should be <= MAX_DOUBLE_LUT_COLS
+ * @in_1:	The 1st input parameter for lut and must be in increasing order
+ * @in_2:	The 2nd input parameter for lut and must be in decreasing order
+ * @out:	The output parameter for lut
+ */
+struct double_row_lut {
+	int rows;
+	int cols;
+	int in_1[MAX_DOUBLE_LUT_COLS];
+	int in_2[MAX_DOUBLE_LUT_ROWS][MAX_DOUBLE_LUT_COLS];
+	int out[MAX_DOUBLE_LUT_ROWS];
+};
+
+/**
  * struct pm8921_bms_battery_data -
  * @fcc:		full charge capacity (mAmpHour)
  * @fcc_temp_lut:	table to get fcc at a given temp
- * @fcc_sf_lut:		table to get fcc scaling factor for given charge cycles
  * @pc_temp_ocv_lut:	table to get percent charge given batt temp and cycles
  * @pc_sf_lut:		table to get percent charge scaling factor given cycles
  *			and percent charge
+ * @rbatt_sf_lut:	table to get battery resistance scaling factor given
+ *			temperature and percent charge
+ * @rbatt_temp_soc_lut:	table to get rbatt given batt temp and soc
+ * @default_rbatt_mohm:	the default value of battery resistance to use when
+ *			readings from bms are not available.
+ * @delta_rbatt_mohm:	the resistance to be added towards lower soc to
+ *			compensate for battery capacitance.
  */
 struct pm8921_bms_battery_data {
-	unsigned int			fcc;
-	struct single_row_lut		*fcc_temp_lut;
-	struct single_row_lut		*fcc_sf_lut;
-	struct pc_temp_ocv_lut		*pc_temp_ocv_lut;
-	struct pc_sf_lut		*pc_sf_lut;
+	unsigned int		fcc;
+	struct single_row_lut	*fcc_temp_lut;
+	struct single_row_lut	*fcc_sf_lut;
+	struct pc_temp_ocv_lut	*pc_temp_ocv_lut;
+	struct sf_lut		*pc_sf_lut;
+	struct sf_lut		*rbatt_sf_lut;
+	struct double_row_lut	*rbatt_temp_soc_lut;
+	int			default_rbatt_mohm;
+	int			delta_rbatt_mohm;
 };
 
 struct pm8xxx_bms_core_data {
@@ -95,25 +127,42 @@ struct pm8xxx_bms_core_data {
 	unsigned int	batt_id_channel;
 };
 
+enum battery_type {
+	BATT_UNKNOWN = 0,
+	BATT_PALLADIUM,
+	BATT_DESAY,
+};
+
 /**
  * struct pm8921_bms_platform_data -
+ * @batt_type:		allows to force chose battery calibration data
  * @r_sense:		sense resistor value in (mOhms)
  * @i_test:		current at which the unusable charger cutoff is to be
  *			calculated or the peak system current (mA)
  * @v_failure:		the voltage at which the battery is considered empty(mV)
  * @calib_delay_ms:	how often should the adc calculate gain and offset
+ * @enable_fcc_learning:	if set the driver will learn full charge
+ *				capacity of the battery upon end of charge
+ * @allow_soc_increase:	allow soc increase without charger attached
  */
 struct pm8921_bms_platform_data {
 	struct pm8xxx_bms_core_data	bms_cdata;
+	struct pm8921_bms_battery_data	*battery_data;
+	enum battery_type		battery_type;
 	unsigned int			r_sense;
 	unsigned int			i_test;
 	unsigned int			v_failure;
 	unsigned int			calib_delay_ms;
 	unsigned int			max_voltage_uv;
+	unsigned int			default_rbatt_mohms;
+	unsigned int			rconn_mohm;
+	int				enable_fcc_learning;
+	bool				allow_soc_increase;
 };
 
 #if defined(CONFIG_PM8921_BMS) || defined(CONFIG_PM8921_BMS_MODULE)
 extern struct pm8921_bms_battery_data  palladium_1500_data;
+extern struct pm8921_bms_battery_data  desay_5200_data;
 /**
  * pm8921_bms_get_vsense_avg - return the voltage across the sense
  *				resitor in microvolts
@@ -148,6 +197,12 @@ int pm8921_bms_get_battery_current(int *result);
 int pm8921_bms_get_percent_charge(void);
 
 /**
+ * pm8921_bms_get_init_fcc - returns initial fcc in mAh of the battery
+ *
+ */
+int pm8921_bms_get_init_fcc(void);
+
+/**
  * pm8921_bms_get_fcc - returns fcc in mAh of the battery depending on its age
  *			and temperature
  *
@@ -176,6 +231,10 @@ void pm8921_bms_calibrate_hkadc(void);
  */
 int pm8921_bms_get_simultaneous_battery_voltage_and_current(int *ibat_ua,
 								int *vbat_uv);
+/**
+ * pm8921_bms_get_rbatt - function to get the battery resistance in mOhm.
+ */
+int pm8921_bms_get_rbatt(void);
 #else
 static inline int pm8921_bms_get_vsense_avg(int *result)
 {
@@ -186,6 +245,10 @@ static inline int pm8921_bms_get_battery_current(int *result)
 	return -ENXIO;
 }
 static inline int pm8921_bms_get_percent_charge(void)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_get_init_fcc(void)
 {
 	return -ENXIO;
 }
@@ -206,6 +269,10 @@ static inline int pm8921_bms_get_simultaneous_battery_voltage_and_current(
 						int *ibat_ua, int *vbat_uv)
 {
 	return -ENXIO;
+}
+static inline int pm8921_bms_get_rbatt(void)
+{
+	return -EINVAL;
 }
 #endif
 
