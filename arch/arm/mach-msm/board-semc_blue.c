@@ -3700,7 +3700,7 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.phy_type		= SNPS_28NM_INTEGRATED_PHY,
 	.pmic_id_irq		= PM8921_USB_ID_IN_IRQ(PM8921_IRQ_BASE),
 	.vbus_power		= msm_hsusb_vbus_power,
-	.power_budget		= CONFIG_USB_MSM_OTG_POWER_BUDGET,
+	.power_budget		= 300,
 	.phy_init_seq		= semc_usb_phy_init_seq,
 #ifdef CONFIG_FB_MSM_MHL_SII8334
 	.mhl_dev_name		= SII_DEV_NAME,
