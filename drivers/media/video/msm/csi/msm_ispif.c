@@ -137,6 +137,9 @@ static int msm_ispif_reset(void)
 		(0x1 << RDI_1_VFE_RST_STB) +
 		(0x1 << RDI_1_CSID_RST_STB);
 	msm_io_w(data, ispif->base + ISPIF_RST_CMD_ADDR);
+#if defined(CONFIG_SEMC_CAM_MAIN_V4L2) || defined(CONFIG_SEMC_CAM_SUB_V4L2)
+	msleep(1);
+#endif
 	return wait_for_completion_interruptible(&ispif->reset_complete);
 }
 

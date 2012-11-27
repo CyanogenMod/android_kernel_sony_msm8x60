@@ -157,6 +157,9 @@ struct msm_panel_info {
 	__u32 is_3d_panel;
 	__u32 frame_rate;
 
+	/* Sony */
+	__u32 width;
+	__u32 height;
 
 	struct mddi_panel_info mddi;
 	struct lcd_panel_info lcd;
@@ -183,6 +186,10 @@ struct msm_fb_panel_data {
 	int (*power_ctrl) (boolean enable);
 	struct platform_device *next;
 	int (*clk_func) (int enable);
+
+	/* Sony */
+	struct msm_panel_info *(*panel_detect) (struct msm_fb_data_type *mfd);
+	int (*update_panel) (struct platform_device *pdev);
 };
 
 /*===========================================================================

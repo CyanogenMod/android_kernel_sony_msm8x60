@@ -43,6 +43,18 @@ endif
 obj-$(CONFIG_SMP) += headsmp.o platsmp.o
 obj-$(CONFIG_HOTPLUG_CPU) += hotplug.o
 
+ifdef CONFIG_ARCH_MSM8X60
+	obj-$(CONFIG_SIMPLE_REMOTE_PLATFORM) += simple_remote_msm8x60_pf.o
+endif
+ifdef CONFIG_ARCH_MSM8960
+	obj-$(CONFIG_PM8921_MIC_BIAS) += pm8921-mic_bias.o
+	obj-$(CONFIG_SIMPLE_REMOTE_PLATFORM) += simple_remote_msm8960_pf.o
+endif
+
+ifdef CONFIG_ARCH_MSM8X60
+	obj-$(CONFIG_PMIC8058_MIC_BIAS) += pm8058-mic_bias.o
+endif
+
 obj-$(CONFIG_MSM_CPU_AVS) += avs.o
 obj-$(CONFIG_MSM_AVS_HW) += avs_hw.o
 obj-$(CONFIG_CPU_V6) += idle-v6.o
@@ -249,6 +261,12 @@ obj-$(CONFIG_ARCH_MSM9615) += board-9615.o devices-9615.o board-9615-regulator.o
 obj-$(CONFIG_ARCH_MSM9615) += clock-local.o clock-9615.o acpuclock-9615.o clock-rpm.o
 obj-$(CONFIG_ARCH_MSMCOPPER) += board-copper.o board-dt.o
 
+obj-$(CONFIG_MACH_SEMC_HAYABUSA) += board-semc_blue.o devices-8960.o board-semc_blue_hayabusa.o
+obj-$(CONFIG_MACH_SEMC_HAYABUSA) += gyro-semc_common.o battery-blue_falk.o
+
+obj-$(CONFIG_MACH_SEMC_MINT) += board-semc_blue.o devices-8960.o board-semc_blue_mint.o
+obj-$(CONFIG_MACH_SEMC_MINT) += gyro-semc_common.o battery-blue_mentos.o
+
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o
@@ -316,6 +334,11 @@ obj-$(CONFIG_ARCH_MSM7X27A) += board-msm7x27a-regulator.o
 endif
 
 obj-$(CONFIG_ARCH_MSM8960) += mdm2.o mdm_common.o
+
+obj-$(CONFIG_SEMC_CHARGER_USB_ARCH) += semc_charger_usb.o
+obj-$(CONFIG_SEMC_CHARGER_CRADLE_ARCH) += semc_charger_cradle.o
+obj-$(CONFIG_BATTERY_SEMC_ARCH) += semc_battery_data.o
+
 obj-$(CONFIG_MSM_RTB) += msm_rtb.o
 obj-$(CONFIG_MSM_CACHE_ERP) += cache_erp.o
 obj-$(CONFIG_MSM_CACHE_DUMP) += msm_cache_dump.o

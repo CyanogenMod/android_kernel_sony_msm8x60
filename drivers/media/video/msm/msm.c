@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -127,6 +128,9 @@ static int msm_server_control(struct msm_cam_server_dev *server_dev,
 				struct msm_ctrl_cmd *out)
 {
 	int rc = 0;
+#if defined(CONFIG_SEMC_CAM_MAIN_V4L2) || defined(CONFIG_SEMC_CAM_SUB_V4L2)
+	int cnt = 0;
+#endif
 	void *value;
 	struct msm_queue_cmd *rcmd;
 	struct msm_ctrl_cmd *ctrlcmd;
@@ -172,9 +176,20 @@ static int msm_server_control(struct msm_cam_server_dev *server_dev,
 
 	/* wait for config return status */
 	D("Waiting for config status\n");
+#if defined(CONFIG_SEMC_CAM_MAIN_V4L2) || defined(CONFIG_SEMC_CAM_SUB_V4L2)
+retry:
+#endif
 	rc = wait_event_interruptible_timeout(queue->wait,
 		!list_empty_careful(&queue->list),
 		msecs_to_jiffies(out->timeout_ms));
+#if defined(CONFIG_SEMC_CAM_MAIN_V4L2) || defined(CONFIG_SEMC_CAM_SUB_V4L2)
+	if (rc == -ERESTARTSYS && cnt < 10) {
+		pr_err("ERESTARTSYS happen cnt=%d\n", cnt);
+		msleep(20);
+		cnt++;
+		goto retry;
+	}
+#endif
 	D("Waiting is over for config status\n");
 	if (list_empty_careful(&queue->list)) {
 		if (!rc)
@@ -1541,6 +1556,7 @@ static int msm_open(struct file *f)
 				__func__, rc);
 			goto mctl_register_isp_sd_failed;
 		}
+#if !defined(CONFIG_SEMC_VPE)
 		if (pcam->mctl.isp_sdev->sd_vpe) {
 			rc = v4l2_device_register_subdev(&pcam->v4l2_dev,
 						pcam->mctl.isp_sdev->sd_vpe);
@@ -1548,6 +1564,7 @@ static int msm_open(struct file *f)
 				goto mctl_register_isp_sd_vpe_failed;
 			}
 		}
+#endif
 		rc = msm_setup_v4l2_event_queue(&pcam_inst->eventHandle,
 							pcam->pvdev);
 		if (rc < 0) {
@@ -1583,8 +1600,10 @@ msm_send_open_server_failed:
 	v4l2_fh_exit(&pcam_inst->eventHandle);
 
 mctl_event_q_setup_failed:
+#if !defined(CONFIG_SEMC_VPE)
 	v4l2_device_unregister_subdev(pcam->mctl.isp_sdev->sd_vpe);
 mctl_register_isp_sd_vpe_failed:
+#endif
 	v4l2_device_unregister_subdev(pcam->mctl.isp_sdev->sd);
 mctl_register_isp_sd_failed:
 	if (pcam->mctl.mctl_release)
@@ -1729,7 +1748,9 @@ static int msm_close(struct file *f)
 
 	if (pcam->use_count == 0) {
 		v4l2_device_unregister_subdev(pcam->mctl.isp_sdev->sd);
+#if !defined(CONFIG_SEMC_VPE)
 		v4l2_device_unregister_subdev(pcam->mctl.isp_sdev->sd_vpe);
+#endif
 		rc = msm_cam_server_close_session(&g_server_dev, pcam);
 		if (rc < 0)
 			pr_err("msm_cam_server_close_session fails %d\n", rc);
@@ -2080,6 +2101,7 @@ static int msm_close_server(struct inode *inode, struct file *fp)
 			ktime_get_ts(&v4l2_ev.timestamp);
 			v4l2_event_queue(
 				g_server_dev.pcam_active->pvdev, &v4l2_ev);
+			mutex_unlock(&g_server_dev.server_lock);
 		}
 	sub.type = V4L2_EVENT_ALL;
 	msm_server_v4l2_unsubscribe_event(
@@ -2591,6 +2613,7 @@ static int msm_sync_destroy(struct msm_sync *sync)
 {
 	if (sync) {
 		mutex_destroy(&sync->lock);
+		wake_lock_destroy(&sync->suspend_lock);
 		wake_lock_destroy(&sync->wake_lock);
 	}
 	return 0;
@@ -2646,6 +2669,8 @@ static int msm_sync_init(struct msm_sync *sync,
 {
 	int rc = 0;
 	wake_lock_init(&sync->wake_lock, WAKE_LOCK_IDLE, "msm_camera");
+	wake_lock_init(&sync->suspend_lock, WAKE_LOCK_SUSPEND,
+			"msm_camera_suspend");
 	sync->opencnt = 0;
 	mutex_init(&sync->lock);
 	return rc;

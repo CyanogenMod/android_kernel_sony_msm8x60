@@ -4,6 +4,7 @@
  *  Copyright (C) 2007 Google Inc,
  *  Copyright (C) 2003 Deep Blue Solutions, Ltd, All Rights Reserved.
  *  Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ *  Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -2721,7 +2722,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		 * For DDR50 mode, controller needs clock rate to be
 		 * double than what is required on the SD card CLK pin.
 		 */
-		if (ios->timing == MMC_TIMING_UHS_DDR50) {
+		if (ios->ddr || (ios->timing == MMC_TIMING_UHS_DDR50)) {
 			/*
 			 * Make sure that we don't double the clock if
 			 * doubled clock rate is already set
@@ -2778,7 +2779,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	if (ios->timing == MMC_TIMING_UHS_SDR104) {
 		clk |= (4 << 14);
 		host->tuning_needed = 1;
-	} else if (ios->timing == MMC_TIMING_UHS_DDR50) {
+	} else if (ios->ddr || ios->timing == MMC_TIMING_UHS_DDR50) {
 		clk |= (3 << 14);
 	} else {
 		clk |= (2 << 14); /* feedback clock */
@@ -5280,7 +5281,10 @@ static int msmsdcc_runtime_idle(struct device *dev)
 		return 0;
 
 	/* Idle timeout is not configurable for now */
-	pm_schedule_suspend(dev, host->idle_tout_ms);
+	if (mmc->caps & MMC_CAP_NONREMOVABLE)
+		pm_schedule_suspend(dev, host->idle_tout_ms);
+	else
+		pm_schedule_suspend(dev, (host->idle_tout_ms * 10));
 
 	return -EAGAIN;
 }

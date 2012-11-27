@@ -1,6 +1,7 @@
 /*
  *
  * Copyright (c) 2011-2012 Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This file is based on include/net/bluetooth/hci_core.h
  *
@@ -27,6 +28,7 @@
 #ifndef __RADIO_HCI_CORE_H
 #define __RADIO_HCI_CORE_H
 
+#ifdef __KERNEL__
 #include <linux/skbuff.h>
 #include <linux/interrupt.h>
 #include <linux/mutex.h>
@@ -488,6 +490,7 @@ struct hci_fm_dbg_param_rsp {
 
 #define hci_req_lock(d)		mutex_lock(&d->req_lock)
 #define hci_req_unlock(d)	mutex_unlock(&d->req_lock)
+#endif
 
 /* FM RDS */
 #define RDS_PTYPE 2
@@ -624,7 +627,7 @@ enum iris_region_t {
 	IRIS_REGION_OTHER
 };
 
-#define STD_BUF_SIZE        (64)
+#define STD_BUF_SIZE        (128)
 
 enum iris_buf_t {
 	IRIS_BUF_SRCH_LIST,

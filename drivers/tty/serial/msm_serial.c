@@ -659,6 +659,9 @@ static void msm_set_termios(struct uart_port *port, struct ktermios *termios,
 	unsigned int baud, mr;
 	struct msm_port *msm_port = UART_TO_MSM(port);
 
+	if (!termios->c_cflag)
+		return;
+
 	spin_lock_irqsave(&port->lock, flags);
 	clk_enable(msm_port->clk);
 

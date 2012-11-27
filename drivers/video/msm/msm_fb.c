@@ -175,6 +175,7 @@ int msm_fb_cursor(struct fb_info *info, struct fb_cursor *cursor)
 
 static int msm_fb_resource_initialized;
 
+#ifndef CONFIG_LEDS_AS3676
 #ifndef CONFIG_FB_BACKLIGHT
 static int lcd_backlight_registered;
 
@@ -203,6 +204,7 @@ static struct led_classdev backlight_led = {
 	.brightness	= MAX_BACKLIGHT_BRIGHTNESS,
 	.brightness_set	= msm_fb_set_bl_brightness,
 };
+#endif
 #endif
 
 static struct msm_fb_platform_data *msm_fb_pdata;
@@ -407,6 +409,7 @@ static int msm_fb_probe(struct platform_device *pdev)
 	if (err < 0)
 		printk(KERN_ERR "pm_runtime: fail to set active.\n");
 	pm_runtime_enable(mfd->fbi->dev);
+#ifndef CONFIG_LEDS_AS3676
 #ifdef CONFIG_FB_BACKLIGHT
 	msm_fb_config_backlight(mfd);
 #else
@@ -417,6 +420,7 @@ static int msm_fb_probe(struct platform_device *pdev)
 		else
 			lcd_backlight_registered = 1;
 	}
+#endif
 #endif
 
 	pdev_list[pdev_list_cnt++] = pdev;
@@ -481,6 +485,7 @@ static int msm_fb_remove(struct platform_device *pdev)
 	/* remove /dev/fb* */
 	unregister_framebuffer(mfd->fbi);
 
+#ifndef CONFIG_LEDS_AS3676
 #ifdef CONFIG_FB_BACKLIGHT
 	/* remove /sys/class/backlight */
 	backlight_device_unregister(mfd->fbi->bl_dev);
@@ -489,6 +494,7 @@ static int msm_fb_remove(struct platform_device *pdev)
 		lcd_backlight_registered = 0;
 		led_classdev_unregister(&backlight_led);
 	}
+#endif
 #endif
 
 #ifdef MSM_FB_ENABLE_DBGFS
@@ -532,6 +538,28 @@ static int msm_fb_suspend(struct platform_device *pdev, pm_message_t state)
 #else
 #define msm_fb_suspend NULL
 #endif
+
+static void msm_fb_shutdown(struct platform_device *pdev)
+{
+	struct msm_fb_data_type *mfd;
+	int ret = 0;
+	MSM_FB_DEBUG("msm_fb_shutdown\n");
+
+	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
+	if (mfd) {
+		if (mfd->op_enable) {
+			ret = msm_fb_blank_sub(FB_BLANK_POWERDOWN, mfd->fbi,
+						mfd->op_enable);
+		}
+
+		if (ret)
+			MSM_FB_INFO
+				("msm_fb_shutdown: can't turn off display!\n");
+
+		mfd->op_enable = FALSE;
+		mdp_pipe_ctrl(MDP_MASTER_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	}
+}
 
 static int msm_fb_suspend_sub(struct msm_fb_data_type *mfd)
 {
@@ -741,7 +769,7 @@ static struct platform_driver msm_fb_driver = {
 	.suspend = msm_fb_suspend,
 	.resume = msm_fb_resume,
 #endif
-	.shutdown = NULL,
+	.shutdown = msm_fb_shutdown,
 	.driver = {
 		   /* Driver name must match the device name added in platform.c. */
 		   .name = "msm_fb",
@@ -1178,16 +1206,26 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	fix->mmio_len = 0;	/* No MMIO Address */
 	fix->accel = FB_ACCEL_NONE;/* FB_ACCEL_MSM needes to be added in fb.h */
 
-	var->xoffset = 0,	/* Offset from virtual to visible */
-	var->yoffset = 0,	/* resolution */
-	var->grayscale = 0,	/* No graylevels */
-	var->nonstd = 0,	/* standard pixel format */
-	var->activate = FB_ACTIVATE_VBL,	/* activate it at vsync */
-	var->height = -1,	/* height of picture in mm */
-	var->width = -1,	/* width of picture in mm */
-	var->accel_flags = 0,	/* acceleration flags */
-	var->sync = 0,	/* see FB_SYNC_* */
-	var->rotate = 0,	/* angle we rotate counter clockwise */
+	var->xoffset = 0;	/* Offset from virtual to visible */
+	var->yoffset = 0;	/* resolution */
+	var->grayscale = 0;	/* No graylevels */
+	var->nonstd = 0;	/* standard pixel format */
+	var->activate = FB_ACTIVATE_VBL;	/* activate it at vsync */
+	/* height of picture in mm */
+	if (panel_info && panel_info->height)
+		var->height = panel_info->height;
+	else
+		var->height = -1;
+
+	/* width of picture in mm */
+	if (panel_info && panel_info->width)
+		var->width = panel_info->width;
+	else
+		var->width = -1;
+
+	var->accel_flags = 0;	/* acceleration flags */
+	var->sync = 0;	/* see FB_SYNC_* */
+	var->rotate = 0;	/* angle we rotate counter clockwise */
 	mfd->op_enable = FALSE;
 
 	switch (mfd->fb_imgType) {
@@ -4175,6 +4213,7 @@ struct platform_device *msm_fb_add_device(struct platform_device *pdev)
 	/* link to the latest pdev */
 	mfd->pdev = this_dev;
 
+	mfd->panel_pdev = pdev;
 	mfd_list[mfd_list_index++] = mfd;
 	fbi_list[fbi_list_index++] = fbi;
 

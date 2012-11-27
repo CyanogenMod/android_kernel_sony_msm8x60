@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,6 +25,7 @@
 #include <linux/mfd/pmic8058.h>
 #include <linux/mfd/pmic8901.h>
 #include <linux/mfd/pm8xxx/misc.h>
+#include <linux/console.h>
 
 #include <asm/mach-types.h>
 
@@ -54,7 +56,6 @@ int pmic_reset_irq;
 static void __iomem *msm_tmr0_base;
 
 #ifdef CONFIG_MSM_DLOAD_MODE
-static int in_panic;
 static void *dload_mode_addr;
 
 /* Download mode master kill-switch */
@@ -62,17 +63,6 @@ static int dload_set(const char *val, struct kernel_param *kp);
 static int download_mode = 1;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
-
-static int panic_prep_restart(struct notifier_block *this,
-			      unsigned long event, void *ptr)
-{
-	in_panic = 1;
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block panic_blk = {
-	.notifier_call	= panic_prep_restart,
-};
 
 static void set_dload_mode(int on)
 {
@@ -107,6 +97,39 @@ static int dload_set(const char *val, struct kernel_param *kp)
 #else
 #define set_dload_mode(x) do {} while (0)
 #endif
+
+static int in_panic;
+extern void arm_machine_flush_console(void);
+#include <asm/proc-fns.h>
+#include <asm/cacheflush.h>
+#include <mach/system.h>
+
+static void msm_panic_restart(char mode, const char *cmd)
+{
+	arm_machine_flush_console();
+	local_irq_disable();
+	local_fiq_disable();
+	flush_cache_all();
+	cpu_proc_fin();
+	flush_cache_all();
+	arch_reset(mode, cmd);
+	mdelay(1000);
+	printk(KERN_ERR "Reboot failed -- System halted\n");
+	while (1)
+		;
+}
+
+static int panic_prep_restart(struct notifier_block *this,
+			      unsigned long event, void *ptr)
+{
+	in_panic = 1;
+	arm_pm_restart = msm_panic_restart;
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block panic_blk = {
+	.notifier_call	= panic_prep_restart,
+};
 
 void msm_set_restart_mode(int mode)
 {
@@ -213,6 +236,18 @@ void arch_reset(char mode, const char *cmd)
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
+	} else {
+		__raw_writel(0x776655AA, restart_reason);
+	}
+
+	if (in_panic) {
+		writel(0xC0DEDEAD, restart_reason);
+
+		/* if we were in suspend when a panic triggering event occured
+		 * the console may still be suspended, meaning we will loose
+		 * critical kernel logs in last_kmsg. Telling console to panic.
+		 */
+		panic_console();
 	}
 
 	__raw_writel(0, msm_tmr0_base + WDT0_EN);
@@ -236,14 +271,15 @@ static int __init msm_restart_init(void)
 {
 	int rc;
 
-#ifdef CONFIG_MSM_DLOAD_MODE
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+#ifdef CONFIG_MSM_DLOAD_MODE
 	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
 
 	/* Reset detection is switched on below.*/
 	set_dload_mode(1);
 #endif
 	msm_tmr0_base = msm_timer_get_timer0_base();
+
 	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;
 	pm_power_off = msm_power_off;
 

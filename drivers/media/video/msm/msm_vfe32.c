@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -856,7 +857,10 @@ static int vfe32_capture(uint32_t num_frames_capture)
 	}
 
 	vfe32_ctrl->vfe_capture_count = num_frames_capture;
-	irq_comp_mask	= msm_io_r(vfe32_ctrl->vfebase + VFE_IRQ_COMP_MASK);
+
+
+	irq_comp_mask	=
+		msm_io_r(vfe32_ctrl->vfebase + VFE_IRQ_COMP_MASK);
 
 	if (vfe32_ctrl->operation_mode == VFE_OUTPUTS_MAIN_AND_THUMB ||
 		vfe32_ctrl->operation_mode == VFE_OUTPUTS_JPEG_AND_THUMB ||
@@ -2909,7 +2913,8 @@ static void vfe32_process_output_path_irq_0(void)
 		vfe32_ctrl->liveshot_state == VFE_STATE_STARTED ||
 		vfe32_ctrl->liveshot_state == VFE_STATE_STOP_REQUESTED ||
 		vfe32_ctrl->liveshot_state == VFE_STATE_STOPPED) &&
-		(vfe32_ctrl->vfe_capture_count <= 1)) || free_buf;
+		(vfe32_ctrl->vfe_capture_count <= 1)) ||
+		free_buf;
 
 	if (out_bool) {
 		ping_pong = msm_io_r(vfe32_ctrl->vfebase +
@@ -2951,8 +2956,9 @@ static void vfe32_process_output_path_irq_0(void)
 				VFE_OUTPUTS_JPEG_AND_THUMB ||
 			vfe32_ctrl->operation_mode ==
 				VFE_OUTPUTS_RAW ||
-			vfe32_ctrl->liveshot_state == VFE_STATE_STOPPED)
+			vfe32_ctrl->liveshot_state == VFE_STATE_STOPPED) {
 			vfe32_ctrl->outpath.out0.capture_cnt--;
+		}
 
 		vfe_send_outmsg(&vfe32_ctrl->subdev,
 			MSG_ID_OUTPUT_PRIMARY, ch0_paddr,
@@ -2982,9 +2988,7 @@ static void vfe32_process_output_path_irq_1(void)
 			vfe32_ctrl->operation_mode ==
 				VFE_OUTPUTS_MAIN_AND_THUMB ||
 			vfe32_ctrl->operation_mode ==
-				VFE_OUTPUTS_RAW ||
-			vfe32_ctrl->operation_mode ==
-				VFE_OUTPUTS_JPEG_AND_THUMB) &&
+				VFE_OUTPUTS_RAW) &&
 			(vfe32_ctrl->vfe_capture_count <= 1)) || free_buf;
 
 	if (out_bool) {
@@ -3021,11 +3025,9 @@ static void vfe32_process_output_path_irq_1(void)
 			vfe32_ctrl->operation_mode ==
 				VFE_OUTPUTS_MAIN_AND_THUMB ||
 			vfe32_ctrl->operation_mode ==
-				VFE_OUTPUTS_RAW ||
-			vfe32_ctrl->operation_mode ==
-				VFE_OUTPUTS_JPEG_AND_THUMB)
+				VFE_OUTPUTS_RAW) {
 			vfe32_ctrl->outpath.out1.capture_cnt--;
-
+		}
 		vfe_send_outmsg(&vfe32_ctrl->subdev,
 			MSG_ID_OUTPUT_SECONDARY, ch0_paddr,
 			ch1_paddr, ch2_paddr);

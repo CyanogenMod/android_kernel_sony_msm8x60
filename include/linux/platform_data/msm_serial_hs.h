@@ -29,7 +29,6 @@ extern void msm_hs_request_clock_on(struct uart_port *uport);
  * @rx_wakeup_irq: Rx activity irq
  * @rx_to_inject: extra character to be inserted to Rx tty on wakeup
  * @inject_rx: 1 = insert rx_to_inject. 0 = do not insert extra character
- * @exit_lpm_cb: function called before every Tx transaction
  *
  * This is an optional structure required for UART Rx GPIO IRQ based
  * wakeup from low power state. UART wakeup can be triggered by RX activity
@@ -43,7 +42,6 @@ struct msm_serial_hs_platform_data {
 	int rx_wakeup_irq;
 	unsigned char inject_rx_on_wakeup;
 	char rx_to_inject;
-	void (*exit_lpm_cb)(struct uart_port *);
 };
 
 #endif

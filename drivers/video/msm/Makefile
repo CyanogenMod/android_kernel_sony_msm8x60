@@ -77,6 +77,16 @@ obj-$(CONFIG_FB_MSM_MIPI_DSI_ORISE) += mipi_orise.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_RENESAS) += mipi_renesas.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_TRULY) += mipi_truly.o
 obj-$(CONFIG_FB_MSM_MIPI_DSI_SIMULATOR) += mipi_simulator.o
+ifeq ($(CONFIG_FB_MSM_MIPI_DSI_RENESAS_R63306),y)
+obj-y += mipi_renesas_r63306.o
+obj-y += mipi_r63306_panels/
+obj-y += mipi_dsi_panel_common.o
+endif
+ifeq ($(CONFIG_FB_MSM_MIPI_DSI_SAMSUNG_S6D6AA0),y)
+obj-y += mipi_samsung_s6d6aa0.o
+obj-y += mipi_s6d6aa0_panels/
+obj-y += mipi_dsi_panel_common.o
+endif
 
 # MIPI Bridge
 obj-$(CONFIG_FB_MSM_MIPI_DSI_TC358764_DSI2LVDS) += mipi_tc358764_dsi2lvds.o
@@ -153,6 +163,7 @@ obj-$(CONFIG_FB_MSM_LCDC_SAMSUNG_OLED_PT) += lcdc_samsung_oled_pt.o
 obj-$(CONFIG_FB_MSM_HDMI_ADV7520_PANEL) += adv7520.o
 obj-$(CONFIG_FB_MSM_LCDC_ST15_WXGA) += lcdc_st15.o
 obj-$(CONFIG_FB_MSM_HDMI_MSM_PANEL) += hdmi_msm.o
+obj-$(CONFIG_FB_MSM_MHL_SII8334) += mhl_sii8334.o
 obj-$(CONFIG_FB_MSM_EXT_INTERFACE_COMMON) += external_common.o
 
 obj-$(CONFIG_FB_MSM_TVOUT) += tvout_msm.o

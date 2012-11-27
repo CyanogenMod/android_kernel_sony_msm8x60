@@ -323,6 +323,16 @@ int mipi_dsi_buf_alloc(struct dsi_buf *dp, int size)
 	return size;
 }
 
+void mipi_dsi_buf_release(struct dsi_buf *dp)
+{
+       kfree(dp->start);
+       dp->start = NULL;
+       dp->end = NULL;
+       dp->data = NULL;
+       dp->size = 0;
+       dp->len = 0;
+}
+
 /*
  * mipi dsi gerneric long write
  */

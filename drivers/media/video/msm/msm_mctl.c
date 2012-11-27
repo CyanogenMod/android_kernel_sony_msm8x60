@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -542,11 +543,13 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 	p_mctl->isp_sdev->sd = dev_get_drvdata(dev);
 	put_driver(driver);
 
+#if !defined(CONFIG_SEMC_VPE)
 	if (pdata->is_vpe) {
 		/* register vfe subdev */
 		driver = driver_find(MSM_VPE_DRV_NAME, &platform_bus_type);
 		if (!driver)
 			goto out;
+
 
 		dev = driver_find_device(driver, NULL, 0,
 				msm_mctl_subdev_match_core);
@@ -556,7 +559,7 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 		p_mctl->isp_sdev->sd_vpe = dev_get_drvdata(dev);
 		put_driver(driver);
 	}
-
+#endif
 	rc = 0;
 
 
@@ -616,6 +619,7 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 	/* open sub devices - once only*/
 	if (!sync->opencnt) {
 		uint32_t csid_version;
+		wake_lock(&sync->suspend_lock);
 		wake_lock(&sync->wake_lock);
 
 		csid_core = camdev->csid_core;
@@ -734,6 +738,7 @@ csiphy_init_failed:
 			p_mctl->sync.sdata->actuator_info);
 register_sdev_failed:
 msm_open_done:
+	wake_unlock(&p_mctl->sync.suspend_lock);
 	wake_unlock(&p_mctl->sync.wake_lock);
 	mutex_unlock(&sync->lock);
 	return rc;
@@ -781,7 +786,8 @@ static int msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 			p_mctl->sync.sdata->actuator_info);
 
 	v4l2_subdev_call(p_mctl->sensor_sdev, core, s_power, 0);
-
+	
+	wake_unlock(&p_mctl->sync.suspend_lock);	
 	wake_unlock(&p_mctl->sync.wake_lock);
 	return rc;
 }
