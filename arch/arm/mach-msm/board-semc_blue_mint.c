@@ -237,47 +237,14 @@ static struct platform_device gpio_keys_device = {
 	.resource = NULL,
 };
 
-#define GPIO_SW_SIM_DETECTION		36
-
-static struct gpio_event_direct_entry gpio_sw_gpio_map[] = {
-	{PM8921_GPIO_PM_TO_SYS(GPIO_SW_SIM_DETECTION), SW_JACK_PHYSICAL_INSERT},
-};
-
-static struct gpio_event_input_info gpio_sw_gpio_info = {
-	.info.func = gpio_event_input_func,
-	.info.no_suspend = 1,
-	.flags = GPIOEDF_ACTIVE_HIGH,
-	.type = EV_SW,
-	.keymap = gpio_sw_gpio_map,
-	.keymap_size = ARRAY_SIZE(gpio_sw_gpio_map),
-};
-
-static struct gpio_event_info *pmic_keypad_info[] = {
-	&gpio_sw_gpio_info.info,
-};
-
-struct gpio_event_platform_data pmic_keypad_data = {
-	.name = "sim-detection",
-	.info = pmic_keypad_info,
-	.info_count = ARRAY_SIZE(pmic_keypad_info),
-};
-
-static struct platform_device pmic_keypad_device = {
-	.name = GPIO_EVENT_DEV_NAME,
-	.id = 0,
-	.dev = {.platform_data = &pmic_keypad_data},
-};
-
 static int __init input_devices_init(void)
 {
 	platform_device_register(&gpio_keys_device);
-	platform_device_register(&pmic_keypad_device);
 	return 0;
 }
 
 static void __exit input_devices_exit(void)
 {
-	platform_device_unregister(&pmic_keypad_device);
 }
 
 module_init(input_devices_init);
