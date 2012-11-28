@@ -14,6 +14,8 @@
 #ifndef _WFD_UTIL_H_
 #define _WFD_UTIL_H_
 
+#include <linux/slab.h>
+
 /*#define DEBUG_WFD*/
 
 #define WFD_TAG "wfd: "
