@@ -3968,7 +3968,6 @@ out:
 
 static struct android_usb_platform_data android_usb_pdata = {
 	.update_pid_and_serial_num = usb_diag_update_pid_and_serial_num,
-	.can_stall = 1,
 };
 
 static struct platform_device android_usb_device = {
