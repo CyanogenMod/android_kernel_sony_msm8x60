@@ -333,7 +333,7 @@ struct bms_notify {
  *				battery should resume charging
  * @term_current:		The charging based term current
  * @eoc_warm_batt:		enable End Of Charge when battery is warm
- *
+ * @do_shutdown:		if true, initiate shutdown sequence
  */
 struct pm8921_chg_chip {
 	struct device			*dev;
@@ -384,6 +384,7 @@ struct pm8921_chg_chip {
 	bool				ext_charging;
 	bool				ext_charge_done;
 	bool				is_temp_control;
+	bool				do_shutdown;
 	DECLARE_BITMAP(enabled_irqs, PM_CHG_MAX_INTS);
 	struct work_struct		battery_id_valid_work;
 	int64_t				batt_id_min;
@@ -1364,7 +1365,9 @@ static int voltage_based_capacity(struct pm8921_chg_chip *chip)
 static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 {
 	int vbat_meas_uv;
+	int usb_present;
 	int percent_soc = pm8921_bms_get_percent_charge();
+	int force_counter = RETRY_NUM_FOR_FORCE_SHUTDOWN;
 
 	if (percent_soc == -ENXIO)
 		percent_soc = voltage_based_capacity(chip);
@@ -1375,23 +1378,32 @@ static int get_prop_batt_capacity(struct pm8921_chg_chip *chip)
 	if (vbat_meas_uv < 0) {
 		percent_soc = -EIO;
 	} else if (vbat_meas_uv < chip->min_voltage_mv * 1000) {
-		chip->num_of_under_voltage++;
 		pr_err("vbat_meas_uv = %d, %d times\n",
-				vbat_meas_uv, chip->num_of_under_voltage);
-		if (chip->num_of_under_voltage >= RETRY_NUM_FOR_FORCE_SHUTDOWN)
-			percent_soc = 0;
+			vbat_meas_uv, chip->num_of_under_voltage);
+
+		usb_present = is_usb_chg_plugged_in(chip);
+		if (usb_present) {
+			pr_info("charger is ON, increase shutdown counter\n");
+			force_counter *= 6;
+		}
+
+		if (chip->num_of_under_voltage >= force_counter)
+			chip->do_shutdown = true;
+
+		chip->num_of_under_voltage++;
 	} else {
 		chip->num_of_under_voltage = 0;
 	}
 
-	if (percent_soc == 0) {
-		if (chip->num_of_under_voltage != 0) {
-			pr_err("shutdown since battery is 0\n");
-			update_charge_state(BIT(DIS_BIT_CHG_SHUTDOWN),
-				DIS_BIT_CHG_SHUT_MASK);
-		} else {
-			percent_soc = 1;
-		}
+	if (chip->do_shutdown) {
+		percent_soc = 0;
+		pr_err("shutdown since battery is 0\n");
+
+		update_charge_state(BIT(DIS_BIT_CHG_SHUTDOWN),
+					DIS_BIT_CHG_SHUT_MASK);
+		power_supply_changed(&chip->usb_psy);
+	} else if (percent_soc == 0) {
+		percent_soc = 1;
 	}
 
 	if (percent_soc <= 10)
@@ -1497,6 +1509,7 @@ static int get_prop_batt_status(struct pm8921_chg_chip *chip)
 			|| chip->soc < 100)
 			batt_state = POWER_SUPPLY_STATUS_NOT_CHARGING;
 	}
+
 	return batt_state;
 }
 
@@ -3901,6 +3914,8 @@ static int msm_battery_gauge_alarm_notify(struct notifier_block *nb,
 		if (wake_lock_active(&the_chip->low_voltage_wake_lock))
 			wake_unlock(&the_chip->low_voltage_wake_lock);
 
+		/* TODO: find better way */
+		the_chip->num_of_under_voltage = 0;
 		set_heartbeat_update_interval(the_chip,
 			the_chip->default_update_time);
 		break;
