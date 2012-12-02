@@ -5343,6 +5343,7 @@ static struct platform_device *msm8960_devices[] __initdata = {
 	&android_usb_device,
 	&msm_pcm,
 	&msm_multi_ch_pcm,
+	&msm_lowlatency_pcm,
 	&msm_pcm_routing,
 	&msm_cpudai0,
 	&msm_cpudai1,
