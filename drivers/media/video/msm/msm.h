@@ -48,6 +48,7 @@
 #define MSM_VFE_DRV_NAME "msm_vfe"
 #define MSM_VPE_DRV_NAME "msm_vpe"
 #define MSM_GEMINI_DRV_NAME "msm_gemini"
+#define MSM_MERCURY_DRV_NAME "msm_mercury"
 
 /* msm queue management APIs*/
 

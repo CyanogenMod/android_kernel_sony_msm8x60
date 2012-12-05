@@ -5332,7 +5332,12 @@ static struct clk_lookup msm_clocks_8960_v1[] __initdata = {
 	CLK_LOOKUP("imem_clk",		imem_axi_clk.c,		NULL),
 	CLK_LOOKUP("ijpeg_clk",         ijpeg_clk.c,            NULL),
 	CLK_LOOKUP("core_clk",		ijpeg_clk.c,	"footswitch-8x60.3"),
+#ifndef CONFIG_MSM_MERCURY
 	CLK_LOOKUP("core_clk",		jpegd_clk.c,		NULL),
+#else
+	CLK_LOOKUP("core_clk",		jpegd_clk.c,	"msm_mercury.0"),
+	CLK_LOOKUP("iface_clk",		jpegd_p_clk.c,	"msm_mercury.0"),
+#endif
 	CLK_LOOKUP("core_clk",		mdp_clk.c,		"mdp.0"),
 	CLK_LOOKUP("core_clk",		mdp_clk.c,	"footswitch-8x60.4"),
 	CLK_LOOKUP("vsync_clk",	mdp_vsync_clk.c,	"mdp.0"),
