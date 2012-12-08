@@ -105,11 +105,8 @@ static int mipi_dsi_off(struct platform_device *pdev)
 
 	ret = panel_next_off(pdev);
 
-#ifdef CONFIG_MSM_BUS_SCALING
-	mdp_bus_scale_update_request(0);
-#endif
-
 	spin_lock_bh(&dsi_clk_lock);
+
 	mipi_dsi_clk_disable();
 
 	/* disbale dsi engine */
@@ -309,10 +306,6 @@ static int mipi_dsi_on(struct platform_device *pdev)
 			mipi_dsi_set_tear_on(mfd);
 		}
 	}
-
-#ifdef CONFIG_MSM_BUS_SCALING
-	mdp_bus_scale_update_request(2);
-#endif
 
 	mdp4_overlay_dsi_state_set(ST_DSI_RESUME);
 
