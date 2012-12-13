@@ -27,6 +27,7 @@
 #include <linux/input.h>
 #include <linux/delay.h>
 #include <linux/wakelock.h>
+#include <linux/module.h>
 
 #define APDS9702_VENDOR      0x0001
 

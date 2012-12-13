@@ -25,7 +25,7 @@
 #include <linux/input.h>
 #include <asm/atomic.h>
 #include <linux/bitops.h>
-#include <mach/gpio.h>
+#include <linux/gpio.h>
 #include <linux/mutex.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>

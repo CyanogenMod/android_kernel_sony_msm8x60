@@ -95,6 +95,7 @@
 #include <linux/bma250_ng_common.h>
 #include <linux/delay.h>
 #include <linux/mutex.h>
+#include <linux/module.h>
 
 #define BMA250_NAME                      "bma250"
 #define BMA250_VENDORID                  0x0001

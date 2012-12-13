@@ -290,7 +290,7 @@ static struct pm8xxx_mpp_platform_data pm8xxx_mpp_pdata __devinitdata = {
 };
 
 static struct pm8xxx_rtc_platform_data pm8xxx_rtc_pdata __devinitdata = {
-	.rtc_write_enable       = false,
+	.rtc_write_enable       = true,
 	.rtc_alarm_powerup	= false,
 };
 
@@ -394,9 +394,9 @@ struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
 	.battery_data		= &pm8921_battery_data,
 	.r_sense		= 10,
 	.i_test			= 1000,
-	.v_failure		= 3200,
+	.v_cutoff		= 3200,
 	.max_voltage_uv         = MAX_VOLTAGE_MV * 1000,
-	.rconn_mohm		= 30,
+	.rconn_mohm		= 18,
 	.enable_fcc_learning	= 1,
 };
 

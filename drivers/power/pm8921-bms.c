@@ -91,7 +91,7 @@ struct pm8921_bms_chip {
 	struct dentry		*dent;
 	unsigned int		r_sense;
 	unsigned int		i_test;
-	unsigned int		v_failure;
+	unsigned int		v_cutoff;
 	unsigned int		fcc;
 	struct single_row_lut	*fcc_temp_lut;
 	struct single_row_lut	*fcc_sf_lut;
@@ -1311,7 +1311,7 @@ static int calculate_unusable_charge_uah(struct pm8921_bms_chip *chip,
 
 	/* calculate unusable charge */
 	voltage_unusable_uv = (rbatt * chip->i_test)
-						+ (chip->v_failure * 1000);
+						+ (chip->v_cutoff * 1000);
 	pc_unusable = calculate_pc(chip, voltage_unusable_uv,
 						batt_temp, chargecycles);
 	pr_debug("rbatt = %umilliOhms unusable_v =%d unusable_pc = %d\n",
@@ -2842,7 +2842,7 @@ static int __devinit pm8921_bms_probe(struct platform_device *pdev)
 	chip->dev = &pdev->dev;
 	chip->r_sense = pdata->r_sense;
 	chip->i_test = pdata->i_test;
-	chip->v_failure = pdata->v_failure;
+	chip->v_cutoff = pdata->v_cutoff;
 	chip->max_voltage_uv = pdata->max_voltage_uv;
 	chip->batt_type = pdata->battery_type;
 	chip->rconn_mohm = pdata->rconn_mohm;

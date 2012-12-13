@@ -16,19 +16,21 @@
 #include <linux/ioport.h>
 #include <linux/platform_device.h>
 #include <linux/bootmem.h>
+#include <linux/gpio.h>
 #include <asm/mach-types.h>
 #include <asm/mach/mmc.h>
 #include <mach/board.h>
-#include <mach/gpio.h>
 #include <mach/gpiomux.h>
 #include "devices.h"
 #include "board-8960.h"
 #include "board-storage-common-a.h"
 
+#ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 #ifdef CONFIG_MMC_MSM_POWER_SUPPLY_SDC3_VIA_MPP04
 static uint32_t msm_sdc3_set_mpp04(struct device*, unsigned int);
 #endif
 static int msm_sdc3_get_wpswitch(struct device *dev);
+#endif
 
 /* MSM8960 has 5 SDCC controllers */
 enum sdcc_controllers {
@@ -290,7 +292,6 @@ static struct mmc_platform_data msm8960_sdc1_data = {
 #endif
 	.sup_clk_table	= sdc1_sup_clk_rates,
 	.sup_clk_cnt	= ARRAY_SIZE(sdc1_sup_clk_rates),
-	.pclk_src_dfab	= 1,
 	.nonremovable	= 1,
 	.vreg_data	= &mmc_slot_vreg_data[SDCC1],
 	.pin_data	= &mmc_slot_pin_data[SDCC1],
@@ -310,7 +311,6 @@ static struct mmc_platform_data msm8960_sdc2_data = {
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
 	.sup_clk_table  = sdc2_sup_clk_rates,
 	.sup_clk_cnt    = ARRAY_SIZE(sdc2_sup_clk_rates),
-	.pclk_src_dfab  = 1,
 	.vreg_data      = &mmc_slot_vreg_data[SDCC2],
 	.pin_data       = &mmc_slot_pin_data[SDCC2],
 	.sdiowakeup_irq = MSM_GPIO_TO_INT(90),
@@ -324,19 +324,16 @@ static struct mmc_platform_data msm8960_sdc3_data = {
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
 	.sup_clk_table	= sdc3_sup_clk_rates,
 	.sup_clk_cnt	= ARRAY_SIZE(sdc3_sup_clk_rates),
-	.pclk_src_dfab	= 1,
 	.vreg_data	= &mmc_slot_vreg_data[SDCC3],
 	.pin_data	= &mmc_slot_pin_data[SDCC3],
 	.wpswitch	= msm_sdc3_get_wpswitch,
 #ifdef CONFIG_MMC_MSM_POWER_SUPPLY_SDC3_VIA_MPP04
 	.translate_vdd	= msm_sdc3_set_mpp04,
 #endif
-#ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
 	.status_gpio	= PM8921_GPIO_PM_TO_SYS(26),
 	.status_irq	= PM8921_GPIO_IRQ(PM8921_IRQ_BASE, 26),
 	.irq_flags	= IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 	.is_status_gpio_active_low = true,
-#endif
 	.xpc_cap	= 1,
 	.uhs_caps	= 0,
 	.mpm_sdiowakeup_int = MSM_MPM_PIN_SDC3_DAT1,
@@ -354,7 +351,6 @@ static struct mmc_platform_data msm8960_sdc4_data = {
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
 	.sup_clk_table  = sdc4_sup_clk_rates,
 	.sup_clk_cnt    = ARRAY_SIZE(sdc4_sup_clk_rates),
-	.pclk_src_dfab  = 1,
 	.vreg_data      = &mmc_slot_vreg_data[SDCC4],
 	.pin_data       = &mmc_slot_pin_data[SDCC4],
 	.sdiowakeup_irq = MSM_GPIO_TO_INT(85),
@@ -429,6 +425,7 @@ done:
 }
 #endif
 
+#ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 static int msm_sdc3_get_wpswitch(struct device *dev)
 {
 	/*
@@ -439,6 +436,7 @@ static int msm_sdc3_get_wpswitch(struct device *dev)
 	int status = 0;
 	return status;
 }
+#endif
 
 void __init msm8960_init_mmc(void)
 {

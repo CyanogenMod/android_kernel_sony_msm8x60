@@ -31,6 +31,7 @@
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/freezer.h>
+#include <linux/module.h>
 #include <linux/akm8972.h>
 
 #define AKM8972_BASE_NUM 10

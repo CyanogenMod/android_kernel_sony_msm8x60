@@ -318,6 +318,8 @@ obj-$(CONFIG_MACH_BLUE_TSUBASA) += irda-blue_common.o
 obj-$(CONFIG_MACH_BLUE_TSUBASA) += oneseg-blue_common.o
 obj-$(CONFIG_MACH_BLUE_TSUBASA) += felica-blue_common.o
 
+CFLAGS_board-blue.o += -Idrivers/staging/android
+
 CFLAGS_msm_vibrator.o += -Idrivers/staging/android
 CFLAGS_board-9615.o += -Idrivers/usb/gadget
 

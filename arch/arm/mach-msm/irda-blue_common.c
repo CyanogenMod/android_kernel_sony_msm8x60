@@ -16,7 +16,8 @@
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/wakelock.h>
-#include <linux/regulator/gpio-regulator.h>
+
+#include <linux/regulator/msm-gpio-regulator.h>
 
 #include "board-8960.h"
 
@@ -113,7 +114,12 @@ static int __init irda_class_init(void)
 		pr_err("%s: class_create_file failed\n", __func__);
 		goto error_class_create_file;
 	}
-	wake_lock_init(&wlock, WAKE_LOCK_IDLE, "irda-blue_common");
+
+/* FIXME WAKE_LOCK_IDLE is gone we may use pm_qos */
+//	wake_lock_init(&wlock, WAKE_LOCK_IDLE, "irda-blue_common");
+	wake_lock_init(&wlock, WAKE_LOCK_SUSPEND, "irda-blue_common");
+/* FIXME*/
+
 	error = semc_irda_power(0);
 	if (error) {
 		pr_err("%s: irda power off failed\n", __func__);

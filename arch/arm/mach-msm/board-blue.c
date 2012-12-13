@@ -18,14 +18,13 @@
 #include <linux/i2c.h>
 #include <linux/gpio.h>
 #include <linux/msm_ssbi.h>
-#include <linux/regulator/gpio-regulator.h>
+#include <linux/regulator/msm-gpio-regulator.h>
 #include <linux/mfd/pm8xxx/pm8921.h>
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #include <linux/regulator/consumer.h>
 #include <linux/spi/spi.h>
 #include <linux/slimbus/slimbus.h>
 #include <linux/bootmem.h>
-#include <linux/msm_kgsl.h>
 #ifdef CONFIG_ANDROID_PMEM
 #include <linux/android_pmem.h>
 #endif
@@ -84,7 +83,6 @@
 #include <mach/usbdiag.h>
 #include <mach/socinfo.h>
 #include <mach/rpm.h>
-#include <mach/gpio.h>
 #include <mach/gpiomux.h>
 #include <mach/msm_bus_board.h>
 #include <mach/msm_memtypes.h>
@@ -109,6 +107,7 @@
 #include <mach/iommu_domains.h>
 #include <mach/simple_remote_msm8960_pf.h>
 
+#include <mach/kgsl.h>
 #include <linux/fmem.h>
 
 #include "timer.h"
@@ -120,7 +119,6 @@
 #include <mach/cpuidle.h>
 #include "rpm_resources.h"
 #include <mach/mpm.h>
-#include "acpuclock.h"
 #include "smd_private.h"
 #include "pm-boot.h"
 
@@ -156,6 +154,13 @@
 #include "felica-blue.h"
 #endif
 
+#ifdef CONFIG_ANDROID_PERSISTENT_RAM
+#include <linux/persistent_ram.h>
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+#include <ram_console.h>
+#endif
+#endif
+
 #ifdef CONFIG_NFC_PN544
 #define NXP_GPIO_NFC_EN		PM8921_GPIO_PM_TO_SYS(33)
 #define NXP_GPIO_NFC_FWDL_EN	19
@@ -175,7 +180,7 @@ static struct platform_device msm_fm_platform_init = {
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 #define HOLE_SIZE	0x20000
-#define MSM_PMEM_KERNEL_EBI1_SIZE  0x65000
+#define MSM_CONTIG_MEM_SIZE  0x65000
 #ifdef CONFIG_MSM_IOMMU
 #define MSM_ION_MM_SIZE            0x3800000 /* Need to be multiple of 64K */
 #define MSM_ION_SF_SIZE            0x0
@@ -203,18 +208,18 @@ static struct platform_device msm_fm_platform_init = {
 
 static unsigned msm_ion_sf_size = MSM_ION_SF_SIZE;
 #else
-#define MSM_PMEM_KERNEL_EBI1_SIZE  0x110C000
+#define MSM_CONTIG_MEM_SIZE  0x110C000
 #define MSM_ION_HEAP_NUM	1
 #endif
 
-#ifdef CONFIG_KERNEL_PMEM_EBI_REGION
-static unsigned pmem_kernel_ebi1_size = MSM_PMEM_KERNEL_EBI1_SIZE;
-static int __init pmem_kernel_ebi1_size_setup(char *p)
+#ifdef CONFIG_KERNEL_MSM_CONTIG_MEM_REGION
+static unsigned msm_contig_mem_size = MSM_CONTIG_MEM_SIZE;
+static int __init msm_contig_mem_size_setup(char *p)
 {
-	pmem_kernel_ebi1_size = memparse(p, NULL);
+	msm_contig_mem_size = memparse(p, NULL);
 	return 0;
 }
-early_param("pmem_kernel_ebi1_size", pmem_kernel_ebi1_size_setup);
+early_param("msm_contig_mem_size", msm_contig_mem_size_setup);
 #endif
 
 #ifdef CONFIG_ANDROID_PMEM
@@ -366,7 +371,7 @@ static void __init reserve_pmem_memory(void)
 	reserve_memory_for(&android_pmem_pdata);
 	reserve_memory_for(&android_pmem_audio_pdata);
 #endif
-	msm8960_reserve_table[MEMTYPE_EBI1].size += pmem_kernel_ebi1_size;
+	msm8960_reserve_table[MEMTYPE_EBI1].size += msm_contig_mem_size;
 #endif
 }
 
@@ -734,7 +739,6 @@ static void __init reserve_ion_memory(void)
 		msm8960_fmem_pdata.reserved_size_low = fixed_low_size +
 							HOLE_SIZE;
 		msm8960_fmem_pdata.reserved_size_high = fixed_high_size;
-		msm8960_fmem_pdata.size += HOLE_SIZE;
 	}
 
 	/* Since the fixed area may be carved out of lowmem,
@@ -753,7 +757,7 @@ static void __init reserve_ion_memory(void)
 
 		if (heap->extra_data) {
 			int fixed_position = NOT_FIXED;
-			struct ion_cp_heap_pdata *pdata;
+			struct ion_cp_heap_pdata *pdata = NULL;
 
 			switch (heap->type) {
 			case ION_HEAP_TYPE_CP:
@@ -901,22 +905,74 @@ static int __init ext_display_setup(char *param)
 }
 early_param("ext_display", ext_display_setup);
 
+#ifdef CONFIG_ANDROID_PERSISTENT_RAM
+#define SONY_PERSISTENT_RAM_SIZE	(SZ_1M)
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
-#define MSM_RAM_CONSOLE_SIZE    (128 * SZ_1K)
+#define SONY_RAM_CONSOLE_SIZE    (124*SZ_1K * 2)
+#endif
 
-static struct resource ram_console_resources[] = {
-	[0] = {
-		.flags  = IORESOURCE_MEM,
-	},
+static struct persistent_ram_descriptor pram_descs[] = {
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+        {
+                .name = "ram_console",
+                .size = SONY_RAM_CONSOLE_SIZE,
+        },
+#endif
+};
+
+static struct persistent_ram sony_persistent_ram = {
+        .size = SONY_PERSISTENT_RAM_SIZE,
+        .num_descs = ARRAY_SIZE(pram_descs),
+        .descs = pram_descs,
+};
+
+void __init sony_add_persistent_ram(void)
+{
+        struct persistent_ram *pram = &sony_persistent_ram;
+        struct membank* bank = &meminfo.bank[0];
+
+        pram->start = bank->start + bank->size - SONY_PERSISTENT_RAM_SIZE;
+
+        persistent_ram_early_init(pram);
+}
+#endif
+
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+static char startup[128] = {0,};
+int __init sony_startup_reason(char *s)
+{
+        int n;
+
+        if (*s == '=')
+                s++;
+        n = snprintf(startup, sizeof(startup),
+                 "Boot info:\n"
+                 "Last boot reason: %s\n", s);
+        startup[n] = '\0';
+        return 1;
+}
+__setup("startup", sony_startup_reason);
+
+struct ram_console_platform_data ram_console_pdata = {
+        .bootinfo = startup,
 };
 
 static struct platform_device ram_console_device = {
-	.name           = "ram_console",
-	.id             = -1,
+        .name = "ram_console",
+        .id = -1,
+        .dev = {
+                .platform_data = &ram_console_pdata,
+        }
 };
-#endif
 
+void __init sony_add_ramconsole_devices(void)
+{
+        platform_device_register(&ram_console_device);
+}
+#endif /* CONFIG_ANDROID_RAM_CONSOLE */
+
+#if 0
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 #define MSM_RAMDUMP_INFO_SIZE	(4 * SZ_1K)
 #define MSM_AMSS_LOG_SIZE	(16 * SZ_1K)
@@ -938,9 +994,11 @@ static struct platform_device ramdumplog_device = {
 	.id             = -1,
 };
 #endif
+#endif
 
 static void reserve_memory_lastlogs(void)
 {
+#if 0
 	struct membank *mb = &meminfo.bank[0];
 	unsigned long bank_end = mb->start + mb->size;
 	unsigned long lastlogs_base = bank_end - SZ_1M;
@@ -952,12 +1010,6 @@ static void reserve_memory_lastlogs(void)
 
 	memblock_free(lastlogs_base, SZ_1M);
 	memblock_remove(lastlogs_base, SZ_1M);
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-	ram_console_resources[0].start = bank_end - MSM_RAM_CONSOLE_SIZE;
-	ram_console_resources[0].end = bank_end - 1;
-	ram_console_device.num_resources  = ARRAY_SIZE(ram_console_resources);
-	ram_console_device.resource       = ram_console_resources;
-#endif
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 	ramdumplog_resources[0].start = lastlogs_base;
 	ramdumplog_resources[0].end = lastlogs_base + MSM_RAMDUMP_INFO_SIZE - 1;
@@ -965,6 +1017,7 @@ static void reserve_memory_lastlogs(void)
 	ramdumplog_resources[1].end = lastlogs_base + MSM_RAMDUMP_LOG_SIZE - 1;
 	ramdumplog_device.num_resources  = ARRAY_SIZE(ramdumplog_resources);
 	ramdumplog_device.resource       = ramdumplog_resources;
+#endif
 #endif
 }
 
@@ -986,6 +1039,7 @@ static void __init msm8960_reserve(void)
 		}
 #endif
 	}
+	sony_add_persistent_ram();
 }
 
 static int msm8960_change_memory_power(u64 start, u64 size,
@@ -2576,6 +2630,9 @@ static DEFINE_MUTEX(sensor_status_lock);
 #define VREGL9_IDDIO_LCURRENT 1000
 #define VREGL9_IDDIO_HCURRENT 30000
 
+#if defined(CONFIG_SENSORS_MPU3050) || defined(CONFIG_INPUT_AKM8972) || \
+    defined(CONFIG_INPUT_BMA250_NG) || defined(CONFIG_INPUT_BMA250) || \
+    defined(CONFIG_INPUT_APDS9702)
 static void sensor_power(bool enable, struct regulator **reg, const char *id)
 {
 	int rc;
@@ -2599,6 +2656,7 @@ err:
 
 	return;
 }
+#endif
 
 #if defined CONFIG_INPUT_BMA250_NG || defined CONFIG_INPUT_BMA250
 #define BMA250_GPIO 10
@@ -2774,12 +2832,6 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
 #endif
 };
 
-static struct msm_pm_sleep_status_data msm_pm_slp_sts_data = {
-	.base_addr = MSM_ACC0_BASE + 0x08,
-	.cpu_offset = MSM_ACC1_BASE - MSM_ACC0_BASE,
-	.mask = 1UL << 13,
-};
-
 static struct spi_board_info spi_board_info[] __initdata = {
 	/* No devices yet */
 };
@@ -2814,10 +2866,10 @@ static struct platform_device msm_tsens_device = {
 
 static struct msm_thermal_data msm_thermal_pdata = {
 	.sensor_id = 0,
-	.poll_ms = 1000,
-	.limit_temp = 60,
-	.temp_hysteresis = 10,
-	.limit_freq = 918000,
+	.poll_ms = 250,
+	.limit_temp_degC = 60,
+	.temp_hysteresis_degC = 10,
+	.freq_step = 2,
 };
 
 #ifdef CONFIG_MSM_FAKE_BATTERY
@@ -2911,6 +2963,7 @@ static struct platform_device sony_ssm_device = {
 #endif
 
 static struct platform_device *common_devices[] __initdata = {
+	&msm8960_device_acpuclk,
 	&msm8960_device_dmov,
 	&msm_device_smd,
 	&msm8960_device_uart_gsbi8,
@@ -2984,24 +3037,23 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_rpm_log_device,
 	&msm8960_rpm_stat_device,
 	&msm_device_tz_log,
-#ifdef CONFIG_MSM_QDSS
-	&msm_qdss_device,
-	&msm_etb_device,
-	&msm_tpiu_device,
-	&msm_funnel_device,
-	&msm_etm_device,
-#endif
+	&coresight_tpiu_device,
+	&coresight_etb_device,
+	&coresight_funnel_device,
+	&coresight_etm0_device,
+	&coresight_etm1_device,
 	&msm_device_dspcrashd_8960,
 	&msm8960_device_watchdog,
 	&msm8960_rtb_device,
 	&msm8960_cpu_idle_device,
 	&msm8960_msm_gov_device,
 	&msm8960_device_cache_erp,
-#ifdef CONFIG_ANDROID_RAM_CONSOLE
-	&ram_console_device,
-#endif
+	&msm8960_device_ebi1_ch0_erp,
+	&msm8960_device_ebi1_ch1_erp,
+#if 0
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 	&ramdumplog_device,
+#endif
 #endif
 	&msm8960_cache_dump_device,
 	&msm8960_iommu_domain_device,
@@ -3028,6 +3080,7 @@ static struct platform_device *cdp_devices[] __initdata = {
 	&android_usb_device,
 	&msm_pcm,
 	&msm_multi_ch_pcm,
+	&msm_lowlatency_pcm,
 	&msm_pcm_routing,
 	&msm_cpudai0,
 	&msm_cpudai1,
@@ -3108,12 +3161,25 @@ static void __init msm8960_i2c_init(void)
 
 static void __init msm8960_gfx_init(void)
 {
+	struct kgsl_device_platform_data *kgsl_3d0_pdata =
+		msm_kgsl_3d0.dev.platform_data;
 	uint32_t soc_platform_version = socinfo_get_version();
+
 	if (SOCINFO_VERSION_MAJOR(soc_platform_version) == 1) {
-		struct kgsl_device_platform_data *kgsl_3d0_pdata =
-				msm_kgsl_3d0.dev.platform_data;
 		kgsl_3d0_pdata->pwrlevel[0].gpu_freq = 320000000;
 		kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 266667000;
+	}
+	if (cpu_is_msm8960ab()) {
+		kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 0);
+	} else {
+
+		/* 8960v3 GPU registers returns 5 for patch release
+		 * but it should be 6, so dummy up the chipid here
+		 * based the platform type
+		 */
+
+		if (SOCINFO_VERSION_MAJOR(soc_platform_version) >= 3)
+			kgsl_3d0_pdata->chipid = ADRENO_CHIPID(2, 2, 0, 6);
 	}
 }
 
@@ -3244,16 +3310,11 @@ static DEFINE_MUTEX(hsic_status_lock);
 
 void peripheral_connect()
 {
-	int rc = 0;
 	mutex_lock(&hsic_status_lock);
 	if (hsic_peripheral_status)
 		goto out;
-	rc = platform_device_add(&msm_device_hsic_host);
-	if (rc)
-		pr_err("%s: failed to add a platform device, rc=%d\n",
-			__func__, rc);
-	else
-		hsic_peripheral_status = 1;
+	platform_device_add(&msm_device_hsic_host);
+	hsic_peripheral_status = 1;
 out:
 	mutex_unlock(&hsic_status_lock);
 }
@@ -3527,6 +3588,9 @@ static void __init msm8960_cdp_init(void)
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
 		pr_err("meminfo_init() failed!\n");
 
+	sony_add_ramconsole_devices();
+
+	platform_device_register(&msm_gpio_device);
 	msm_tsens_early_init(&msm_tsens_pdata);
 	msm_thermal_init(&msm_thermal_pdata);
 	BUG_ON(msm_rpm_init(&msm8960_rpm_data));
@@ -3566,7 +3630,6 @@ static void __init msm8960_cdp_init(void)
 	msm8960_init_cam();
 #endif
 	msm8960_init_mmc();
-	acpuclk_init(&acpuclk_8960_soc_data);
 	setup_init_vregs();
 #ifdef CONFIG_MSM_GSBI10_UART
 #ifndef CONFIG_SONY_FELICA_NFC_SUPPORT
@@ -3583,7 +3646,6 @@ static void __init msm8960_cdp_init(void)
 	msm8960_init_dsps();
 	change_memory_power = &msm8960_change_memory_power;
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
-	msm_pm_init_sleep_status_data(&msm_pm_slp_sts_data);
 }
 
 MACHINE_START(BLUE_SOMC, "BLUE SOMC")
@@ -3595,4 +3657,5 @@ MACHINE_START(BLUE_SOMC, "BLUE SOMC")
 	.init_machine = msm8960_cdp_init,
 	.init_early = msm8960_allocate_memory_regions,
 	.init_very_early = msm8960_early_memory,
+	.restart = msm_restart
 MACHINE_END

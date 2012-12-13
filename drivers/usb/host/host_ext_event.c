@@ -16,6 +16,7 @@
 #include <linux/cdev.h>
 #include <linux/semaphore.h>
 #include <linux/slab.h>
+#include <linux/module.h>
 
 #define MAX_NAME_SIZE 32
 #define MAX_MODULE_NAME_SIZE 32
