@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,6 +25,10 @@
 #include <linux/mfd/pmic8058.h>
 #include <linux/mfd/pmic8901.h>
 #include <linux/mfd/pm8xxx/misc.h>
+#ifdef CONFIG_MACH_SONY
+#include <linux/console.h>
+#include <asm/system_misc.h>
+#endif
 
 #include <asm/mach-types.h>
 
@@ -70,10 +75,35 @@ static int download_mode = 0;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
 
+#ifdef CONFIG_MACH_SONY
+extern void arm_machine_flush_console(void);
+#include <asm/proc-fns.h>
+#include <asm/cacheflush.h>
+#include <mach/system.h>
+
+static void msm_panic_restart(char mode, const char *cmd)
+{
+	arm_machine_flush_console();
+	local_irq_disable();
+	local_fiq_disable();
+	flush_cache_all();
+	cpu_proc_fin();
+	flush_cache_all();
+	msm_restart(mode, cmd);
+	mdelay(1000);
+	printk(KERN_ERR "Reboot failed -- System halted\n");
+	while (1)
+		;
+}
+#endif
+
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
 	in_panic = 1;
+#ifdef CONFIG_MACH_SONY
+	arm_pm_restart = msm_panic_restart;
+#endif
 	return NOTIFY_DONE;
 }
 
@@ -274,8 +304,25 @@ void msm_restart(char mode, const char *cmd)
 			__raw_writel(0x77665501, restart_reason);
 		}
 	} else {
+#ifndef CONFIG_MACH_SONY
 		__raw_writel(0x77665501, restart_reason);
+#else
+		__raw_writel(0x776655AA, restart_reason);
+#endif
 	}
+
+#ifdef CONFIG_MACH_SONY
+	if (in_panic) {
+		__raw_writel(0xC0DEDEAD, restart_reason);
+
+		/* if we were in suspend when a panic triggering event occured
+		 * the console may still be suspended, meaning we will loose
+		 * critical kernel logs in last_kmsg. Telling console to panic.
+		 */
+		panic_console();
+	}
+#endif
+
 #ifdef CONFIG_LGE_CRASH_HANDLER
 	if (in_panic == 1)
 		set_kernel_crash_magic_number();
@@ -322,6 +369,21 @@ static int __init msm_pmic_restart_init(void)
 
 late_initcall(msm_pmic_restart_init);
 
+#ifdef CONFIG_MACH_SONY
+static int msm_reboot_call(struct notifier_block *this,
+			unsigned long code, void *_cmd)
+{
+	if (code == SYS_DOWN)
+		disable_nonboot_cpus();
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block msm_reboot_notifier = {
+	.notifier_call = msm_reboot_call,
+};
+#endif
+
 static int __init msm_restart_init(void)
 {
 #ifdef CONFIG_MSM_DLOAD_MODE
@@ -332,6 +394,9 @@ static int __init msm_restart_init(void)
 		LGE_ERROR_HANDLER_MAGIC_ADDR;
 #endif
 	set_dload_mode(download_mode);
+#endif
+#ifdef CONFIG_MACH_SONY
+	register_reboot_notifier(&msm_reboot_notifier);
 #endif
 	msm_tmr0_base = msm_timer_get_timer0_base();
 	restart_reason = MSM_IMEM_BASE + RESTART_REASON_ADDR;

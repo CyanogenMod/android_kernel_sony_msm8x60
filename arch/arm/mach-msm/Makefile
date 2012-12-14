@@ -49,9 +49,11 @@ else
 endif
 obj-$(CONFIG_HOTPLUG_CPU) += hotplug.o
 
+ifdef CONFIG_MACH_SONY
 ifdef CONFIG_ARCH_MSM8960
 	obj-$(CONFIG_PM8921_MIC_BIAS) += pm8921-mic_bias.o
 	obj-$(CONFIG_SIMPLE_REMOTE_PLATFORM) += simple_remote_msm8960_pf.o
+endif
 endif
 
 obj-$(CONFIG_MSM_CPU_AVS) += avs.o

@@ -147,7 +147,9 @@ static DEFINE_MUTEX(app_access_lock);
 
 static int qsee_bw_count;
 static int qsee_sfpb_bw_count;
+#ifndef CONFIG_MACH_SONY
 static struct clk *qseecom_bus_clk;
+#endif
 static uint32_t qsee_perf_client;
 
 struct qseecom_registered_listener_list {
@@ -1199,11 +1201,13 @@ static int qsee_vote_for_clock(int32_t clk_type)
 
 	switch (clk_type) {
 	case CLK_DFAB:
+#ifndef CONFIG_MACH_SONY
 		/* Check if the clk is valid */
 		if (IS_ERR_OR_NULL(qseecom_bus_clk)) {
 			pr_warn("qseecom bus clock is null or error");
 			return -EINVAL;
 		}
+#endif
 		mutex_lock(&qsee_bw_mutex);
 		if (!qsee_bw_count) {
 			ret = msm_bus_scale_client_update_request(
@@ -1245,11 +1249,13 @@ static void qsee_disable_clock_vote(int32_t clk_type)
 
 	switch (clk_type) {
 	case CLK_DFAB:
+#ifndef CONFIG_MACH_SONY
 		/* Check if the DFAB clk is valid */
 		if (IS_ERR_OR_NULL(qseecom_bus_clk)) {
 			pr_warn("qseecom bus clock is null or error");
 			return;
 		}
+#endif
 		mutex_lock(&qsee_bw_mutex);
 		if (qsee_bw_count > 0) {
 			if (qsee_bw_count-- == 1) {
@@ -1710,7 +1716,9 @@ static int qseecom_release(struct inode *inode, struct file *file)
 		mutex_unlock(&pil_access_lock);
 	}
 	kfree(data);
+#ifndef CONFIG_MACH_SONY
 	qsee_disable_clock_vote(CLK_DFAB);
+#endif
 
 	return ret;
 }
@@ -1731,7 +1739,9 @@ static int __devinit qseecom_probe(struct platform_device *pdev)
 	uint32_t system_call_id = QSEOS_CHECK_VERSION_CMD;
 
 	qsee_bw_count = 0;
+#ifndef CONFIG_MACH_SONY
 	qseecom_bus_clk = NULL;
+#endif
 	qsee_perf_client = 0;
 
 	rc = alloc_chrdev_region(&qseecom_device_no, 0, 1, QSEECOM_DEV);
@@ -1801,6 +1811,7 @@ static int __devinit qseecom_probe(struct platform_device *pdev)
 
 		if (!qsee_perf_client) {
 			pr_err("Unable to register bus client\n");
+#ifndef CONFIG_MACH_SONY
 		} else {
 			qseecom_bus_clk = clk_get(class_dev, "bus_clk");
 			if (IS_ERR(qseecom_bus_clk)) {
@@ -1809,6 +1820,7 @@ static int __devinit qseecom_probe(struct platform_device *pdev)
 				pr_debug("Enabled DFAB clock");
 				clk_set_rate(qseecom_bus_clk, 64000000);
 			}
+#endif
 		}
 	}
 	return 0;
@@ -1853,7 +1865,9 @@ static int __devinit qseecom_init(void)
 
 static void __devexit qseecom_exit(void)
 {
+#ifndef CONFIG_MACH_SONY
 	clk_put(qseecom_bus_clk);
+#endif
 
 	device_destroy(driver_class, qseecom_device_no);
 	class_destroy(driver_class);
