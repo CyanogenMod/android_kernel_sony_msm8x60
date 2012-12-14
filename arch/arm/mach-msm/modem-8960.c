@@ -189,6 +189,13 @@ out:
 
 static irqreturn_t modem_wdog_bite_irq(int irq, void *dev_id)
 {
+
+#ifdef CONFIG_MACH_SONY
+	/* Ignore if we're the one that set SMSM_RESET */
+	if (crash_shutdown)
+		return IRQ_HANDLED;
+#endif
+
 	switch (irq) {
 
 	case Q6SW_WDOG_EXPIRED_IRQ:

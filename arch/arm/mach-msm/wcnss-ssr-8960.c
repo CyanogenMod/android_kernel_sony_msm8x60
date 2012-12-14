@@ -59,8 +59,10 @@ static void smsm_state_cb_hdlr(void *data, uint32_t old_state,
 		return;
 	}
 
+#ifndef CONFIG_MACH_SONY
 	if (!enable_riva_ssr)
 		panic(MODULE_NAME ": SMSM reset request received from Riva");
+#endif
 
 	smem_reset_reason = smem_get_entry(SMEM_SSR_REASON_WCNSS0,
 			&smem_reset_size);
@@ -81,6 +83,11 @@ static void smsm_state_cb_hdlr(void *data, uint32_t old_state,
 		memset(smem_reset_reason, 0, smem_reset_size);
 		wmb();
 	}
+
+#ifdef CONFIG_MACH_SONY
+	if (!enable_riva_ssr)
+		panic(MODULE_NAME ": SMSM reset request received from Riva");
+#endif
 
 	ss_restart_inprogress = true;
 	subsystem_restart_dev(riva_8960_dev);
