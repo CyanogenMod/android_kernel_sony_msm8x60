@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -417,9 +418,11 @@ struct platform_device msm8960_device_uart_gsbi5 = {
 	.resource	= resources_uart_gsbi5,
 };
 
+#ifndef CONFIG_MACH_SONY
 static struct msm_serial_hslite_platform_data uart_gsbi8_pdata = {
 	.line		= 0,
 };
+#endif
 
 static struct resource resources_uart_gsbi8[] = {
 	{
@@ -443,10 +446,16 @@ static struct resource resources_uart_gsbi8[] = {
 
 struct platform_device msm8960_device_uart_gsbi8 = {
 	.name	= "msm_serial_hsl",
+#ifndef CONFIG_MACH_SONY
 	.id	= 1,
 	.num_resources	   = ARRAY_SIZE(resources_uart_gsbi8),
 	.resource	   = resources_uart_gsbi8,
 	.dev.platform_data = &uart_gsbi8_pdata,
+#else
+	.id	= 0,
+	.num_resources	= ARRAY_SIZE(resources_uart_gsbi8),
+	.resource	= resources_uart_gsbi8,
+#endif
 };
 
 /* MSM Video core device */
