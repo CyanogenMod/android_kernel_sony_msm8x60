@@ -318,6 +318,10 @@ obj-$(CONFIG_MACH_BLUE_TSUBASA) += irda-blue_common.o
 obj-$(CONFIG_MACH_BLUE_TSUBASA) += oneseg-blue_common.o
 obj-$(CONFIG_MACH_BLUE_TSUBASA) += felica-blue_common.o
 
+obj-$(CONFIG_MACH_BLUE_MINT) += board-blue-all.o board-blue_mint-pmic.o board-blue_mint-gpiomux.o board-blue_mint-regulator.o battery-blue_mentos.o
+obj-$(CONFIG_MACH_BLUE_MINT) += gyro-sony_common.o board-sony_blue-gyro.o board-blue_mint-camera.o
+obj-$(CONFIG_MACH_BLUE_MINT) += irda-blue_common.o
+
 CFLAGS_board-blue.o += -Idrivers/staging/android
 
 CFLAGS_msm_vibrator.o += -Idrivers/staging/android
