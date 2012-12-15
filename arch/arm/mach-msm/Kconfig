@@ -878,6 +878,14 @@ config MACH_BLUE_TSUBASA
         help
           Support for the Sony Xperia V
 
+config MACH_BLUE_MINT
+        depends on ARCH_MSM8960
+	select MACH_SONY
+        default n
+        bool "SONY Mint"
+        help
+          Support for the Sony Xperia TS
+
 endmenu
 
 source "arch/arm/mach-msm/lge/Kconfig"
