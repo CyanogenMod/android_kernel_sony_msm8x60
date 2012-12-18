@@ -697,6 +697,14 @@ config BU52031NVX_POUCHDETECT
 	help
 	  depends on BU52031NVX
 
+config VIBRATOR_LC898300
+	tristate "VIBRATOR Support for LC898300 I2C chips"
+	depends on ANDROID_TIMED_OUTPUT && I2C
+	default n
+	help
+	  This option enables device driver support for the vibrator
+	  on the LC898300 chips accessed via the I2C bus.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

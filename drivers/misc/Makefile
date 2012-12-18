@@ -85,3 +85,4 @@ obj-$(CONFIG_NFC_PN544) += pn544.o
 obj-$(CONFIG_SONY_ONESEG_TUNER_PM) += oneseg_tunerpm.o
 obj-$(CONFIG_SONY_FELICA_SUPPORT) += felica.o
 obj-$(CONFIG_SONY_FELICA_NFC_SUPPORT) += felica_vdev.o
+obj-$(CONFIG_VIBRATOR_LC898300) += vibrator-lc898300.o
