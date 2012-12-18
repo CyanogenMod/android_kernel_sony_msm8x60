@@ -20,10 +20,22 @@
 
 #ifdef CONFIG_SENSORS_MPU3050
 
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 #define GYRO_ORIENTATION {  1,  0,  0,  0,  1,  0,  0,  0,  1 }
 #define ACCEL_ORIENTATION {  0,  1,  0, -1,  0,  0,  0,  0,  1 }
 #define COMPASS_ORIENTATION { -1,  0,  0,  0,  1,  0,  0,  0, -1 }
 #define PRESSURE_ORIENTATION {  1,  0,  0,  0,  1,  0,  0,  0,  1 }
+#elif defined CONFIG_MACH_BLUE_MINT
+#define GYRO_ORIENTATION {  0,  1,  0,  -1,  0,  0,  0,  0,  1 }
+#define ACCEL_ORIENTATION { 1, 0,  0,  0,  1,  0,  0,  0,  1 }
+#define COMPASS_ORIENTATION {  -1, 0,  0,  0,  1,  0,  0,  0, -1 }
+#define PRESSURE_ORIENTATION {  1,  0,  0,  0,  1,  0,  0,  0,  1 }
+#elif defined CONFIG_MACH_BLUE_HAYABUSA
+#define GYRO_ORIENTATION {  0,  1,  0,  -1,  0,  0,  0,  0,  1 }
+#define ACCEL_ORIENTATION { 1, 0,  0,  0,  1,  0,  0,  0,  1 }
+#define COMPASS_ORIENTATION {  1, 0,  0,  0,  1,  0,  0,  0, 1 }
+#define PRESSURE_ORIENTATION {  1,  0,  0,  0,  1,  0,  0,  0,  1 }
+#endif
 
 struct mpu3050_platform_data mpu_data = {
 	.int_config  = BIT_INT_ANYRD_2CLEAR,
