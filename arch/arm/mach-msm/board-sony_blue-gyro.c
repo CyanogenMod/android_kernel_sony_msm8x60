@@ -57,4 +57,3 @@ struct mpu3050_platform_data mpu_data = {
 	.power_mode = mpu3050_power_mode,
 };
 #endif /* CONFIG_SENSORS_MPU3050 */
-

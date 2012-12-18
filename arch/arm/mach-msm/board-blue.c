@@ -2336,14 +2336,24 @@ struct as3676_platform_data as3676_platform_data = {
 	.leds[0] = {
 		.name = "lcd-backlight_1",
 		.on_charge_pump = 0,
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.max_current_uA = 20000,
 		.startup_current_uA = 20000,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.max_current_uA = 21000,
+		.startup_current_uA = 4000,
+#endif
 	},
 	.leds[1] = {
 		.name = "lcd-backlight_2",
 		.on_charge_pump = 0,
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.max_current_uA = 20000,
 		.startup_current_uA = 20000,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.max_current_uA = 21000,
+		.startup_current_uA = 4000,
+#endif
 	},
 	.leds[2] = {
 		.name = "led_3-not-connected",
@@ -2352,52 +2362,92 @@ struct as3676_platform_data as3676_platform_data = {
 	},
 	.leds[3] = {
 		.name = "led_4-not-connected",
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.on_charge_pump = 1,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.on_charge_pump = 0,
+#endif
 		.max_current_uA = 0,
 	},
 	.leds[4] = {
 		.name = "led_5-not-connected",
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.on_charge_pump = 1,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.on_charge_pump = 0,
+#endif
 		.max_current_uA = 0,
 	},
 	.leds[5] = {
 		.name = "led_6-not-connected",
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.on_charge_pump = 1,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.on_charge_pump = 0,
+#endif
 		.max_current_uA = 0,
 	},
 	.leds[6] = {
 		.name = "pwr-red",
 		.on_charge_pump = 1,
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.max_current_uA = 2000,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.max_current_uA = 1000,
+#endif
 	},
 	.leds[7] = {
 		.name = "pwr-green",
 		.on_charge_pump = 1,
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.max_current_uA = 2000,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.max_current_uA = 1000,
+#endif
 	},
 	.leds[8] = {
 		.name = "pwr-blue",
 		.on_charge_pump = 1,
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.max_current_uA = 2000,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.max_current_uA = 1000,
+#endif
 	},
 	.leds[9] = {
 		.name = "led_10-not-connected",
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.on_charge_pump = 1,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.on_charge_pump = 0,
+#endif
 		.max_current_uA = 0,
 	},
 	.leds[10] = {
 		.name = "led_11-not-connected",
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.on_charge_pump = 1,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.on_charge_pump = 0,
+#endif
 		.max_current_uA = 0,
 	},
 	.leds[11] = {
 		.name = "led_12-not-connected",
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.on_charge_pump = 1,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.on_charge_pump = 0,
+#endif
 		.max_current_uA = 0,
 	},
 	.leds[12] = {
 		.name = "led_13-not-connected",
+#ifdef CONFIG_MACH_BLUE_TSUBASA
 		.on_charge_pump = 1,
+#elif defined CONFIG_MACH_BLUE_MINT
+		.on_charge_pump = 0,
+#endif
 		.max_current_uA = 0,
 	},
 };
