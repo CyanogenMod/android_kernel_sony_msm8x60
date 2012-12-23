@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -49,8 +50,10 @@ MODULE_PARM_DESC(cfilt_adjust_ms, "delay after adjusting cfilt voltage in ms");
 #define BITS_PER_REG 8
 #define TABLA_CFILT_FAST_MODE 0x00
 #define TABLA_CFILT_SLOW_MODE 0x40
+#ifdef CONFIG_MACH_SONY
 #define TABLA_HP_AMP_ENABLE   0x41
 #define TABLA_HP_AMP_DISABLE  0x48
+#endif
 #define MBHC_FW_READ_ATTEMPTS 15
 #define MBHC_FW_READ_TIMEOUT 2000000
 
@@ -347,7 +350,9 @@ struct tabla_priv {
 #endif
 };
 
+#ifdef CONFIG_MACH_SONY
 struct snd_soc_codec *wcd_codec;
+#endif
 
 static const u32 comp_shift[] = {
 	0,
@@ -7423,6 +7428,7 @@ int tabla_hs_detect(struct snd_soc_codec *codec,
 }
 EXPORT_SYMBOL_GPL(tabla_hs_detect);
 
+#ifdef CONFIG_MACH_SONY
 int tabla_codec_hp_amp_enable(u8 enable)
 {
 	int rc = 0;
@@ -7438,6 +7444,7 @@ int tabla_codec_hp_amp_enable(u8 enable)
 	return rc;
 }
 EXPORT_SYMBOL_GPL(tabla_codec_hp_amp_enable);
+#endif
 
 static irqreturn_t tabla_slimbus_irq(int irq, void *data)
 {
@@ -8163,7 +8170,9 @@ static int tabla_codec_probe(struct snd_soc_codec *codec)
 	}
 #endif
 
+#ifdef CONFIG_MACH_SONY
 	wcd_codec = codec;
+#endif
 
 	codec->ignore_pmdown_time = 1;
 	return ret;
