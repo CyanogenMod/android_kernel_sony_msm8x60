@@ -161,6 +161,10 @@
 #endif
 #endif
 
+#ifdef CONFIG_VIBRATOR_LC898300
+#include <linux/vibrator-lc898300.h>
+#endif
+
 #ifdef CONFIG_NFC_PN544
 #define NXP_GPIO_NFC_EN		PM8921_GPIO_PM_TO_SYS(33)
 #define NXP_GPIO_NFC_FWDL_EN	19
@@ -2808,6 +2812,148 @@ static struct apds9702_platform_data apds9702_pdata = {
 };
 #endif
 
+#ifdef CONFIG_VIBRATOR_LC898300
+#define VIB_RSTB 79
+#define VIB_EN 53
+
+static struct regulator *ldo16;
+
+static int lc898300_rstb_gpio_setup(bool value)
+{
+	if (ldo16 == NULL)
+		return -EINVAL;
+	gpio_set_value(VIB_RSTB, value);
+	return 0;
+}
+
+static int lc898300_en_gpio_setup(bool value)
+{
+	if (ldo16 == NULL)
+		return -EINVAL;
+	gpio_set_value(VIB_EN, value);
+	return 0;
+}
+
+static int lc898300_gpio_allocate(struct device *dev)
+{
+	int rc;
+
+	rc = gpio_request(VIB_RSTB, "vibrator reset_gpio");
+	if (rc) {
+		dev_err(dev, "%s: GPIO %d: request failed. rc=%d\n",
+				__func__, VIB_RSTB, rc);
+		return rc;
+	}
+
+	rc = gpio_direction_output(VIB_RSTB, 0);
+	if (rc) {
+		dev_err(dev, "%s: GPIO %d: direction out failed rc=%d\n",
+				__func__, VIB_EN, rc);
+		goto error1;
+	}
+
+	rc = gpio_request(VIB_EN, "vibrator enable_gpio");
+	if (rc) {
+		dev_err(dev, "%s: GPIO %d: request failed. rc=%d\n",
+				__func__, VIB_EN, rc);
+		goto error1;
+	}
+
+	rc = gpio_direction_output(VIB_EN, 0);
+	if (rc) {
+		dev_err(dev, "%s: GPIO %d: direction out failed rc=%d\n",
+				__func__, VIB_EN, rc);
+		goto error2;
+	}
+
+	return rc;
+
+error2:
+	gpio_free(VIB_EN);
+error1:
+	gpio_free(VIB_RSTB);
+	return rc;
+}
+
+static void lc898300_gpio_release(struct device *dev)
+{
+	gpio_free(VIB_RSTB);
+	gpio_free(VIB_EN);
+}
+
+static int lc898300_power_config(struct device *dev, bool on)
+{
+	int rc = 0;
+
+	if (on) {
+		ldo16 = regulator_get(NULL, "8921_l16");
+		if (IS_ERR(ldo16)) {
+			dev_err(dev, "%s: could not get 8921_l16, rc = %ld\n",
+				__func__, PTR_ERR(ldo16));
+                        return -ENODEV;
+		}
+                rc = regulator_set_voltage(ldo16, 3050000, 3050000);
+		if (rc) {
+			dev_err(dev, "%s: unable to set L16 voltage to "
+					"3.075V, rc = %d!\n", __func__, rc);
+			goto error;
+		}
+	} else {
+		goto error;
+	}
+
+	return rc;
+error:
+	regulator_put(ldo16);
+	ldo16 = NULL;
+	return rc;
+}
+
+static int lc898300_power_enable(struct device *dev, bool on)
+{
+	int rc = 0;
+
+	if (ldo16 == NULL) {
+		dev_err(dev, "%s: ldo16 = NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	if (on) {
+		rc = regulator_enable(ldo16);
+		if (rc) {
+			dev_err(dev, "%s: enable regulator 8921_l16 failed\n",
+					__func__);
+		}
+	} else {
+		rc = regulator_disable(ldo16);
+		if (rc)
+			dev_err(dev, "'%s: regulator 8921_l16 disable failed"
+					", rc=%d\n", __func__, rc);
+	}
+
+	return rc;
+}
+
+struct lc898300_vib_cmd lc898300_vib_cmd_data = {
+	.vib_cmd_intensity = VIB_CMD_PWM_8_15,
+	.vib_cmd_resonance = VIB_CMD_FREQ_150,
+	.vib_cmd_startup   = VIB_CMD_STTIME_3,
+	.vib_cmd_brake	   = VIB_CMD_ATBR | VIB_CMD_BRTIME_2 |
+			     VIB_CMD_BRPWR_15_15,
+};
+
+static struct lc898300_platform_data lc898300_platform_data = {
+	.name = "vibrator",
+	.power_config = lc898300_power_config,
+	.power_enable = lc898300_power_enable,
+	.gpio_allocate = lc898300_gpio_allocate,
+	.gpio_release = lc898300_gpio_release,
+	.rstb_gpio_setup = lc898300_rstb_gpio_setup,
+	.en_gpio_setup = lc898300_en_gpio_setup,
+	.vib_cmd_info = &lc898300_vib_cmd_data,
+};
+#endif
+
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi4_pdata = {
 	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
@@ -3399,6 +3545,13 @@ static struct i2c_board_info gsbi12_peripherals_info[] __initdata = {
 		I2C_BOARD_INFO("bma250", 0x30 >> 1),
 		.irq = MSM_GPIO_TO_INT(BMA250_GPIO),
 		.platform_data = &bma250_platform_data,
+	},
+#endif
+#ifdef CONFIG_VIBRATOR_LC898300
+	{
+		/* Config-spec is 8-bit = 0x92, src-code need 7-bit => 0x49 */
+		I2C_BOARD_INFO(LC898300_I2C_NAME, 0x92 >> 1),
+		.platform_data = &lc898300_platform_data,
 	},
 #endif
 #ifdef CONFIG_INPUT_AKM8972
