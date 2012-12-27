@@ -527,7 +527,7 @@ tSirRetStatus limFTPrepareAddBssReq( tpAniSirGlobal pMac,
                              false,pftSessionEntry,&pBeaconStruct->VHTCaps);
 #else
         limPopulateOwnRateSet(pMac, &pAddBssParams->staContext.supportedRates, 
-                                                    beaconStruct.HTCaps.supportedMCSSet, false,pftSessionEntry);
+                                                    pBeaconStruct->HTCaps.supportedMCSSet, false,pftSessionEntry);
 #endif
         limFillSupportedRatesInfo(pMac, NULL, &pAddBssParams->staContext.supportedRates,pftSessionEntry);
 

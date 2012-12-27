@@ -23,4 +23,8 @@ config PRIMA_WLAN_OKC
 	bool "Enable the Prima WLAN Opportunistic Key Caching feature"
 	default n
 
+config PRIMA_WLAN_FEATURE_11AC
+	bool "Enable the Prima WLAN 11AC feature"
+	default n
+
 endif # PRIMA_WLAN
