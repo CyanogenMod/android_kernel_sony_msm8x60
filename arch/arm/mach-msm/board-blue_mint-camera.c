@@ -27,6 +27,891 @@
 #include "board-8960.h"
 
 #ifdef CONFIG_MSM_CAMERA
+#if !defined(CONFIG_SONY_CAM_MAIN_V4L2) && !defined(CONFIG_SONY_CAM_SUB_V4L2)
+#if (defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)) && \
+	defined(CONFIG_I2C)
+
+static struct i2c_board_info cam_expander_i2c_info[] = {
+	{
+		I2C_BOARD_INFO("sx1508q", 0x22),
+		.platform_data = &msm8960_sx150x_data[SX150X_CAM]
+	},
+};
+
+static struct msm_cam_expander_info cam_expander_info[] = {
+	{
+		cam_expander_i2c_info,
+		MSM_8960_GSBI4_QUP_I2C_BUS_ID,
+	},
+};
+#endif
+#endif
+
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+static struct gpiomux_setting cam_mclk = {
+	.func	= GPIOMUX_FUNC_1,
+	.drv	= GPIOMUX_DRV_6MA,
+	.pull	= GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting gpio_2ma_no_pull_low = {
+	.func   = GPIOMUX_FUNC_GPIO,
+	.drv    = GPIOMUX_DRV_2MA,
+	.pull   = GPIOMUX_PULL_NONE,
+	.dir    = GPIOMUX_OUT_LOW,
+};
+
+static struct gpiomux_setting cam_mclk1 = {
+	.func	= GPIOMUX_FUNC_2,
+	.drv	= GPIOMUX_DRV_6MA,
+	.pull	= GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting gpio_2ma_pull_down_in = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv  = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_DOWN,
+	.dir  = GPIOMUX_IN,
+};
+
+static struct gpiomux_setting gsbi4 = {
+	.func = GPIOMUX_FUNC_1,  /* gsbi4 */
+	.drv = GPIOMUX_DRV_4MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+#else
+static struct gpiomux_setting cam_settings[] = {
+	{
+		.func = GPIOMUX_FUNC_GPIO, /*suspend*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_DOWN,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_1, /*active 1*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_NONE,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_GPIO, /*active 2*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_NONE,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_1, /*active 3*/
+		.drv = GPIOMUX_DRV_8MA,
+		.pull = GPIOMUX_PULL_NONE,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_5, /*active 4*/
+		.drv = GPIOMUX_DRV_8MA,
+		.pull = GPIOMUX_PULL_UP,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_6, /*active 5*/
+		.drv = GPIOMUX_DRV_8MA,
+		.pull = GPIOMUX_PULL_UP,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_2, /*active 6*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_UP,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_3, /*active 7*/
+		.drv = GPIOMUX_DRV_8MA,
+		.pull = GPIOMUX_PULL_UP,
+	},
+
+	{
+		.func = GPIOMUX_FUNC_GPIO, /*i2c suspend*/
+		.drv = GPIOMUX_DRV_2MA,
+		.pull = GPIOMUX_PULL_KEEPER,
+	},
+};
+#endif
+
+#if !defined(CONFIG_SONY_CAM_MAIN_V4L2) && !defined(CONFIG_SONY_CAM_SUB_V4L2)
+static struct msm_gpiomux_config msm8960_cdp_flash_configs[] = {
+	{
+		.gpio = 3,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[1],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+};
+
+static struct msm_gpiomux_config msm8960_cam_common_configs[] = {
+	{
+		.gpio = 2,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[2],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+	{
+		.gpio = 3,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[2],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+	{
+		.gpio = 4,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[1],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+	{
+		.gpio = 5,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[3],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+	{
+		.gpio = 76,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[2],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+	{
+		.gpio = 107,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[2],
+			[GPIOMUX_SUSPENDED] = &cam_settings[0],
+		},
+	},
+};
+#endif
+
+static struct msm_gpiomux_config msm8960_cam_2d_configs[] = {
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+	{
+		.gpio		= 1,
+		.settings = {
+			[GPIOMUX_ACTIVE]	= &gpio_2ma_no_pull_low,
+			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
+		},
+	},
+	{
+		.gpio		= 4,
+		.settings = {
+			[GPIOMUX_ACTIVE]	= &cam_mclk1,
+			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
+		},
+	},
+	{
+		.gpio		= 5,
+		.settings	= {
+			[GPIOMUX_ACTIVE]	= &cam_mclk,
+			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
+		},
+	},
+	{
+		.gpio		= 18,
+		.settings	= {
+			[GPIOMUX_ACTIVE]	= &gpio_2ma_no_pull_low,
+			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
+		},
+	},
+	{
+		.gpio = 20,
+		.settings = {
+			[GPIOMUX_ACTIVE]	= &gsbi4,
+			[GPIOMUX_SUSPENDED]	= &gpio_2ma_pull_down_in,
+		},
+	},
+	{
+		.gpio = 21,
+		.settings = {
+			[GPIOMUX_ACTIVE]	= &gsbi4,
+			[GPIOMUX_SUSPENDED]	= &gpio_2ma_pull_down_in,
+		},
+	},
+#else
+	{
+		.gpio = 18,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[3],
+			[GPIOMUX_SUSPENDED] = &cam_settings[8],
+		},
+	},
+	{
+		.gpio = 19,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[3],
+			[GPIOMUX_SUSPENDED] = &cam_settings[8],
+		},
+	},
+	{
+		.gpio = 20,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[3],
+			[GPIOMUX_SUSPENDED] = &cam_settings[8],
+		},
+	},
+	{
+		.gpio = 21,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &cam_settings[3],
+			[GPIOMUX_SUSPENDED] = &cam_settings[8],
+		},
+	},
+#endif
+};
+
+#if !defined(CONFIG_SONY_CAM_MAIN_V4L2) && !defined(CONFIG_SONY_CAM_SUB_V4L2)
+#define VFE_CAMIF_TIMER1_GPIO 2
+#define VFE_CAMIF_TIMER2_GPIO 3
+#define VFE_CAMIF_TIMER3_GPIO_INT 4
+static struct msm_camera_sensor_strobe_flash_data strobe_flash_xenon = {
+	.flash_trigger = VFE_CAMIF_TIMER2_GPIO,
+	.flash_charge = VFE_CAMIF_TIMER1_GPIO,
+	.flash_charge_done = VFE_CAMIF_TIMER3_GPIO_INT,
+	.flash_recharge_duration = 50000,
+	.irq = MSM_GPIO_TO_INT(VFE_CAMIF_TIMER3_GPIO_INT),
+};
+
+#ifdef CONFIG_MSM_CAMERA_FLASH
+static struct msm_camera_sensor_flash_src msm_flash_src = {
+	.flash_sr_type = MSM_CAMERA_FLASH_SRC_EXT,
+	._fsrc.ext_driver_src.led_en = VFE_CAMIF_TIMER1_GPIO,
+	._fsrc.ext_driver_src.led_flash_en = VFE_CAMIF_TIMER2_GPIO,
+};
+#endif
+#endif
+
+static struct msm_bus_vectors cam_init_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+};
+
+static struct msm_bus_vectors cam_preview_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 139968000,
+		.ib	= 559872000,
+#else
+		.ab  = 27648000,
+		.ib  = 110592000,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 279936000,
+		.ib	= 699840000,
+#else
+		.ab  = 0,
+		.ib  = 0,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+};
+
+static struct msm_bus_vectors cam_video_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 121305600,
+		.ib	= 485222400,
+#else
+		.ab  = 154275840,
+		.ib  = 617103360,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 214617600,
+		.ib	= 494553600,
+#else
+		.ab  = 206807040,
+		.ib  = 488816640,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+};
+
+static struct msm_bus_vectors cam_snapshot_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 295401600,
+		.ib	= 1181606400,
+#else
+		.ab  = 274423680,
+		.ib  = 1097694720,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 590803200,
+		.ib	= 1477008000,
+#else
+		.ab  = 0,
+		.ib  = 0,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 590803200,
+		.ib	= 590803200,
+#else
+		.ab  = 540000000,
+		.ib  = 1350000000,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 43200000,
+		.ib  = 69120000,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 43200000,
+		.ib  = 69120000,
+	},
+};
+
+static struct msm_bus_vectors cam_zsl_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 302071680,
+		.ib  = 1208286720,
+	},
+	{
+		.src = MSM_BUS_MASTER_VPE,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+		.ab	= 1521190000,
+		.ib	= 1521190000,
+#else
+		.ab  = 540000000,
+		.ib  = 1350000000,
+#endif
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 43200000,
+		.ib  = 69120000,
+	},
+	{
+		.src = MSM_BUS_MASTER_VFE,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 43200000,
+		.ib  = 69120000,
+	},
+};
+
+static struct msm_bus_paths cam_bus_client_config[] = {
+	{
+		ARRAY_SIZE(cam_init_vectors),
+		cam_init_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_preview_vectors),
+		cam_preview_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_video_vectors),
+		cam_video_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_snapshot_vectors),
+		cam_snapshot_vectors,
+	},
+	{
+		ARRAY_SIZE(cam_zsl_vectors),
+		cam_zsl_vectors,
+	},
+};
+
+static struct msm_bus_scale_pdata cam_bus_client_pdata = {
+		cam_bus_client_config,
+		ARRAY_SIZE(cam_bus_client_config),
+		.name = "msm_camera",
+};
+
+static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
+	{
+		.csid_core = 0,
+#if defined(CONFIG_SONY_VPE)
+		.is_vpe			= 0,
+#else
+		.is_vpe    = 1,
+#endif
+		.cam_bus_scale_table = &cam_bus_client_pdata,
+	},
+	{
+		.csid_core = 1,
+#if defined(CONFIG_SONY_VPE)
+		.is_vpe			= 0,
+#else
+		.is_vpe    = 1,
+#endif
+		.cam_bus_scale_table = &cam_bus_client_pdata,
+	},
+	{
+		.csid_core = 2,
+#if defined(CONFIG_SONY_VPE)
+		.is_vpe			= 0,
+#else
+		.is_vpe    = 1,
+#endif
+		.cam_bus_scale_table = &cam_bus_client_pdata,
+	},
+};
+
+static struct camera_vreg_t msm_8960_back_cam_vreg[] = {
+#ifdef CONFIG_SONY_CAM_MAIN_V4L2
+	{ "cam_vana", REG_LDO, 2600000, 3000000, 85600 },
+	{ "cam_vio", REG_VS, 0, 0, 0 },
+	{ "cam_vdig", REG_LDO, 1200000, 1200000, 105000 },
+#else
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vio", REG_VS, 0, 0, 0},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+#endif
+
+};
+
+static struct camera_vreg_t msm_8960_front_cam_vreg[] = {
+#ifdef CONFIG_SONY_CAM_SUB_V4L2
+	{ "cam_vana", REG_LDO, 2600000, 3000000, 85600 },
+	{ "cam_vio", REG_VS, 0, 0, 0 },
+#else
+	{"cam_vio", REG_VS, 0, 0, 0},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+#endif
+};
+
+static struct gpio msm8960_common_cam_gpio[] = {
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+	{ 4, GPIOF_DIR_IN, "CAMIF_MCLK" },
+#endif
+	{5, GPIOF_DIR_IN, "CAMIF_MCLK"},
+	{20, GPIOF_DIR_IN, "CAMIF_I2C_DATA"},
+	{21, GPIOF_DIR_IN, "CAMIF_I2C_CLK"},
+	{ 89, GPIOF_DIR_OUT, "CAM_AF" },
+};
+
+static struct gpio msm8960_front_cam_gpio[] = {
+#ifdef CONFIG_SONY_CAM_SUB_V4L2
+	{ 18, GPIOF_DIR_OUT, "CAM_RESET" },
+#else
+	{76, GPIOF_DIR_OUT, "CAM_RESET"},
+#endif
+};
+
+static struct gpio msm8960_back_cam_gpio[] = {
+#ifdef CONFIG_SONY_CAM_MAIN_V4L2
+	{ 1, GPIOF_DIR_OUT, "CAM_RESET" },
+#else
+	{107, GPIOF_DIR_OUT, "CAM_RESET"},
+#endif
+};
+
+static struct msm_gpio_set_tbl msm8960_front_cam_gpio_set_tbl[] = {
+#ifdef CONFIG_SONY_CAM_SUB_V4L2
+	{ 18, GPIOF_OUT_INIT_LOW, 1 },
+	{ 18, GPIOF_OUT_INIT_HIGH, 1000 },
+#else
+	{76, GPIOF_OUT_INIT_LOW, 1000},
+	{76, GPIOF_OUT_INIT_HIGH, 4000},
+#endif
+};
+
+static struct msm_gpio_set_tbl msm8960_back_cam_gpio_set_tbl[] = {
+#ifdef CONFIG_SONY_CAM_MAIN_V4L2
+	{ 1, GPIOF_OUT_INIT_LOW, 1 },
+	{ 1, GPIOF_OUT_INIT_HIGH, 1000 },
+#else
+	{107, GPIOF_OUT_INIT_LOW, 1000},
+	{107, GPIOF_OUT_INIT_HIGH, 4000},
+#endif
+};
+
+static struct msm_camera_gpio_conf msm_8960_front_cam_gpio_conf = {
+	.cam_gpiomux_conf_tbl = msm8960_cam_2d_configs,
+	.cam_gpiomux_conf_tbl_size = ARRAY_SIZE(msm8960_cam_2d_configs),
+	.cam_gpio_common_tbl = msm8960_common_cam_gpio,
+	.cam_gpio_common_tbl_size = ARRAY_SIZE(msm8960_common_cam_gpio),
+	.cam_gpio_req_tbl = msm8960_front_cam_gpio,
+	.cam_gpio_req_tbl_size = ARRAY_SIZE(msm8960_front_cam_gpio),
+	.cam_gpio_set_tbl = msm8960_front_cam_gpio_set_tbl,
+	.cam_gpio_set_tbl_size = ARRAY_SIZE(msm8960_front_cam_gpio_set_tbl),
+};
+
+static struct msm_camera_gpio_conf msm_8960_back_cam_gpio_conf = {
+	.cam_gpiomux_conf_tbl = msm8960_cam_2d_configs,
+	.cam_gpiomux_conf_tbl_size = ARRAY_SIZE(msm8960_cam_2d_configs),
+	.cam_gpio_common_tbl = msm8960_common_cam_gpio,
+	.cam_gpio_common_tbl_size = ARRAY_SIZE(msm8960_common_cam_gpio),
+	.cam_gpio_req_tbl = msm8960_back_cam_gpio,
+	.cam_gpio_req_tbl_size = ARRAY_SIZE(msm8960_back_cam_gpio),
+	.cam_gpio_set_tbl = msm8960_back_cam_gpio_set_tbl,
+	.cam_gpio_set_tbl_size = ARRAY_SIZE(msm8960_back_cam_gpio_set_tbl),
+};
+
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+static struct msm_camera_sensor_flash_data msm_camera_flash_none = {
+	.flash_type	= MSM_CAMERA_FLASH_NONE,
+	.flash_src	= NULL,
+};
+
+static struct msm_camera_csi_lane_params msm_camera_csi_lane_params = {
+	.csi_lane_assign	= 0xE4,
+	.csi_lane_mask		= 0xF,
+};
+#endif
+
+#ifdef CONFIG_SONY_CAM_MAIN_V4L2
+static struct msm_camera_sensor_platform_info
+		msm_camera_sony_sensor_main_platform_info = {
+	.mount_angle		= 90,
+	.sensor_reset		= 1,
+	.cam_vreg		= msm_8960_back_cam_vreg,
+	.num_vreg		= ARRAY_SIZE(msm_8960_back_cam_vreg),
+	.gpio_conf		= &msm_8960_back_cam_gpio_conf,
+	.csi_lane_params	= &msm_camera_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info
+		msm_camera_sony_sensor_main_sensor_info = {
+	.sensor_name		= "sony_sensor_main",
+	.sensor_reset		= 1,
+	.pdata			= &msm_camera_csi_device_data[0],
+	.flash_data		= &msm_camera_flash_none,
+	.sensor_platform_info	= &msm_camera_sony_sensor_main_platform_info,
+	.csi_if			= 1,
+	.camera_type		= BACK_CAMERA_2D,
+};
+#else
+static struct i2c_board_info msm_act_main_cam_i2c_info = {
+	I2C_BOARD_INFO("msm_actuator", 0x11),
+};
+
+static struct msm_actuator_info msm_act_main_cam_0_info = {
+	.board_info     = &msm_act_main_cam_i2c_info,
+	.cam_name   = MSM_ACTUATOR_MAIN_CAM_0,
+	.bus_id         = MSM_8960_GSBI4_QUP_I2C_BUS_ID,
+	.vcm_pwd        = 0,
+	.vcm_enable     = 0,
+};
+
+static struct msm_camera_sensor_flash_data flash_imx074 = {
+	.flash_type	= MSM_CAMERA_FLASH_LED,
+#ifdef CONFIG_MSM_CAMERA_FLASH
+	.flash_src	= &msm_flash_src
+#endif
+};
+
+static struct msm_camera_csi_lane_params imx074_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0xF,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_imx074 = {
+	.mount_angle	= 90,
+	.cam_vreg = msm_8960_back_cam_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_back_cam_vreg),
+	.gpio_conf = &msm_8960_back_cam_gpio_conf,
+	.csi_lane_params = &imx074_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_imx074_data = {
+	.sensor_name	= "imx074",
+	.pdata	= &msm_camera_csi_device_data[0],
+	.flash_data	= &flash_imx074,
+	.strobe_flash_data = &strobe_flash_xenon,
+	.sensor_platform_info = &sensor_board_info_imx074,
+	.csi_if	= 1,
+	.camera_type = BACK_CAMERA_2D,
+	.sensor_type = BAYER_SENSOR,
+	.actuator_info = &msm_act_main_cam_0_info,
+};
+#endif
+
+#ifdef CONFIG_SONY_CAM_SUB_V4L2
+static struct msm_camera_sensor_platform_info
+		msm_camera_sony_sensor_sub_platform_info = {
+	.mount_angle		= 90,
+	.sensor_reset		= 18,
+	.cam_vreg		= msm_8960_front_cam_vreg,
+	.num_vreg		= ARRAY_SIZE(msm_8960_front_cam_vreg),
+	.gpio_conf		= &msm_8960_front_cam_gpio_conf,
+	.csi_lane_params	= &msm_camera_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info
+		msm_camera_sony_sensor_sub_sensor_info = {
+	.sensor_name		= "sony_sensor_sub",
+	.sensor_reset		= 18,
+	.pdata			= &msm_camera_csi_device_data[1],
+	.flash_data		= &msm_camera_flash_none,
+	.sensor_platform_info	= &msm_camera_sony_sensor_sub_platform_info,
+	.csi_if			= 1,
+	.camera_type		= FRONT_CAMERA_2D,
+};
+#else
+static struct camera_vreg_t msm_8960_mt9m114_vreg[] = {
+	{"cam_vio", REG_VS, 0, 0, 0},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+};
+
+static struct msm_camera_sensor_flash_data flash_mt9m114 = {
+	.flash_type = MSM_CAMERA_FLASH_NONE
+};
+
+static struct msm_camera_csi_lane_params mt9m114_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0x1,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_mt9m114 = {
+	.mount_angle = 90,
+	.cam_vreg = msm_8960_mt9m114_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_mt9m114_vreg),
+	.gpio_conf = &msm_8960_front_cam_gpio_conf,
+	.csi_lane_params = &mt9m114_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_mt9m114_data = {
+	.sensor_name = "mt9m114",
+	.pdata = &msm_camera_csi_device_data[1],
+	.flash_data = &flash_mt9m114,
+	.sensor_platform_info = &sensor_board_info_mt9m114,
+	.csi_if = 1,
+	.camera_type = FRONT_CAMERA_2D,
+	.sensor_type = YUV_SENSOR,
+};
+
+static struct msm_camera_sensor_flash_data flash_ov2720 = {
+	.flash_type	= MSM_CAMERA_FLASH_NONE,
+};
+
+static struct msm_camera_csi_lane_params ov2720_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0x3,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_ov2720 = {
+	.mount_angle	= 0,
+	.cam_vreg = msm_8960_front_cam_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_front_cam_vreg),
+	.gpio_conf = &msm_8960_front_cam_gpio_conf,
+	.csi_lane_params = &ov2720_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_ov2720_data = {
+	.sensor_name	= "ov2720",
+	.pdata	= &msm_camera_csi_device_data[1],
+	.flash_data	= &flash_ov2720,
+	.sensor_platform_info = &sensor_board_info_ov2720,
+	.csi_if	= 1,
+	.camera_type = FRONT_CAMERA_2D,
+	.sensor_type = BAYER_SENSOR,
+};
+#endif
+
+#if !defined(CONFIG_SONY_CAM_MAIN_V4L2)
+static struct camera_vreg_t msm_8960_s5k3l1yx_vreg[] = {
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vio", REG_VS, 0, 0, 0},
+};
+
+static struct msm_camera_sensor_flash_data flash_s5k3l1yx = {
+	.flash_type = MSM_CAMERA_FLASH_NONE,
+};
+
+static struct msm_camera_csi_lane_params s5k3l1yx_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0xF,
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_s5k3l1yx = {
+	.mount_angle  = 0,
+	.cam_vreg = msm_8960_s5k3l1yx_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_s5k3l1yx_vreg),
+	.gpio_conf = &msm_8960_back_cam_gpio_conf,
+	.csi_lane_params = &s5k3l1yx_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_s5k3l1yx_data = {
+	.sensor_name          = "s5k3l1yx",
+	.pdata                = &msm_camera_csi_device_data[0],
+	.flash_data           = &flash_s5k3l1yx,
+	.sensor_platform_info = &sensor_board_info_s5k3l1yx,
+	.csi_if               = 1,
+	.camera_type          = BACK_CAMERA_2D,
+	.sensor_type          = BAYER_SENSOR,
+};
+
+static struct msm_camera_csi_lane_params imx091_csi_lane_params = {
+	.csi_lane_assign = 0xE4,
+	.csi_lane_mask = 0xF,
+};
+
+static struct camera_vreg_t msm_8960_imx091_vreg[] = {
+	{"cam_vana", REG_LDO, 2800000, 2850000, 85600},
+	{"cam_vdig", REG_LDO, 1200000, 1200000, 105000},
+	{"cam_vio", REG_VS, 0, 0, 0},
+};
+
+static struct msm_camera_sensor_flash_data flash_imx091 = {
+	.flash_type	= MSM_CAMERA_FLASH_LED,
+#ifdef CONFIG_MSM_CAMERA_FLASH
+	.flash_src	= &msm_flash_src
+#endif
+};
+
+static struct msm_camera_sensor_platform_info sensor_board_info_imx091 = {
+	.mount_angle	= 0,
+	.cam_vreg = msm_8960_imx091_vreg,
+	.num_vreg = ARRAY_SIZE(msm_8960_imx091_vreg),
+	.gpio_conf = &msm_8960_back_cam_gpio_conf,
+	.csi_lane_params = &imx091_csi_lane_params,
+};
+
+static struct msm_camera_sensor_info msm_camera_sensor_imx091_data = {
+	.sensor_name	= "imx091",
+	.pdata	= &msm_camera_csi_device_data[0],
+	.flash_data	= &flash_imx091,
+	.sensor_platform_info = &sensor_board_info_imx091,
+	.csi_if	= 1,
+	.camera_type = BACK_CAMERA_2D,
+	.sensor_type = BAYER_SENSOR,
+};
+#endif
+
+#if !defined(CONFIG_SONY_CAM_MAIN_V4L2) && !defined(CONFIG_SONY_CAM_SUB_V4L2)
+static struct pm8xxx_mpp_config_data privacy_light_on_config = {
+	.type		= PM8XXX_MPP_TYPE_SINK,
+	.level		= PM8XXX_MPP_CS_OUT_5MA,
+	.control	= PM8XXX_MPP_CS_CTRL_MPP_LOW_EN,
+};
+
+static struct pm8xxx_mpp_config_data privacy_light_off_config = {
+	.type		= PM8XXX_MPP_TYPE_SINK,
+	.level		= PM8XXX_MPP_CS_OUT_5MA,
+	.control	= PM8XXX_MPP_CS_CTRL_DISABLE,
+};
+
+static int32_t msm_camera_8960_ext_power_ctrl(int enable)
+{
+	int rc = 0;
+	if (enable) {
+		rc = pm8xxx_mpp_config(PM8921_MPP_PM_TO_SYS(12),
+			&privacy_light_on_config);
+	} else {
+		rc = pm8xxx_mpp_config(PM8921_MPP_PM_TO_SYS(12),
+			&privacy_light_off_config);
+	}
+	return rc;
+}
+#endif
+
+static struct platform_device msm_camera_server = {
+	.name = "msm_cam_server",
+	.id = 0,
+};
+
 #if defined(CONFIG_SONY_VPE)
 struct resource sony_vpe_resources[] = {
 	{
@@ -49,397 +934,40 @@ struct platform_device sony_vpe_device = {
 };
 #endif
 
-#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
-static struct msm_gpiomux_config msm_camera_2d_configs[] = {
-	{
-		.gpio		= 1,
-		.settings	= {
-			[GPIOMUX_ACTIVE]	= &gpio_2ma_no_pull_low,
-			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
-		},
-	},
-	{
-		.gpio		= 4,
-		.settings	= {
-			[GPIOMUX_ACTIVE]	= &cam_mclk1,
-			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
-		},
-	},
-	{
-		.gpio		= 5,
-		.settings	= {
-			[GPIOMUX_ACTIVE]	= &cam_mclk0,
-			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
-		},
-	},
-	{
-		.gpio		= 18,
-		.settings	= {
-			[GPIOMUX_ACTIVE]	= &gpio_2ma_no_pull_low,
-			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
-		},
-	},
-	{
-		.gpio		= 20,
-		.settings	= {
-			[GPIOMUX_ACTIVE]	= &gsbi4,
-			[GPIOMUX_SUSPENDED]	= &gpio_2ma_pull_down_in,
-		},
-	},
-	{
-		.gpio		= 21,
-		.settings	= {
-			[GPIOMUX_ACTIVE]	= &gsbi4,
-			[GPIOMUX_SUSPENDED]	= &gpio_2ma_pull_down_in,
-		},
-	},
-	{
-		.gpio		= 89,
-		.settings	= {
-			[GPIOMUX_ACTIVE]	= &gpio_2ma_no_pull_low,
-			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
-		},
-	},
-};
-
-static struct msm_bus_vectors msm_camera_init_vectors[] = {
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VPE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 0,
-		.ib	= 0,
-	},
-};
-
-static struct msm_bus_vectors msm_camera_preview_vectors[] = {
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 139968000,
-		.ib	= 559872000,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VPE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 279936000,
-		.ib	= 699840000,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 0,
-		.ib	= 0,
-	},
-};
-
-static struct msm_bus_vectors msm_camera_video_vectors[] = {
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 121305600,
-		.ib	= 485222400,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VPE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 214617600,
-		.ib	= 494553600,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 0,
-		.ib	= 0,
-	},
-};
-
-static struct msm_bus_vectors msm_camera_snapshot_vectors[] = {
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 295401600,
-		.ib	= 1181606400,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VPE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 590803200,
-		.ib	= 1477008000,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 590803200,
-		.ib	= 590803200,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 43200000,
-		.ib	= 69120000,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 43200000,
-		.ib	= 69120000,
-	},
-};
-
-static struct msm_bus_vectors msm_camera_zsl_vectors[] = {
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 302071680,
-		.ib	= 1208286720,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VPE,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 0,
-		.ib	= 0,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_EBI_CH0,
-		.ab	= 1521190000,
-		.ib	= 1521190000,
-	},
-	{
-		.src	= MSM_BUS_MASTER_JPEG_ENC,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 43200000,
-		.ib	= 69120000,
-	},
-	{
-		.src	= MSM_BUS_MASTER_VFE,
-		.dst	= MSM_BUS_SLAVE_MM_IMEM,
-		.ab	= 43200000,
-		.ib	= 69120000,
-	},
-};
-
-static struct msm_bus_paths msm_camera_bus_client_config[] = {
-	{
-		ARRAY_SIZE(msm_camera_init_vectors),
-		msm_camera_init_vectors,
-	},
-	{
-		ARRAY_SIZE(msm_camera_preview_vectors),
-		msm_camera_preview_vectors,
-	},
-	{
-		ARRAY_SIZE(msm_camera_video_vectors),
-		msm_camera_video_vectors,
-	},
-	{
-		ARRAY_SIZE(msm_camera_snapshot_vectors),
-		msm_camera_snapshot_vectors,
-	},
-	{
-		ARRAY_SIZE(msm_camera_zsl_vectors),
-		msm_camera_zsl_vectors,
-	},
-};
-
-static struct msm_bus_scale_pdata msm_camera_bus_client_pdata = {
-	msm_camera_bus_client_config,
-	ARRAY_SIZE(msm_camera_bus_client_config),
-	.name = "msm_camera",
-};
-
-static struct msm_camera_device_platform_data msm_camera_csi_device_data[] = {
-	{
-		.csid_core		= 0,
-		.is_csiphy		= 1,
-		.is_csid		= 1,
-		.is_ispif		= 1,
-		.is_vpe			= 0,
-		.cam_bus_scale_table	= &msm_camera_bus_client_pdata,
-	},
-	{
-		.csid_core		= 1,
-		.is_csiphy		= 1,
-		.is_csid		= 1,
-		.is_ispif		= 1,
-		.is_vpe			= 0,
-		.cam_bus_scale_table	= &msm_camera_bus_client_pdata,
-	},
-        {
-               .ioclk.mclk_clk_rate = 24000000,
-               .ioclk.vfe_clk_rate  = 228570000,
-               .csid_core = 2,
-               .cam_bus_scale_table = &msm_camera_bus_client_pdata,
-        },
-};
-
-static struct camera_vreg_t msm_camera_back_cam_vreg[] = {
-	{ "cam_vana", REG_LDO, 2600000, 3000000, 85600 },
-	{ "cam_vio", REG_VS, 0, 0, 0 },
-	{ "cam_vdig", REG_LDO, 1200000, 1200000, 105000 },
-};
-
-static struct camera_vreg_t msm_camera_front_cam_vreg[] = {
-	{ "cam_vana", REG_LDO, 2600000, 3000000, 85600 },
-	{ "cam_vio", REG_VS, 0, 0, 0 },
-};
-
-static struct gpio msm_camera_common_cam_gpio[] = {
-	{ 4, GPIOF_DIR_IN, "CAMIF_MCLK" },
-	{ 5, GPIOF_DIR_IN, "CAMIF_MCLK" },
-	{ 20, GPIOF_DIR_IN, "CAMIF_I2C_DATA" },
-	{ 21, GPIOF_DIR_IN, "CAMIF_I2C_CLK" },
-	{ 89, GPIOF_DIR_OUT, "CAM_AF" },
-};
-
-static struct gpio msm_camera_front_cam_gpio[] = {
-	{ 18, GPIOF_DIR_OUT, "CAM_RESET" },
-};
-
-static struct gpio msm_camera_back_cam_gpio[] = {
-	{ 1, GPIOF_DIR_OUT, "CAM_RESET" },
-};
-
-static struct msm_gpio_set_tbl msm_camera_front_cam_gpio_set_tbl[] = {
-	{ 18, GPIOF_OUT_INIT_LOW, 1 },
-	{ 18, GPIOF_OUT_INIT_HIGH, 1000 },
-};
-
-static struct msm_gpio_set_tbl msm_camera_back_cam_gpio_set_tbl[] = {
-	{ 1, GPIOF_OUT_INIT_LOW, 1 },
-	{ 1, GPIOF_OUT_INIT_HIGH, 1000 },
-};
-
-static struct msm_camera_gpio_conf msm_camera_front_cam_gpio_conf = {
-	.cam_gpiomux_conf_tbl		= msm_camera_2d_configs,
-	.cam_gpiomux_conf_tbl_size	= ARRAY_SIZE(msm_camera_2d_configs),
-	.cam_gpio_common_tbl		= msm_camera_common_cam_gpio,
-	.cam_gpio_common_tbl_size
-		= ARRAY_SIZE(msm_camera_common_cam_gpio),
-	.cam_gpio_req_tbl		= msm_camera_front_cam_gpio,
-	.cam_gpio_req_tbl_size		= ARRAY_SIZE(msm_camera_front_cam_gpio),
-	.cam_gpio_set_tbl		= msm_camera_front_cam_gpio_set_tbl,
-	.cam_gpio_set_tbl_size
-		= ARRAY_SIZE(msm_camera_front_cam_gpio_set_tbl),
-};
-
-static struct msm_camera_gpio_conf msm_camera_back_cam_gpio_conf = {
-	.cam_gpiomux_conf_tbl		= msm_camera_2d_configs,
-	.cam_gpiomux_conf_tbl_size	= ARRAY_SIZE(msm_camera_2d_configs),
-	.cam_gpio_common_tbl		= msm_camera_common_cam_gpio,
-	.cam_gpio_common_tbl_size
-		= ARRAY_SIZE(msm_camera_common_cam_gpio),
-	.cam_gpio_req_tbl		= msm_camera_back_cam_gpio,
-	.cam_gpio_req_tbl_size		= ARRAY_SIZE(msm_camera_back_cam_gpio),
-	.cam_gpio_set_tbl		= msm_camera_back_cam_gpio_set_tbl,
-	.cam_gpio_set_tbl_size
-		= ARRAY_SIZE(msm_camera_back_cam_gpio_set_tbl),
-};
-
-static struct msm_camera_sensor_flash_data msm_camera_flash_none = {
-	.flash_type	= MSM_CAMERA_FLASH_NONE,
-	.flash_src	= NULL,
-};
-#endif
-
-#ifdef CONFIG_SONY_CAM_MAIN_V4L2
-static struct msm_camera_sensor_platform_info
-		msm_camera_sony_sensor_main_platform_info = {
-	.mount_angle		= 90,
-	.sensor_reset		= 1,
-	.cam_vreg		= msm_camera_back_cam_vreg,
-	.num_vreg		= ARRAY_SIZE(msm_camera_back_cam_vreg),
-	.gpio_conf		= &msm_camera_back_cam_gpio_conf,
-};
-
-static struct msm_camera_sensor_info
-		msm_camera_sony_sensor_main_sensor_info = {
-	.sensor_name		= "sony_sensor_main",
-	.sensor_reset		= 1,
-	.pdata			= &msm_camera_csi_device_data[0],
-	.flash_data		= &msm_camera_flash_none,
-	.sensor_platform_info	= &msm_camera_sony_sensor_main_platform_info,
-	.csi_if			= 1,
-	.camera_type		= BACK_CAMERA_2D,
-};
-#endif
-
-#ifdef CONFIG_SONY_CAM_SUB_V4L2
-static struct msm_camera_sensor_platform_info
-		msm_camera_sony_sensor_sub_platform_info = {
-	.mount_angle		= 90,
-	.sensor_reset		= 18,
-	.cam_vreg		= msm_camera_front_cam_vreg,
-	.num_vreg		= ARRAY_SIZE(msm_camera_front_cam_vreg),
-	.gpio_conf		= &msm_camera_front_cam_gpio_conf,
-};
-
-static struct msm_camera_sensor_info
-		msm_camera_sony_sensor_sub_sensor_info = {
-	.sensor_name		= "sony_sensor_sub",
-	.sensor_reset		= 18,
-	.pdata			= &msm_camera_csi_device_data[1],
-	.flash_data		= &msm_camera_flash_none,
-	.sensor_platform_info	= &msm_camera_sony_sensor_sub_platform_info,
-	.csi_if			= 1,
-	.camera_type		= FRONT_CAMERA_2D,
-};
-#endif
-
 void __init msm8960_init_cam(void)
 {
 #if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
-	msm_gpiomux_install(msm_camera_2d_configs,
-			ARRAY_SIZE(msm_camera_2d_configs));
+	msm_gpiomux_install(msm8960_cam_2d_configs,
+			ARRAY_SIZE(msm8960_cam_2d_configs));
+#else
+	msm_gpiomux_install(msm8960_cam_common_configs,
+			ARRAY_SIZE(msm8960_cam_common_configs));
 
+	if (machine_is_msm8960_cdp()) {
+		msm_gpiomux_install(msm8960_cdp_flash_configs,
+			ARRAY_SIZE(msm8960_cdp_flash_configs));
+		msm_flash_src._fsrc.ext_driver_src.led_en =
+			GPIO_CAM_GP_LED_EN1;
+		msm_flash_src._fsrc.ext_driver_src.led_flash_en =
+			GPIO_CAM_GP_LED_EN2;
+		#if defined(CONFIG_I2C) && (defined(CONFIG_GPIO_SX150X) || \
+		defined(CONFIG_GPIO_SX150X_MODULE))
+		msm_flash_src._fsrc.ext_driver_src.expander_info =
+			cam_expander_info;
+		#endif
+	}
+
+	if (machine_is_msm8960_liquid()) {
+		struct msm_camera_sensor_info *s_info;
+		s_info = &msm_camera_sensor_imx074_data;
+		s_info->sensor_platform_info->mount_angle = 180;
+		s_info = &msm_camera_sensor_ov2720_data;
+		s_info->sensor_platform_info->ext_power_ctrl =
+			msm_camera_8960_ext_power_ctrl;
+	}
+#endif
+
+	platform_device_register(&msm_camera_server);
 	platform_device_register(&msm8960_device_csiphy0);
 	platform_device_register(&msm8960_device_csiphy1);
 	platform_device_register(&msm8960_device_csiphy2);
@@ -453,11 +981,11 @@ void __init msm8960_init_cam(void)
 #else
 	platform_device_register(&msm8960_device_vpe);
 #endif
-#endif
 }
 
-#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+#ifdef CONFIG_I2C
 static struct i2c_board_info msm8960_camera_i2c_boardinfo[] = {
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
 #ifdef CONFIG_SONY_CAM_MAIN_V4L2
 	{
 		I2C_BOARD_INFO("sony_sensor_main", 0x1A),
@@ -470,14 +998,44 @@ static struct i2c_board_info msm8960_camera_i2c_boardinfo[] = {
 		.platform_data = &msm_camera_sony_sensor_sub_sensor_info,
 	},
 #endif
+#else
+	{
+	I2C_BOARD_INFO("imx074", 0x1A),
+	.platform_data = &msm_camera_sensor_imx074_data,
+	},
+	{
+	I2C_BOARD_INFO("ov2720", 0x6C),
+	.platform_data = &msm_camera_sensor_ov2720_data,
+	},
+	{
+	I2C_BOARD_INFO("mt9m114", 0x48),
+	.platform_data = &msm_camera_sensor_mt9m114_data,
+	},
+	{
+	I2C_BOARD_INFO("s5k3l1yx", 0x20),
+	.platform_data = &msm_camera_sensor_s5k3l1yx_data,
+	},
+#ifdef CONFIG_MSM_CAMERA_FLASH_SC628A
+	{
+	I2C_BOARD_INFO("sc628a", 0x6E),
+	},
+#endif
+	{
+	I2C_BOARD_INFO("imx091", 0x34),
+	.platform_data = &msm_camera_sensor_imx091_data,
+	},
+#endif
 };
 
 struct msm_camera_board_info msm8960_camera_board_info = {
 	.board_info = msm8960_camera_i2c_boardinfo,
 	.num_i2c_board_info = ARRAY_SIZE(msm8960_camera_i2c_boardinfo),
 };
+#endif
 
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
 static const struct sony_sensor_seq sensor_main_power_off[] = {
+	{ I2C_WRITE, 0x0100, 100 },
 	{ CAM_CLK, -1, 1 },
 	{ GPIO_RESET, 0, 1 },
 	{ GPIO_AF, -1, 0 },
@@ -497,14 +1055,6 @@ static const struct sony_sensor_seq sensor_main_power_on[] = {
 	{ EXIT, 0, 0 },
 };
 
-const struct sony_sensor_module sensor_main_modules[] = {
-	{ "GENERIC",  0x1A, sensor_main_power_on, sensor_main_power_off },
-	{ "SOI13BS0", 0x1A, sensor_main_power_on, sensor_main_power_off },
-	{ "SOI13BS1", 0x1A, sensor_main_power_on, sensor_main_power_off },
-	{ "KMO13BS0", 0x1A, sensor_main_power_on, sensor_main_power_off },
-};
-const int sony_sensor_main_modules_len = ARRAY_SIZE(sensor_main_modules);
-
 static const struct sony_sensor_seq sensor_sub_power_off[] = {
 	{ GPIO_RESET, 0, 1 },
 	{ CAM_CLK, -1, 1 },
@@ -521,12 +1071,17 @@ static const struct sony_sensor_seq sensor_sub_power_on[] = {
 	{ EXIT, 0, 0 },
 };
 
-const struct sony_sensor_module sensor_sub_modules[] = {
-	{ "GENERIC",  0x48, sensor_sub_power_on, sensor_sub_power_off },
-	{ "STW01BM0", 0x48, sensor_sub_power_on, sensor_sub_power_off },
-	{ "APT01BM0", 0x48, sensor_sub_power_on, sensor_sub_power_off },
+static const struct sony_sensor_module sensor_main_modules[] = {
+	{ "GENERIC",  sensor_main_power_on, sensor_main_power_off },
+	{ "SOI13BS0", sensor_main_power_on, sensor_main_power_off },
+	{ "KMO13BS0", sensor_main_power_on, sensor_main_power_off },
 };
 
+static const struct sony_sensor_module sensor_sub_modules[] = {
+	{ "GENERIC",  sensor_sub_power_on, sensor_sub_power_off },
+	{ "STW01BM0", sensor_sub_power_on, sensor_sub_power_off },
+	{ "APT01BM0", sensor_sub_power_on, sensor_sub_power_off },
+};
 
 const struct sony_sensor_info sensor_info[] = {
 	{
@@ -543,11 +1098,10 @@ const struct sony_sensor_info sensor_info[] = {
 		.eeprom_addr	= 0x48,
 		.eeprom_type	= 1,
 		.gpio_af	= 0,
-		.subdev_code	= V4L2_MBUS_FMT_YUYV8_2X8,
+		.subdev_code	= V4L2_MBUS_FMT_SBGGR10_1X10,
 		.modules	= sensor_sub_modules,
 		.modules_num	= ARRAY_SIZE(sensor_sub_modules),
 	},
 };
-
 #endif
 #endif
