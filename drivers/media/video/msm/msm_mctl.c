@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -461,6 +462,7 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 		struct msm_sensor_csi_info csi_info;
 		uint32_t csid_version;
 		uint32_t csic_version;
+		wake_lock(&p_mctl->suspend_lock);
 		wake_lock(&p_mctl->wake_lock);
 
 		csid_core = camdev->csid_core;
@@ -566,6 +568,7 @@ act_power_up_failed:
 		pr_err("%s: sensor powerdown failed: %d\n", __func__, rc);
 sensor_sdev_failed:
 register_sdev_failed:
+	wake_unlock(&p_mctl->suspend_lock);
 	wake_unlock(&p_mctl->wake_lock);
 	mutex_unlock(&p_mctl->lock);
 	return rc;
@@ -617,6 +620,7 @@ static void msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 				PM_QOS_DEFAULT_VALUE);
 	pm_qos_remove_request(&p_mctl->pm_qos_req_list);
 
+	wake_unlock(&p_mctl->suspend_lock);
 	wake_unlock(&p_mctl->wake_lock);
 }
 
@@ -699,7 +703,7 @@ int msm_mctl_init(struct msm_cam_v4l2_device *pcam)
 		pr_err("%s: invalid mctl controller", __func__);
 		return -EINVAL;
 	}
-
+        wake_lock_init(&pmctl->suspend_lock, WAKE_LOCK_SUSPEND, "msm_camera_suspend");
 	wake_lock_init(&pmctl->wake_lock, WAKE_LOCK_SUSPEND, "msm_camera");
 	mutex_init(&pmctl->lock);
 	pmctl->opencnt = 0;
@@ -741,6 +745,7 @@ int msm_mctl_free(struct msm_cam_v4l2_device *pcam)
 	}
 
 	mutex_destroy(&pmctl->lock);
+	wake_lock_destroy(&pmctl->suspend_lock);
 	wake_lock_destroy(&pmctl->wake_lock);
 	/*clear out mctl fields*/
 	memset(pmctl, 0, sizeof(struct msm_cam_media_controller));
