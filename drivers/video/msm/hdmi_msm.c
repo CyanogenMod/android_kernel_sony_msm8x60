@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,6 +27,10 @@
 #include <mach/clk.h>
 #include <mach/msm_iomap.h>
 #include <mach/socinfo.h>
+
+#ifdef CONFIG_MHL
+#include <linux/mhl.h>
+#endif
 
 #include "msm_fb.h"
 #include "hdmi_msm.h"
@@ -76,6 +81,9 @@ static void hdmi_msm_turn_on(void);
 static int hdmi_msm_audio_off(void);
 static int hdmi_msm_read_edid(void);
 static void hdmi_msm_hpd_off(void);
+#ifndef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
+static boolean hdmi_msm_is_dvi_mode(void);
+#endif
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT
 
@@ -761,51 +769,74 @@ static int hdmi_msm_audio_off(void);
 static int hdmi_msm_read_edid(void);
 static void hdmi_msm_hpd_off(void);
 
+static void hdmi_msm_send_event(boolean on)
+{
+	char *envp[2];
+
+	/* QDSP OFF preceding the HPD event notification */
+	envp[0] = "HDCP_STATE=FAIL";
+	envp[1] = NULL;
+	DEV_ERR("hdmi: HDMI HPD: QDSP OFF\n");
+	kobject_uevent_env(external_common_state->uevent_kobj,
+			   KOBJ_CHANGE, envp);
+	envp[0] = "HDMI_AUDIO=OFF";
+	envp[1] = NULL;
+	DEV_INFO("HDMI : send HDMI_AUDIO=OFF\n");
+	kobject_uevent_env(external_common_state->uevent_kobj,
+			   KOBJ_CHANGE, envp);
+
+	if (on) {
+		/* Build EDID table */
+		hdmi_msm_read_edid();
+		switch_set_state(&external_common_state->sdev, 1);
+		DEV_INFO("Hdmi state switched to %d: %s\n",
+			external_common_state->sdev.state,  __func__);
+
+		DEV_INFO("HDMI HPD: CONNECTED: send ONLINE\n");
+		kobject_uevent(external_common_state->uevent_kobj, KOBJ_ONLINE);
+#ifndef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
+		/* Send Audio for HDMI Compliance Cases*/
+		envp[0] = "HDCP_STATE=PASS";
+		envp[1] = NULL;
+		DEV_INFO("HDMI HPD: sense : send HDCP_PASS\n");
+		kobject_uevent_env(external_common_state->uevent_kobj,
+			KOBJ_CHANGE, envp);
+		if (!hdmi_msm_is_dvi_mode()) {
+			envp[0] = "HDMI_AUDIO=ON";
+			envp[1] = NULL;
+			DEV_INFO("HDMI : send HDMI_AUDIO=ON\n");
+			kobject_uevent_env(
+				external_common_state->uevent_kobj,
+				KOBJ_CHANGE, envp);
+		}
+#endif
+	} else {
+		switch_set_state(&external_common_state->sdev, 0);
+		DEV_INFO("hdmi: Hdmi state switch to %d: %s\n",
+			external_common_state->sdev.state,  __func__);
+		DEV_INFO("hdmi: HDMI HPD: sense DISCONNECTED: send OFFLINE\n");
+		kobject_uevent(external_common_state->uevent_kobj,
+			KOBJ_OFFLINE);
+	}
+}
+
 static void hdmi_msm_hpd_state_work(struct work_struct *work)
 {
 	boolean hpd_state;
-	char *envp[2];
 
 	if (!hdmi_msm_state || !hdmi_msm_state->hpd_initialized ||
 		!MSM_HDMI_BASE) {
-		DEV_DBG("%s: ignored, probe failed\n", __func__);
+		DEV_ERR("hdmi: %s: ignored, probe failed\n", __func__);
 		return;
 	}
 
-	DEV_DBG("%s:Got interrupt\n", __func__);
-	/* HPD_INT_STATUS[0x0250] */
-	hpd_state = (HDMI_INP(0x0250) & 0x2) >> 1;
-	mutex_lock(&external_common_state_hpd_mutex);
 	mutex_lock(&hdmi_msm_state_mutex);
-	if ((external_common_state->hpd_state != hpd_state) || (hdmi_msm_state->
-			hpd_prev_state != external_common_state->hpd_state)) {
-		external_common_state->hpd_state = hpd_state;
-		hdmi_msm_state->hpd_prev_state =
-				external_common_state->hpd_state;
-		DEV_DBG("%s: state not stable yet, wait again (%d|%d|%d)\n",
-			__func__, hdmi_msm_state->hpd_prev_state,
-			external_common_state->hpd_state, hpd_state);
-		mutex_unlock(&external_common_state_hpd_mutex);
-		hdmi_msm_state->hpd_stable = 0;
-		mutex_unlock(&hdmi_msm_state_mutex);
-		mod_timer(&hdmi_msm_state->hpd_state_timer, jiffies + HZ/2);
-		return;
-	}
-	mutex_unlock(&external_common_state_hpd_mutex);
-
-	if (hdmi_msm_state->hpd_stable++) {
-		mutex_unlock(&hdmi_msm_state_mutex);
-		DEV_DBG("%s: no more timer, depending for IRQ now\n",
-			__func__);
-		return;
-	}
-
-	hdmi_msm_state->hpd_stable = 1;
-	DEV_INFO("HDMI HPD: event detected\n");
+	DEV_DBG("%s: Handling HPD event in the workqueue\n", __func__);
 
 	if (!hdmi_msm_state->hpd_cable_chg_detected) {
+		/* The work item got called from outside the ISR */
 		mutex_unlock(&hdmi_msm_state_mutex);
-		if (hpd_state) {
+		if (external_common_state->hpd_state) {
 			if (!external_common_state->
 					disp_mode_list.num_of_elements)
 				hdmi_msm_read_edid();
@@ -813,71 +844,44 @@ static void hdmi_msm_hpd_state_work(struct work_struct *work)
 	} else {
 		hdmi_msm_state->hpd_cable_chg_detected = FALSE;
 		mutex_unlock(&hdmi_msm_state_mutex);
-		/* QDSP OFF preceding the HPD event notification */
-		envp[0] = "HDCP_STATE=FAIL";
-		envp[1] = NULL;
-		DEV_INFO("HDMI HPD: QDSP OFF\n");
-		kobject_uevent_env(external_common_state->uevent_kobj,
-				   KOBJ_CHANGE, envp);
-		switch_set_state(&external_common_state->sdev, 0);
-		DEV_INFO("Hdmi state switch to %d: %s\n",
-			external_common_state->sdev.state,  __func__);
-		if (hpd_state) {
-			/* Build EDID table */
-			hdmi_msm_read_edid();
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
-			hdmi_msm_state->reauth = FALSE ;
-#endif
-			DEV_INFO("HDMI HPD: sense CONNECTED: send ONLINE\n");
-			kobject_uevent(external_common_state->uevent_kobj,
-				KOBJ_ONLINE);
-			switch_set_state(&external_common_state->sdev, 1);
-				DEV_INFO("Hdmi state switch to %d: %s\n",
-			external_common_state->sdev.state,  __func__);
-#ifndef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
-			/* Send Audio for HDMI Compliance Cases*/
-			envp[0] = "HDCP_STATE=PASS";
-			envp[1] = NULL;
-			DEV_INFO("HDMI HPD: sense : send HDCP_PASS\n");
-			kobject_uevent_env(external_common_state->uevent_kobj,
-				KOBJ_CHANGE, envp);
-			switch_set_state(&external_common_state->sdev, 1);
-			DEV_INFO("Hdmi state switch to %d: %s\n",
-				external_common_state->sdev.state, __func__);
-#endif
-		} else {
-			DEV_INFO("HDMI HPD: sense DISCONNECTED: send OFFLINE\n"
-				);
-			kobject_uevent(external_common_state->uevent_kobj,
-				KOBJ_OFFLINE);
-			switch_set_state(&external_common_state->sdev, 0);
-			DEV_INFO("Hdmi state switch to %d: %s\n",
-				external_common_state->sdev.state,  __func__);
+		mutex_lock(&external_common_state_hpd_mutex);
+		/*
+		 * Handle the connect event only if the cable is
+		 * still connected. This check is needed for the case
+		 * where we get a connect event followed by a disconnect
+		 * event in quick succession. In this case, there is no need
+		 * to process the connect event.
+		 */
+		if ((external_common_state->hpd_state) &&
+				!((HDMI_INP(0x0250) & 0x2) >> 1)) {
+			external_common_state->hpd_state = 0;
+			hdmi_msm_state->hpd_state_in_isr = 0;
+			mutex_unlock(&external_common_state_hpd_mutex);
+			DEV_DBG("%s: Ignoring HPD connect event\n", __func__);
+			return;
 		}
+		mutex_unlock(&external_common_state_hpd_mutex);
+		hdmi_msm_send_event(external_common_state->hpd_state);
 	}
 
-	/* HPD_INT_CTRL[0x0254]
-	 *   31:10 Reserved
-	 *   9     RCV_PLUGIN_DET_MASK	receiver plug in interrupt mask.
-	 *                              When programmed to 1,
-	 *                              RCV_PLUGIN_DET_INT will toggle
-	 *                              the interrupt line
-	 *   8:6   Reserved
-	 *   5     RX_INT_EN		Panel RX interrupt enable
-	 *         0: Disable
-	 *         1: Enable
-	 *   4     RX_INT_ACK		WRITE ONLY. Panel RX interrupt
-	 *                              ack
-	 *   3     Reserved
-	 *   2     INT_EN		Panel interrupt control
-	 *         0: Disable
-	 *         1: Enable
-	 *   1     INT_POLARITY		Panel interrupt polarity
-	 *         0: generate interrupt on disconnect
-	 *         1: generate interrupt on connect
-	 *   0     INT_ACK		WRITE ONLY. Panel interrupt ack */
-	/* Set IRQ for HPD */
-	HDMI_OUTP(0x0254, 4 | (hpd_state ? 0 : 2));
+	/*
+	 * Wait for a short time before checking for
+	 * any changes in the connection status
+	 */
+	udelay(100);
+
+	mutex_lock(&external_common_state_hpd_mutex);
+	/* HPD_INT_STATUS[0x0250] */
+	hpd_state = (HDMI_INP(0x0250) & 0x2) >> 1;
+
+	if (external_common_state->hpd_state != hpd_state) {
+		external_common_state->hpd_state = hpd_state;
+		hdmi_msm_state->hpd_state_in_isr = hpd_state;
+		mutex_unlock(&external_common_state_hpd_mutex);
+		hdmi_msm_send_event(hpd_state);
+	} else {
+		mutex_unlock(&external_common_state_hpd_mutex);
+	}
 }
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT
@@ -910,22 +914,34 @@ static void hdmi_msm_hdcp_reauth_work(struct work_struct *work)
 	 */
 	if (external_common_state->present_hdcp) {
 		hdcp_deauthenticate();
+		mutex_lock(&hdcp_auth_state_mutex);
+		hdmi_msm_state->reauth = TRUE;
+		mutex_unlock(&hdcp_auth_state_mutex);
 		mod_timer(&hdmi_msm_state->hdcp_timer, jiffies + HZ/2);
 	}
 }
 
 static void hdmi_msm_hdcp_work(struct work_struct *work)
 {
-
 	/* Only re-enable if cable still connected */
 	mutex_lock(&external_common_state_hpd_mutex);
 	if (external_common_state->hpd_state &&
 	    !(hdmi_msm_state->full_auth_done)) {
 		mutex_unlock(&external_common_state_hpd_mutex);
-		hdmi_msm_state->reauth = TRUE;
-		hdmi_msm_turn_on();
-	} else
+		if (hdmi_msm_state->reauth == TRUE) {
+			DEV_DBG("%s: Starting HDCP re-authentication\n",
+					__func__);
+			hdmi_msm_turn_on();
+		} else {
+			DEV_DBG("%s: Starting HDCP authentication\n", __func__);
+			hdmi_msm_hdcp_enable();
+		}
+	} else {
 		mutex_unlock(&external_common_state_hpd_mutex);
+		DEV_DBG("%s: HDMI not connected or HDCP already active\n",
+				__func__);
+		hdmi_msm_state->reauth = FALSE;
+	}
 }
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
 
@@ -959,41 +975,56 @@ static irqreturn_t hdmi_msm_isr(int irq, void *dev_id)
 	hpd_int_ctrl = HDMI_INP_ND(0x0254);
 	if ((hpd_int_ctrl & (1 << 2)) && (hpd_int_status & (1 << 0))) {
 		boolean cable_detected = (hpd_int_status & 2) >> 1;
-
-		/* HDMI_HPD_INT_CTRL[0x0254] */
-		/* Clear all interrupts, timer will turn IRQ back on
-		 * Leaving the bit[2] on, else core goes off
-		 * on getting HPD during power off
-		 */
-		HDMI_OUTP(0x0254, (1 << 2) | (1 << 0));
-
 		DEV_DBG("%s: HPD IRQ, Ctrl=%04x, State=%04x\n", __func__,
-			hpd_int_ctrl, hpd_int_status);
-		mutex_lock(&hdmi_msm_state_mutex);
-		hdmi_msm_state->hpd_cable_chg_detected = TRUE;
+				hpd_int_ctrl, hpd_int_status);
 
-		/* ensure 2 readouts */
-		hdmi_msm_state->hpd_prev_state = cable_detected ? 0 : 1;
-		external_common_state->hpd_state = cable_detected ? 1 : 0;
-		hdmi_msm_state->hpd_stable = 0;
-		mod_timer(&hdmi_msm_state->hpd_state_timer, jiffies + HZ/2);
-		mutex_unlock(&hdmi_msm_state_mutex);
-		/*
-		 * HDCP Compliance 1A-01:
-		 * The Quantum Data Box 882 triggers two consecutive
-		 * HPD events very close to each other as a part of this
-		 * test which can trigger two parallel HDCP auth threads
-		 * if HDCP authentication is going on and we get ISR
-		 * then stop the authentication , rather than
-		 * reauthenticating it again
-		 */
-		if (!(hdmi_msm_state->full_auth_done)) {
-			DEV_DBG("%s getting hpd while authenticating\n",\
-			    __func__);
-			mutex_lock(&hdcp_auth_state_mutex);
-			hdmi_msm_state->hpd_during_auth = TRUE;
-			mutex_unlock(&hdcp_auth_state_mutex);
+		/* Ack the interrupt */
+		HDMI_OUTP(0x0254, (hpd_int_ctrl | (1 << 0)));
+
+		mutex_lock(&external_common_state_hpd_mutex);
+		if (hdmi_msm_state->hpd_state_in_isr == cable_detected) {
+			DEV_INFO("%s: HPD has the same state. Ignoring\n",
+					__func__);
+			mutex_unlock(&external_common_state_hpd_mutex);
+		} else {
+			if (!mod_timer(&hdmi_msm_state->hpd_state_timer,
+						jiffies + HZ/2)) {
+				hdmi_msm_state->hpd_state_in_isr =
+					cable_detected;
+				hdmi_msm_state->hpd_cable_chg_detected = TRUE;
+				DEV_DBG("%s: Scheduled work to handle HPD %s\n",
+						__func__,
+						cable_detected ? "connect"
+						: "disconnect");
+			}
+
+			mutex_unlock(&external_common_state_hpd_mutex);
+#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
+			/*
+			 * HDCP Compliance 1A-01:
+			 * The Quantum Data Box 882 triggers two consecutive
+			 * HPD events very close to each other as a part of this
+			 * test which can trigger two parallel HDCP auth threads
+			 * if HDCP authentication is going on and we get ISR
+			 * then stop the authentication , rather than
+			 * reauthenticating it again
+			 */
+			if (hdmi_msm_state->hdcp_activating &&
+					!(hdmi_msm_state->full_auth_done)) {
+				DEV_DBG("%s getting hpd while authenticating\n",
+					    __func__);
+				mutex_lock(&hdcp_auth_state_mutex);
+				hdmi_msm_state->hpd_during_auth = TRUE;
+				mutex_unlock(&hdcp_auth_state_mutex);
+			}
+#endif
 		}
+
+		/* Set up HPD_CTRL to sense HPD event */
+		HDMI_OUTP(0x0254, 4 | (cable_detected ? 0 : 2));
+		DEV_DBG("%s: Setting HPD_CTRL=%d\n", __func__,
+				HDMI_INP(0x0254));
+
 		return IRQ_HANDLED;
 	}
 
@@ -1073,16 +1104,22 @@ static irqreturn_t hdmi_msm_isr(int irq, void *dev_id)
 	if ((hdcp_int_val & (1 << 6)) && (hdcp_int_val & (1 << 4))) {
 		/* AUTH_FAIL_INT */
 		/* Clear and Disable */
+		uint32 link_status = HDMI_INP_ND(0x011C);
 		HDMI_OUTP(0x0118, (hdcp_int_val | (1 << 5))
 			& ~((1 << 6) | (1 << 4)));
 		DEV_INFO("HDCP: AUTH_FAIL_INT received, LINK0_STATUS=0x%08x\n",
-			HDMI_INP_ND(0x011C));
+			link_status);
 		if (hdmi_msm_state->full_auth_done) {
 			envp[0] = "HDCP_STATE=FAIL";
 			envp[1] = NULL;
 			DEV_INFO("HDMI HPD:QDSP OFF\n");
 			kobject_uevent_env(external_common_state->uevent_kobj,
-			KOBJ_CHANGE, envp);
+				KOBJ_CHANGE, envp);
+			envp[0] = "HDMI_AUDIO=OFF";
+			envp[1] = NULL;
+			DEV_INFO("HDMI : send HDMI_AUDIO=OFF\n");
+			kobject_uevent_env(external_common_state->uevent_kobj,
+				KOBJ_CHANGE, envp);
 			switch_set_state(&external_common_state->sdev, 0);
 			DEV_INFO("Hdmi state switch to %d: %s\n",
 				external_common_state->sdev.state,  __func__);
@@ -1091,20 +1128,18 @@ static irqreturn_t hdmi_msm_isr(int irq, void *dev_id)
 			mutex_unlock(&hdcp_auth_state_mutex);
 			/* Calling reauth only when authentication
 			 * is sucessful or else we always go into
-			 * the reauth loop
+			 * the reauth loop. Also, No need to reauthenticate
+			 * if authentication failed because of cable disconnect
 			 */
-			queue_work(hdmi_work_queue,
-			    &hdmi_msm_state->hdcp_reauth_work);
+			if (((link_status & 0xF0) >> 4) != 0x7) {
+				DEV_DBG("Reauthenticate From %s HDCP FAIL INT ",
+					__func__);
+				queue_work(hdmi_work_queue,
+				    &hdmi_msm_state->hdcp_reauth_work);
+			} else {
+				DEV_INFO("HDCP: HDMI cable disconnected\n");
+			}
 		}
-		mutex_lock(&hdcp_auth_state_mutex);
-		/* This flag prevents other threads from re-authenticating
-		 * after we've just authenticated (i.e., finished part3)
-		 */
-		hdmi_msm_state->full_auth_done = FALSE;
-
-		mutex_unlock(&hdcp_auth_state_mutex);
-		DEV_DBG("calling reauthenticate from %s HDCP FAIL INT ",
-		    __func__);
 
 		/* Clear AUTH_FAIL_INFO as well */
 		HDMI_OUTP(0x0118, (hdcp_int_val | (1 << 7)));
@@ -1332,7 +1367,7 @@ static void msm_hdmi_init_ddc(void)
 		* 0x3: 3/4 of total samples */
 	/* Configure the Pre-Scale multiplier
 	 * Configure the Threshold */
-	HDMI_OUTP_ND(0x0220, (10 << 16) | (2 << 0));
+	HDMI_OUTP_ND(0x0220, (5 << 16) | (2 << 0));
 
 	/*
 	 * 0x0224 HDMI_DDC_SETUP
@@ -1348,8 +1383,8 @@ static void msm_hdmi_init_ddc(void)
 	   [15:0] REFTIMER	Value to set the register in order to generate
 		DDC strobe. This register counts on HDCP application clock */
 	/* Enable reference timer
-	 * 27 micro-seconds */
-	HDMI_OUTP_ND(0x027C, (1 << 16) | (27 << 0));
+	 * 68 micro-seconds */
+	HDMI_OUTP_ND(0x027C, (1 << 16) | (68 << 0));
 }
 
 static int hdmi_msm_ddc_clear_irq(const char *what)
@@ -2221,7 +2256,9 @@ static void hdcp_deauthenticate(void)
 	/* Disable HDCP interrupts */
 	HDMI_OUTP(0x0118, 0x0);
 
+	mutex_lock(&hdcp_auth_state_mutex);
 	external_common_state->hdcp_active = FALSE;
+	mutex_unlock(&hdcp_auth_state_mutex);
 	/* 0x0130 HDCP_RESET
 	  [0] LINK0_DEAUTHENTICATE */
 	HDMI_OUTP(0x0130, 0x1);
@@ -2535,6 +2572,8 @@ static int hdcp_authentication_part1(void)
 		}
 		DEV_DBG("HDCP: Link0-AKSV=%02x%08x\n",
 			link0_aksv_1 & 0xFF, link0_aksv_0);
+
+		msleep(50);
 
 		/* Read Bksv 5 bytes at 0x00 in HDCP port */
 		ret = hdmi_msm_ddc_read(0x74, 0x00, bksv, 5, 5, "Bksv", TRUE);
@@ -3010,7 +3049,6 @@ static void hdmi_msm_hdcp_enable(void)
 
 	unfill_black_screen();
 
-	external_common_state->hdcp_active = TRUE;
 	mutex_lock(&hdmi_msm_state_mutex);
 	hdmi_msm_state->hdcp_activating = FALSE;
 	mutex_unlock(&hdmi_msm_state_mutex);
@@ -3021,14 +3059,21 @@ static void hdmi_msm_hdcp_enable(void)
 	 * after we've just authenticated (i.e., finished part3)
 	 */
 	hdmi_msm_state->full_auth_done = TRUE;
+	external_common_state->hdcp_active = TRUE;
 	mutex_unlock(&hdcp_auth_state_mutex);
 
-	if (!hdmi_msm_is_dvi_mode()) {
-		DEV_INFO("HDMI HPD: sense : send HDCP_PASS\n");
-		envp[0] = "HDCP_STATE=PASS";
-		envp[1] = NULL;
-		kobject_uevent_env(external_common_state->uevent_kobj,
+	DEV_INFO("HDMI HPD: sense : send HDCP_PASS\n");
+	envp[0] = "HDCP_STATE=PASS";
+	envp[1] = NULL;
+	kobject_uevent_env(external_common_state->uevent_kobj,
 		    KOBJ_CHANGE, envp);
+	if (!hdmi_msm_is_dvi_mode()) {
+		envp[0] = "HDMI_AUDIO=ON";
+		envp[1] = NULL;
+		DEV_INFO("HDMI : send HDMI_AUDIO=ON\n");
+		kobject_uevent_env(
+			external_common_state->uevent_kobj,
+			KOBJ_CHANGE, envp);
 	}
 	switch_set_state(&external_common_state->sdev, 1);
 	DEV_INFO("Hdmi state switch to %d: %s\n",
@@ -3642,8 +3687,8 @@ static uint8 hdmi_msm_avi_iframe_lut[][16] = {
 	 0x10,	0x10,	0x10,	0x10,	0x10, 0x10, 0x10}, /*00*/
 	{0x18,	0x18,	0x28,	0x28,	0x28,	 0x28,	0x28,	0x28,	0x28,
 	 0x28,	0x28,	0x28,	0x28,	0x18, 0x28, 0x18}, /*01*/
-	{0x00,	0x04,	0x04,	0x04,	0x04,	 0x04,	0x04,	0x04,	0x04,
-	 0x04,	0x04,	0x04,	0x04,	0x88, 0x00, 0x04}, /*02*/
+	{0x00,	0x00,	0x00,	0x00,	0x00,	 0x00,	0x00,	0x00,	0x00,
+	 0x00,	0x00,	0x00,	0x00,	0x00, 0x00, 0x00}, /*02*/
 	{0x02,	0x06,	0x11,	0x15,	0x04,	 0x13,	0x10,	0x05,	0x1F,
 	 0x14,	0x20,	0x22,	0x21,	0x01, 0x03, 0x11}, /*03*/
 	{0x00,	0x01,	0x00,	0x01,	0x00,	 0x00,	0x00,	0x00,	0x00,
@@ -3966,19 +4011,6 @@ static void hdmi_msm_spd_infoframe_packetsetup(void)
 	HDMI_OUTP(0x00A4, packet_header);
 	check_sum += IFRAME_CHECKSUM_32(packet_header);
 
-	/* Vendor Name (7bit ASCII code) */
-	/* 0x00A8 GENERIC1_0
-	 *   BYTE0           7:0  CheckSum
-	 *   BYTE1          15:8  VENDOR_NAME[0]
-	 *   BYTE2         23:16  VENDOR_NAME[1]
-	 *   BYTE3         31:24  VENDOR_NAME[2] */
-	packet_payload = ((vendor_name[0] & 0x7f) << 8)
-		| ((vendor_name[1] & 0x7f) << 16)
-		| ((vendor_name[2] & 0x7f) << 24);
-	check_sum += IFRAME_CHECKSUM_32(packet_payload);
-	packet_payload |= ((0x100 - (0xff & check_sum)) & 0xff);
-	HDMI_OUTP(0x00A8, packet_payload);
-
 	/* 0x00AC GENERIC1_1
 	 *   BYTE4           7:0  VENDOR_NAME[3]
 	 *   BYTE5          15:8  VENDOR_NAME[4]
@@ -4059,6 +4091,19 @@ static void hdmi_msm_spd_infoframe_packetsetup(void)
 	packet_payload = (product_description[15] & 0x7f) | 0x00 << 8;
 	HDMI_OUTP(0x00C0, packet_payload);
 	check_sum += IFRAME_CHECKSUM_32(packet_payload);
+
+	/* Vendor Name (7bit ASCII code) */
+	/* 0x00A8 GENERIC1_0
+	 *   BYTE0           7:0  CheckSum
+	 *   BYTE1          15:8  VENDOR_NAME[0]
+	 *   BYTE2         23:16  VENDOR_NAME[1]
+	 *   BYTE3         31:24  VENDOR_NAME[2] */
+	packet_payload = ((vendor_name[0] & 0x7f) << 8)
+		| ((vendor_name[1] & 0x7f) << 16)
+		| ((vendor_name[2] & 0x7f) << 24);
+	check_sum += IFRAME_CHECKSUM_32(packet_payload);
+	packet_payload |= ((0x100 - (0xff & check_sum)) & 0xff);
+	HDMI_OUTP(0x00A8, packet_payload);
 
 	/* GENERIC1_LINE | GENERIC1_CONT | GENERIC1_SEND
 	 * Setup HDMI TX generic packet control
@@ -4148,9 +4193,6 @@ static void hdmi_msm_turn_on(void)
 #endif
 	hdmi_msm_spd_infoframe_packetsetup();
 
-	/* Set IRQ for HPD */
-	HDMI_OUTP(0x0254, 4 | (external_common_state->hpd_state ? 0 : 2));
-
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
 	if (hdmi_msm_state->reauth) {
 		hdmi_msm_hdcp_enable();
@@ -4173,7 +4215,32 @@ static void hdmi_msm_turn_on(void)
 
 static void hdmi_msm_hpd_state_timer(unsigned long data)
 {
-	queue_work(hdmi_work_queue, &hdmi_msm_state->hpd_state_work);
+	if (!work_busy(&hdmi_msm_state->hpd_state_work)) {
+		/*
+		 * There is no event currently queued.
+		 * Only queue the work if this event has not already
+		 * been processed.
+		 */
+		if (external_common_state->hpd_state !=
+				hdmi_msm_state->hpd_state_in_isr) {
+			/*
+			 * There is no need to use any synchronization
+			 * construct for safeguarding these state vairables
+			 * here since the only other place these are modified
+			 * is in the HPD work thread, which is known to be not
+			 * pending/running.
+			 */
+			external_common_state->hpd_state =
+				hdmi_msm_state->hpd_state_in_isr;
+			DEV_DBG("%s: Queuing work to handle HPD %s event\n",
+					__func__,
+					external_common_state->hpd_state ?
+					"connect" : "disconnect");
+			queue_work(hdmi_work_queue,
+					&hdmi_msm_state->hpd_state_work);
+			return;
+		}
+	}
 }
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
@@ -4203,6 +4270,10 @@ static void hdmi_msm_hpd_off(void)
 	del_timer(&hdmi_msm_state->hpd_state_timer);
 	disable_irq(hdmi_msm_state->irq);
 
+	/* Disable HPD interrupt */
+	HDMI_OUTP(0x0254, 0);
+	DEV_DBG("%s: Disabling HPD_CTRLd\n", __func__);
+
 	hdmi_msm_set_mode(FALSE);
 	hdmi_msm_state->pd->enable_5v(0);
 	hdmi_msm_clk(0);
@@ -4221,7 +4292,7 @@ static void hdmi_msm_dump_regs(const char *prefix)
 #endif
 }
 
-static int hdmi_msm_hpd_on(bool trigger_handler)
+static int hdmi_msm_hpd_on(void)
 {
 	static int phy_reset_done;
 	uint32 hpd_ctrl;
@@ -4262,35 +4333,32 @@ static int hdmi_msm_hpd_on(bool trigger_handler)
 		/* HDMI_USEC_REFTIMER[0x0208] */
 		HDMI_OUTP(0x0208, 0x0001001B);
 
-		/* set timeout to 4.1ms (max) for hardware debounce */
-		hpd_ctrl = HDMI_INP(0x0258) | 0x1FFF;
+		/* Set up HPD state variables */
+		mutex_lock(&external_common_state_hpd_mutex);
+		external_common_state->hpd_state = 0;
+		hdmi_msm_state->hpd_state_in_isr = 0;
+		mutex_unlock(&external_common_state_hpd_mutex);
+		mutex_lock(&hdmi_msm_state_mutex);
+		hdmi_msm_state->hpd_cable_chg_detected = TRUE;
+		mutex_unlock(&hdmi_msm_state_mutex);
 
-		/* Toggle HPD circuit to trigger HPD sense */
-		HDMI_OUTP(0x0258, ~(1 << 28) & hpd_ctrl);
-		HDMI_OUTP(0x0258, (1 << 28) | hpd_ctrl);
+		/* Set up HPD_CTRL to sense HPD event */
+		HDMI_OUTP(0x0254, 0x6);
+		DEV_DBG("%s: Setting HPD_CTRL=%d\n", __func__,
+				HDMI_INP(0x0254));
 
 		hdmi_msm_state->hpd_initialized = TRUE;
 
-		/* Check HPD State */
 		enable_irq(hdmi_msm_state->irq);
+
+		/* set timeout to 4.1ms (max) for hardware debounce */
+		hpd_ctrl = HDMI_INP(0x0258) | 0x1FFF;
+		/* Toggle HPD circuit to trigger HPD sense */
+		HDMI_OUTP(0x0258, ~(1 << 28) & hpd_ctrl);
+		HDMI_OUTP(0x0258, (1 << 28) | hpd_ctrl);
 	}
 
-	if (trigger_handler) {
-		/* Set HPD state machine: ensure at least 2 readouts */
-		mutex_lock(&hdmi_msm_state_mutex);
-		hdmi_msm_state->hpd_stable = 0;
-		hdmi_msm_state->hpd_prev_state = TRUE;
-		mutex_lock(&external_common_state_hpd_mutex);
-		external_common_state->hpd_state = FALSE;
-		mutex_unlock(&external_common_state_hpd_mutex);
-		hdmi_msm_state->hpd_cable_chg_detected = TRUE;
-		mutex_unlock(&hdmi_msm_state_mutex);
-		mod_timer(&hdmi_msm_state->hpd_state_timer,
-			jiffies + HZ/2);
-	}
-
-	DEV_DBG("%s: (IRQ, 5V on) <trigger:%s>\n", __func__,
-		trigger_handler ? "true" : "false");
+	DEV_DBG("%s: (IRQ, 5V on)\n", __func__);
 	return 0;
 
 error3:
@@ -4313,7 +4381,7 @@ static int hdmi_msm_power_ctrl(boolean enable)
 		if (hdmi_prim_display ||
 			external_common_state->hpd_feature_on) {
 			DEV_DBG("%s: Turning HPD ciruitry on\n", __func__);
-			rc = hdmi_msm_hpd_on(true);
+			rc = hdmi_msm_hpd_on();
 		}
 	} else {
 		DEV_DBG("%s: Turning HPD ciruitry off\n", __func__);
@@ -4334,15 +4402,6 @@ static int hdmi_msm_power_on(struct platform_device *pdev)
 	DEV_INFO("power: ON (%dx%d %d)\n", mfd->var_xres, mfd->var_yres,
 		mfd->var_pixclock);
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
-	mutex_lock(&hdmi_msm_state_mutex);
-	if (hdmi_msm_state->hdcp_activating) {
-		hdmi_msm_state->panel_power_on = TRUE;
-		DEV_INFO("HDCP: activating, returning\n");
-	}
-	mutex_unlock(&hdmi_msm_state_mutex);
-#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
-
 	changed = hdmi_common_get_video_format_from_drv_data(mfd);
 	hdmi_msm_audio_info_setup(TRUE, 0, 0, 0, FALSE);
 
@@ -4352,7 +4411,15 @@ static int hdmi_msm_power_on(struct platform_device *pdev)
 		DEV_DBG("%s: Turning HDMI on\n", __func__);
 		mutex_unlock(&external_common_state_hpd_mutex);
 		hdmi_msm_turn_on();
-		hdmi_msm_hdcp_enable();
+
+#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
+		/* Kick off HDCP Authentication */
+		mutex_lock(&hdcp_auth_state_mutex);
+		hdmi_msm_state->reauth = FALSE;
+		hdmi_msm_state->full_auth_done = FALSE;
+		mutex_unlock(&hdcp_auth_state_mutex);
+		mod_timer(&hdmi_msm_state->hdcp_timer, jiffies + HZ/2);
+#endif
 	} else
 		mutex_unlock(&external_common_state_hpd_mutex);
 
@@ -4372,6 +4439,8 @@ static int hdmi_msm_power_on(struct platform_device *pdev)
  */
 static int hdmi_msm_power_off(struct platform_device *pdev)
 {
+	char *envp[2];
+
 	if (!hdmi_msm_state->hdmi_app_clk)
 		return -ENODEV;
 
@@ -4385,6 +4454,20 @@ static int hdmi_msm_power_off(struct platform_device *pdev)
 	}
 	mutex_unlock(&hdmi_msm_state_mutex);
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
+
+	envp[0] = "HDCP_STATE=FAIL";
+	envp[1] = NULL;
+	DEV_INFO("HDMI HPD: QDSP OFF\n");
+	kobject_uevent_env(external_common_state->uevent_kobj,
+			   KOBJ_CHANGE, envp);
+	envp[0] = "HDMI_AUDIO=OFF";
+	envp[1] = NULL;
+	DEV_INFO("HDMI : send HDMI_AUDIO=OFF\n");
+	kobject_uevent_env(external_common_state->uevent_kobj,
+			   KOBJ_CHANGE, envp);
+	switch_set_state(&external_common_state->sdev, 0);
+	DEV_INFO("Hdmi state switch to %d: %s\n",
+		external_common_state->sdev.state, __func__);
 
 	DEV_INFO("power: OFF (audio off, Reset Core)\n");
 	hdmi_msm_audio_off();
@@ -4537,7 +4620,7 @@ static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 		DEV_ERR("Init FAILED: failed to add fb device\n");
 
 	if (hdmi_prim_display) {
-		rc = hdmi_msm_hpd_on(true);
+		rc = hdmi_msm_hpd_on();
 		if (rc)
 			goto error;
 	}
@@ -4639,11 +4722,25 @@ static int hdmi_msm_hpd_feature(int on)
 
 	DEV_INFO("%s: %d\n", __func__, on);
 	if (on) {
-		rc = hdmi_msm_hpd_on(true);
+		rc = hdmi_msm_hpd_on();
+#ifdef CONFIG_MHL
+		/* MHL full operation start */
+		if (hdmi_msm_state->pd->coupled_mhl_device)
+			mhl_full_operation(
+				hdmi_msm_state->pd->coupled_mhl_device,
+				TRUE);
+#endif
 	} else {
 		hdmi_msm_hpd_off();
 		/* Set HDMI switch node to 0 on HPD feature disable */
 		switch_set_state(&external_common_state->sdev, 0);
+#ifdef CONFIG_MHL
+		/* MHL full operation stop */
+		if (hdmi_msm_state->pd->coupled_mhl_device)
+			mhl_full_operation(
+				hdmi_msm_state->pd->coupled_mhl_device,
+				FALSE);
+#endif
 	}
 
 	return rc;

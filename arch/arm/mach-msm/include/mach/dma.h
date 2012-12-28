@@ -2,6 +2,7 @@
  *
  * Copyright (C) 2007 Google, Inc.
  * Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -190,6 +191,14 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 
 #define DMOV_HSUART_GSBI9_RX_CHAN	3
 #define DMOV_HSUART_GSBI9_RX_CRCI	12
+
+#ifdef CONFIG_MSM_GSBI10_UART
+#define DMOV_HSUART_GSBI10_TX_CHAN	10
+#define DMOV_HSUART_GSBI10_TX_CRCI	15
+
+#define DMOV_HSUART_GSBI10_RX_CHAN	11
+#define DMOV_HSUART_GSBI10_RX_CRCI	14
+#endif
 
 #elif defined(CONFIG_ARCH_MSM9615)
 

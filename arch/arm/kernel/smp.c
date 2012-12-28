@@ -41,6 +41,9 @@
 #include <asm/ptrace.h>
 #include <asm/localtimer.h>
 #include <asm/smp_plat.h>
+#ifdef CONFIG_CRASH_NOTES
+#include <asm/crash_notes.h>
+#endif
 
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
@@ -560,17 +563,25 @@ static DEFINE_RAW_SPINLOCK(stop_lock);
 static void ipi_cpu_stop(unsigned int cpu)
 {
 	if (system_state == SYSTEM_BOOTING ||
-	    system_state == SYSTEM_RUNNING) {
+	    system_state == SYSTEM_RUNNING ||
+	    oops_in_progress) {
 		raw_spin_lock(&stop_lock);
 		printk(KERN_CRIT "CPU%u: stopping\n", cpu);
 		dump_stack();
 		raw_spin_unlock(&stop_lock);
 	}
 
-	set_cpu_online(cpu, false);
+	set_cpu_active(cpu, false);
 
 	local_fiq_disable();
 	local_irq_disable();
+#ifdef CONFIG_CRASH_NOTES
+	if (system_state == SYSTEM_BOOTING ||
+	    system_state == SYSTEM_RUNNING ||
+	    oops_in_progress)
+		crash_notes_save_this_cpu(CRASH_NOTE_STOPPING,
+					smp_processor_id());
+#endif
 
 	while (1)
 		cpu_relax();
@@ -711,11 +722,18 @@ void smp_send_stop(void)
 
 	/* Wait up to one second for other CPUs to stop */
 	timeout = USEC_PER_SEC;
-	while (num_online_cpus() > 1 && timeout--)
+	while (num_active_cpus() > 1 && timeout--)
 		udelay(1);
 
-	if (num_online_cpus() > 1)
+	if (num_active_cpus() > 1) {
 		pr_warning("SMP: failed to stop secondary CPUs\n");
+		if (oops_in_progress) {
+			pr_warning("SMP: falling back to watchdog\n");
+			local_irq_disable();
+			while (1)
+				cpu_relax();
+		}
+	}
 }
 
 /*

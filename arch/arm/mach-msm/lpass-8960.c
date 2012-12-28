@@ -142,10 +142,7 @@ static void lpass_smsm_state_cb(void *data, uint32_t old_state,
 static void send_q6_nmi(void)
 {
 	/* Send NMI to QDSP6 via an SCM call. */
-	uint32_t cmd = 0x1;
-
-	scm_call(SCM_SVC_UTIL, SCM_Q6_NMI_CMD,
-	&cmd, sizeof(cmd), NULL, 0);
+	scm_call_atomic1(SCM_SVC_UTIL, SCM_Q6_NMI_CMD, 0x1);
 
 	/* Q6 requires worstcase 100ms to dump caches etc.*/
 	mdelay(100);

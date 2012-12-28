@@ -878,6 +878,13 @@ config MACH_FSM9XXX_SURF
 	  chipset based SURF evaluation board and
 	  FFA board.
 
+config MACH_BLUE_TSUBASA
+        depends on ARCH_MSM8960
+        default n
+        bool "SONY Tsubasa RoW"
+        help
+          Support for the Sony Tsubasa RoW
+
 endmenu
 
 config MSM_STACKED_MEMORY
@@ -1003,7 +1010,6 @@ choice
 	config DEBUG_MSM8960_UART
 		bool "Kernel low-level debugging messages via MSM 8960 UART"
 		depends on ARCH_MSM8960 && DEBUG_LL
-		select DEBUG_MSM8930_UART
 		select MSM_HAS_DEBUG_UART_HS
 		help
 		  Say Y here if you want the debug print routines to direct
@@ -2185,6 +2191,18 @@ config MSM_GSBI9_UART
 	help
 	  This enables GSBI9 configured into UART.
 
+config MSM_GSBI10_UART
+	bool "Enable GSBI10 UART device"
+	default n
+	help
+	  This enables GSBI10 configured into UART.
+
+config MSM_GSBI12_UART
+	bool "Enable GSBI12 UART device"
+	default n
+	help
+	  This enables GSBI12 configured into UART.
+
 config MSM_SHARED_GPIO_FOR_UART2DM
 	bool "Use shared GPIOs into UART mode"
 	depends on (ARCH_MSM7X27A && !MMC_MSM_SDC3_8_BIT_SUPPORT && !MMC_MSM_SDC4_SUPPORT)
@@ -2307,6 +2325,13 @@ config MSM_OCMEM
 	  Enable support for On-Chip Memory available on certain MSM chipsets.
 	  OCMEM is a low latency, high performance pool shared by subsystems.
 
+config PM8921_MIC_BIAS
+        bool "pm8921 mic bias driver"
+        default n
+        help
+          Provides support for activate pm8921 mic bias driver used for
+          primary and secondary mic.
+
 config MSM_RTB
 	bool "Register tracing"
 	help
@@ -2323,6 +2348,22 @@ config MSM_RTB_SEPARATE_CPUS
 	  for each cpu to log accesses. Selecting this option will log each cpu
 	  separately. This will guarantee that the last acesses for each cpu
 	  will be logged but there will be fewer entries per cpu
+
+config SIMPLE_REMOTE_PLATFORM
+        bool "Simple Remote platform specific driver"
+        default n
+        help
+          Provides support for detecting 3.5mm audio jack, such as wired
+          headset. This is the platform specific layer.
+
+config SIMPLE_REMOTE_INVERT_PLUG_DETECTION_STATE
+	bool "Invert state of plug detection"
+	depends on SIMPLE_REMOTE_PLATFORM
+	help
+	  This option enables to invert headphone plug detection state,
+	  currently the plug detection state was low state when headphone
+	  was inserted, but it is high state on some products, so that
+	  we need invert this state on these products.
 
 config MSM_CACHE_ERP
 	bool "Cache / CPU error reporting"
@@ -2447,5 +2488,11 @@ config MSM_HSIC_SYSMON_TEST
 	  This will create a debugfs file entry named "hsic_sysmon_test" which
 	  can be read and written to send character data to the sysmon port of
 	  the modem over USB.
+
+config MMC_MSM_POWER_SUPPLY_SDC3_VIA_MPP04
+	bool "PMIC MPP04"
+	default n
+	help
+	  The power supply for uSD is controlled via MPP04(GPIO)
 
 endif

@@ -1,4 +1,6 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/*
+ * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -630,36 +632,52 @@ static void mdp4_overlay_vg_get_src_offset(struct mdp4_overlay_pipe *pipe,
 	*luma_off = 0;
 	*chroma_off = 0;
 
-	if (pipe->src_x && (pipe->frame_format ==
+	if ((pipe->src_x || pipe->src_y) && (pipe->frame_format ==
 		MDP4_FRAME_FORMAT_LINEAR)) {
-		src_xy = (pipe->src_y << 16) | pipe->src_x;
-		src_xy &= 0xffff0000;
+		src_xy = 0;
 		outpdw(vg_base + 0x0004, src_xy);	/* MDP_RGB_SRC_XY */
 
 		switch (pipe->src_format) {
 		case MDP_Y_CR_CB_H2V2:
 		case MDP_Y_CR_CB_GH2V2:
 		case MDP_Y_CB_CR_H2V2:
-				*luma_off = pipe->src_x;
-				*chroma_off = pipe->src_x/2;
+			*luma_off = pipe->src_x +
+				(pipe->src_y * pipe->srcp0_ystride);
+			*chroma_off = pipe->src_x / 2 +
+				((pipe->src_y / 2) * pipe->srcp1_ystride);
 			break;
 
 		case MDP_Y_CBCR_H2V2_TILE:
 		case MDP_Y_CRCB_H2V2_TILE:
 		case MDP_Y_CBCR_H2V2:
 		case MDP_Y_CRCB_H2V2:
+			*luma_off = pipe->src_x +
+				(pipe->src_y * pipe->srcp0_ystride);
+			*chroma_off = pipe->src_x +
+				((pipe->src_y / 2) * pipe->srcp1_ystride);
+			break;
+
 		case MDP_Y_CRCB_H1V1:
 		case MDP_Y_CBCR_H1V1:
+			*luma_off = pipe->src_x +
+				(pipe->src_y * pipe->srcp0_ystride);
+			*chroma_off = pipe->src_x +
+				((pipe->src_y * 2) * pipe->srcp1_ystride);
+			break;
+
 		case MDP_Y_CRCB_H2V1:
 		case MDP_Y_CBCR_H2V1:
-			*luma_off = pipe->src_x;
-			*chroma_off = pipe->src_x;
+			*luma_off = pipe->src_x +
+				(pipe->src_y * pipe->srcp0_ystride);
+			*chroma_off = pipe->src_x +
+				(pipe->src_y * pipe->srcp1_ystride);
 			break;
 
 		case MDP_YCRYCB_H2V1:
 			if (pipe->src_x & 0x1)
 				pipe->src_x += 1;
-			*luma_off += pipe->src_x * 2;
+			*luma_off += pipe->src_x * 2 +
+				((pipe->src_y * 2) * pipe->srcp0_ystride);
 			break;
 
 		case MDP_ARGB_8888:
@@ -672,7 +690,8 @@ static void mdp4_overlay_vg_get_src_offset(struct mdp4_overlay_pipe *pipe,
 		case MDP_RGB_888:
 		case MDP_YCBCR_H1V1:
 		case MDP_YCRCB_H1V1:
-			*luma_off = pipe->src_x * pipe->bpp;
+			*luma_off = (pipe->src_x * pipe->bpp) +
+					(pipe->src_y * pipe->srcp0_ystride);
 			break;
 
 		default:
@@ -705,6 +724,26 @@ void mdp4_overlay_vg_setup(struct mdp4_overlay_pipe *pipe)
 	format = mdp4_overlay_format(pipe);
 	pattern = mdp4_overlay_unpack_pattern(pipe);
 
+	/* CSC Post Processing enabled? */
+	if (pipe->flags & MDP_OVERLAY_PP_CFG_EN) {
+		if (pipe->pp_cfg.config_ops & MDP_OVERLAY_PP_CSC_CFG) {
+			if (pipe->pp_cfg.csc_cfg.flags & MDP_CSC_FLAG_ENABLE)
+				pipe->op_mode |= MDP4_OP_CSC_EN;
+			if (pipe->pp_cfg.csc_cfg.flags & MDP_CSC_FLAG_YUV_IN)
+				pipe->op_mode |= MDP4_OP_SRC_DATA_YCBCR;
+			if (pipe->pp_cfg.csc_cfg.flags & MDP_CSC_FLAG_YUV_OUT)
+				pipe->op_mode |= MDP4_OP_DST_DATA_YCBCR;
+
+			mdp4_csc_write(&pipe->pp_cfg.csc_cfg,
+				(uint32_t) (vg_base + MDP4_VIDEO_CSC_OFF));
+		}
+		if (pipe->pp_cfg.config_ops & MDP_OVERLAY_PP_QSEED_CFG) {
+			mdp4_qseed_access_cfg(&pipe->pp_cfg.qseed_cfg[0],
+							(uint32_t) vg_base);
+			mdp4_qseed_access_cfg(&pipe->pp_cfg.qseed_cfg[1],
+							(uint32_t) vg_base);
+		}
+	}
 	/* not RGB use VG pipe, pure VG pipe */
 	if (ptype != OVERLAY_TYPE_RGB)
 		pipe->op_mode |= (MDP4_OP_CSC_EN | MDP4_OP_SRC_DATA_YCBCR);
@@ -1471,21 +1510,6 @@ static void mdp4_overlay_bg_solidfill_clear(uint32 mixer_num)
 	}
 }
 
-void mdp4_mixer_pipe_cleanup(int mixer)
-{
-	struct mdp4_overlay_pipe *pipe;
-	int j;
-
-	for (j = MDP4_MIXER_STAGE_MAX - 1; j > MDP4_MIXER_STAGE_BASE; j--) {
-		pipe = ctrl->stage[mixer][j];
-		if (pipe == NULL)
-			continue;
-		pr_debug("%s(): pipe %u\n", __func__, pipe->pipe_ndx);
-		mdp4_mixer_stage_down(pipe);
-		mdp4_overlay_pipe_free(pipe);
-	}
-}
-
 static void mdp4_mixer_stage_commit(int mixer)
 {
 	struct mdp4_overlay_pipe *pipe;
@@ -1615,7 +1639,7 @@ void mdp4_mixer_stage_down(struct mdp4_overlay_pipe *pipe)
 
 void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 {
-	struct mdp4_overlay_pipe *bg_pipe;
+	struct mdp4_overlay_pipe *bg_pipe, *prv_pipe;
 	unsigned char *overlay_base, *rgb_base;
 	uint32 c0, c1, c2, blend_op, constant_color = 0, rgb_src_format;
 	uint32 fg_color3_out, fg_alpha = 0, bg_alpha = 0;
@@ -1641,6 +1665,13 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 		pr_err("%s: Error: no bg_pipe\n", __func__);
 		return;
 	}
+
+	if (pipe->mixer_stage > MDP4_MIXER_STAGE0)
+		prv_pipe = mdp4_overlay_stage_pipe(pipe->mixer_num,
+						pipe->mixer_stage - 1);
+	else
+		prv_pipe = bg_pipe;
+
 
 	if (bg_pipe->pipe_type == OVERLAY_TYPE_BF &&
 	    pipe->mixer_stage > MDP4_MIXER_STAGE0) {
@@ -1726,6 +1757,13 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 				blend_op |= MDP4_BLEND_FG_ALPHA_FG_PIXEL;
 		} else
 			blend_op = MDP4_BLEND_BG_ALPHA_FG_CONST;
+
+		if ((prv_pipe->flags & MDP_BLEND_FG_PREMULT) &&
+			(pipe->flags & MDP_BLEND_FG_PREMULT) &&
+			(pipe->flags & MDP_BLEND_USE_CONST))
+			blend_op = (MDP4_BLEND_FG_ALPHA_FG_CONST |
+					MDP4_BLEND_BG_ALPHA_FG_CONST |
+					MDP4_BLEND_FG_TRANSP_EN);
 
 		blend_op |= MDP4_BLEND_BG_INV_ALPHA;
 		fg_color3_out = 1; /* keep fg alpha */
@@ -2470,7 +2508,8 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 	}
 
 	if (info->node != 0 || mfd->cont_splash_done)	/* primary */
-		if (!mfd->panel_power_on)		/* suspended */
+		if (!mfd->panel_power_on ||
+			mdp_check_suspended()) /* suspended */
 			return -EPERM;
 
 	if (req->src.format == MDP_FB_FORMAT)
@@ -2517,6 +2556,15 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 	}
 
 	mdp4_stat.overlay_set[pipe->mixer_num]++;
+
+	if (pipe->flags & MDP_OVERLAY_PP_CFG_EN) {
+		if (pipe->pipe_num <= OVERLAY_PIPE_VG2)
+			memcpy(&pipe->pp_cfg, &req->overlay_pp_cfg,
+					sizeof(struct mdp_overlay_pp_params));
+		else
+			pr_debug("%s: RGB Pipes don't support CSC/QSEED\n",
+								__func__);
+	}
 
 	if (ctrl->panel_mode & MDP4_PANEL_DTV &&
 	    pipe->mixer_num == MDP4_MIXER1) {
@@ -2633,7 +2681,8 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 				}
 			} else if (ctrl->panel_mode & MDP4_PANEL_DSI_VIDEO) {
 				pipe->flags &= ~MDP_OV_PLAY_NOWAIT;
-				if (mfd->panel_power_on)
+				if (mfd->panel_power_on ||
+					mdp_check_suspended())
 					mdp4_overlay_dsi_video_vsync_push(mfd,
 									  pipe);
 			}
@@ -2719,7 +2768,7 @@ int mdp4_overlay_play_wait(struct fb_info *info, struct msmfb_overlay_data *req)
 	if (mfd == NULL)
 		return -ENODEV;
 
-	if (!mfd->panel_power_on) /* suspended */
+	if (!mfd->panel_power_on || mdp_check_suspended()) /* suspended */
 		return -EPERM;
 
 	pipe = mdp4_overlay_ndx2pipe(req->id);
@@ -2762,7 +2811,7 @@ int mdp4_overlay_play(struct fb_info *info, struct msmfb_overlay_data *req)
 	if (mfd == NULL)
 		return -ENODEV;
 
-	if (!mfd->panel_power_on) /* suspended */
+	if (!mfd->panel_power_on || mdp_check_suspended()) /* suspended */
 		return -EPERM;
 
 	pipe = mdp4_overlay_ndx2pipe(req->id);

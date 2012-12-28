@@ -517,6 +517,15 @@ config INPUT_XEN_KBDDEV_FRONTEND
 	  To compile this driver as a module, choose M here: the
 	  module will be called xen-kbdfront.
 
+config PMIC8XXX_FORCECRASH
+       boolean "PMIC8XXX power key forcecrash support"
+       default n
+       depends on INPUT_PMIC8XXX_PWRKEY && (ARCH_MSM8X60 || ARCH_MSM8960)
+       help
+         Say Y here if you want support forcecrash functionality through
+         PMIC8XXX power key. Triggers panic if power key is hold for more
+         than 10secs.
+
 config PMIC8058_OTHC
         tristate "Qualcomm PMIC8058 OTHC support"
         default n
@@ -545,5 +554,55 @@ config BOSCH_BMA150
         help
           If you say yes here you get support for Bosch Sensortec's
           acceleration sensors SMB380/BMA150.
+
+config INPUT_SIMPLE_REMOTE
+	bool "Simple Remote detection driver"
+	default n
+	select SIMPLE_REMOTE_PLATFORM
+	help
+	  Provides support for detecting 3.5mm audio jack, such as wired
+	  headset. Requires the hardware specific driver
+	  config SIMPLE_REMOTE_PLATFORM
+
+config INPUT_MBHC_HEADSET_CONTROL
+	bool "MBHC Headset control"
+	default n
+	help
+	  Provides support for detecting 3.5mm audio jack, such as wired
+	  headset, using the MBHC-block.
+
+config INPUT_MBHC_MIC_BIAS_SWITCHING_GPIO
+	bool "MBHC Mic bias switching gpio"
+	depends on INPUT_MBHC_HEADSET_CONTROL && INPUT_SIMPLE_REMOTE
+	default n
+	help
+	  Provides support for detecting if the simple remote driver or the
+	  MBHC should be used for detecing 3.5mm audio jack, by reading a gpio
+	  during startup.
+
+config INPUT_AKM8972
+	tristate "AKM8972 Compass Driver"
+	default n
+	depends on I2C
+	help
+	  Say Y here if you want support for the AKM8972 Compass Driver.
+
+config INPUT_APDS9702
+	tristate "APDS9702 proximity driver"
+	depends on I2C
+	default n
+	help
+	  If you say yes here you get support for the APDS9702 chip.
+	  This is used as a proximity sensor.
+
+config INPUT_BMA250_NG
+	tristate "Bosch BMA250 accelerometer (next gen)"
+	default n
+	depends on I2C
+	help
+	  Say Y here if you want support for the BMA250 accelerometer
+	  device. This driver only supports I2C communication.
+	  This device driver supprot to get accelerometer data from
+	  other parent device's register.
 
 endif

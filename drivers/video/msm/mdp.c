@@ -1,9 +1,10 @@
-/* drivers/video/msm_fb/mdp.c
+/* drivers/video/msm/mdp.c
  *
  * MSM MDP Interface (used by framebuffer core)
  *
  * Copyright (c) 2007-2012, Code Aurora Forum. All rights reserved.
  * Copyright (C) 2007 Google Incorporated
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -52,7 +53,7 @@ int mdp_rev;
 int mdp_iommu_split_domain;
 
 static struct platform_device *mdp_init_pdev;
-static struct regulator *footswitch;
+static struct regulator *footswitch, *dsi_pll_vdda, *dsi_pll_vddio;
 static unsigned int mdp_footswitch_on;
 
 struct completion mdp_ppp_comp;
@@ -2143,18 +2144,40 @@ static int mdp_irq_clk_setup(struct platform_device *pdev,
 	}
 	disable_irq(mdp_irq);
 
+	dsi_pll_vdda = regulator_get(&pdev->dev, "dsi_pll_vdda");
+	if (IS_ERR(dsi_pll_vdda)) {
+		dsi_pll_vdda = NULL;
+	} else {
+		if (mdp_rev == MDP_REV_42 || mdp_rev == MDP_REV_44) {
+			ret = regulator_set_voltage(dsi_pll_vdda, 1200000,
+				1200000);
+			if (ret) {
+				pr_err("set_voltage failed for dsi_pll_vdda, ret=%d\n",
+					ret);
+			}
+		}
+	}
+
+	dsi_pll_vddio = regulator_get(&pdev->dev, "dsi_pll_vddio");
+	if (IS_ERR(dsi_pll_vddio)) {
+		dsi_pll_vddio = NULL;
+	} else {
+		if (mdp_rev == MDP_REV_42) {
+			ret = regulator_set_voltage(dsi_pll_vddio, 1800000,
+				1800000);
+			if (ret) {
+				pr_err("set_voltage failed for dsi_pll_vddio, ret=%d\n",
+					ret);
+			}
+		}
+	}
+
 	footswitch = regulator_get(&pdev->dev, "vdd");
-	if (IS_ERR(footswitch))
+	if (IS_ERR(footswitch)) {
 		footswitch = NULL;
-	else {
+	} else {
 		regulator_enable(footswitch);
 		mdp_footswitch_on = 1;
-
-		if (mdp_rev == MDP_REV_42 && !cont_splashScreen) {
-			regulator_disable(footswitch);
-			msleep(20);
-			regulator_enable(footswitch);
-		}
 	}
 
 	mdp_clk = clk_get(&pdev->dev, "core_clk");
@@ -2201,6 +2224,17 @@ static int mdp_irq_clk_setup(struct platform_device *pdev,
 
 	MSM_FB_DEBUG("mdp_clk: mdp_clk=%d\n", (int)clk_get_rate(mdp_clk));
 #endif
+
+	if (mdp_rev == MDP_REV_42 && !cont_splashScreen) {
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		/* DSI Video Timing generator disable */
+		outpdw(MDP_BASE + 0xE0000, 0x0);
+		/* Clear MDP Interrupt Enable register */
+		outpdw(MDP_BASE + 0x50, 0x0);
+		/* Set Overlay Proc 0 to reset state */
+		outpdw(MDP_BASE + 0x10004, 0x3);
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	}
 	return 0;
 }
 
@@ -2211,6 +2245,7 @@ static int mdp_probe(struct platform_device *pdev)
 	struct msm_fb_panel_data *pdata = NULL;
 	int rc;
 	resource_size_t  size ;
+	struct msm_panel_info *pinfo = NULL;
 	unsigned long flag;
 #ifdef CONFIG_FB_MSM_MDP40
 	int intf, if_no;
@@ -2218,7 +2253,6 @@ static int mdp_probe(struct platform_device *pdev)
 #if defined(CONFIG_FB_MSM_MIPI_DSI) && defined(CONFIG_FB_MSM_MDP40)
 	struct mipi_panel_info *mipi;
 #endif
-	static int contSplash_update_done;
 
 	if ((pdev->id == 0) && (pdev->num_resources > 0)) {
 		mdp_init_pdev = pdev;
@@ -2286,20 +2320,6 @@ static int mdp_probe(struct platform_device *pdev)
 	mfd->pdev = msm_fb_dev;
 	mfd->mdp_rev = mdp_rev;
 
-	if (mdp_pdata) {
-		if (mdp_pdata->cont_splash_enabled) {
-			mfd->cont_splash_done = 0;
-			if (!contSplash_update_done) {
-				if (mfd->panel.type == MIPI_VIDEO_PANEL ||
-				    mfd->panel.type == LCDC_PANEL)
-					mdp_pipe_ctrl(MDP_CMD_BLOCK,
-						MDP_BLOCK_POWER_ON, FALSE);
-				contSplash_update_done = 1;
-			}
-		} else
-			mfd->cont_splash_done = 1;
-	}
-
 	mfd->ov0_wb_buf = MDP_ALLOC(sizeof(struct mdp_buf_type));
 	mfd->ov1_wb_buf = MDP_ALLOC(sizeof(struct mdp_buf_type));
 	memset((void *)mfd->ov0_wb_buf, 0, sizeof(struct mdp_buf_type));
@@ -2330,6 +2350,15 @@ static int mdp_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto mdp_probe_err;
 	}
+
+	if (mdp_pdata && mfd->panel_info.pdest == DISPLAY_1) {
+		if (mdp_pdata->cont_splash_enabled &&
+			(mfd->panel.type == MIPI_VIDEO_PANEL ||
+				mfd->panel.type == LCDC_PANEL))
+			mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		mfd->cont_splash_done = (1 - mdp_pdata->cont_splash_enabled);
+	}
+
 	/* data chain */
 	pdata = msm_fb_dev->dev.platform_data;
 	pdata->on = mdp_on;
@@ -2610,13 +2639,35 @@ static int mdp_probe(struct platform_device *pdev)
 	}
 
 	/* req bus bandwidth immediately */
-	if (!(mfd->cont_splash_done))
+	if (!(mfd->cont_splash_done) && (mfd->panel_info.pdest == DISPLAY_1))
 		mdp_bus_scale_update_request(5);
 
 #endif
 
 	/* set driver data */
 	platform_set_drvdata(msm_fb_dev, mfd);
+
+	/* panel detection */
+	MSM_FB_INFO("mdp_probe: panel_detect function\n");
+	if (pdata && pdata->panel_detect && pdata->update_panel) {
+		rc = panel_next_on(msm_fb_dev);
+		if (!rc) {
+			pinfo = pdata->panel_detect(mfd);
+			rc = panel_next_off(msm_fb_dev);
+		}
+		if (!rc && pinfo)
+			mfd->panel_info = *pinfo;
+		pdata->update_panel(pdev);
+#ifdef CONFIG_FB_MSM_MDP40
+		if (mfd->panel.type == MIPI_CMD_PANEL) {
+			mipi = &mfd->panel_info.mipi;
+			configure_mdp_core_clk_table(
+				(mipi->dsi_pclk_rate) * 3 / 2);
+		}
+#endif
+	} else {
+		MSM_FB_INFO("mdp_probe: no panel_detect function\n");
+	}
 
 	rc = platform_device_add(msm_fb_dev);
 	if (rc) {
@@ -2660,6 +2711,17 @@ void mdp_footswitch_ctrl(boolean on)
 		return;
 	}
 
+	if (dsi_pll_vddio)
+		regulator_enable(dsi_pll_vddio);
+
+	if (dsi_pll_vdda)
+		regulator_enable(dsi_pll_vdda);
+
+	mipi_dsi_prepare_clocks();
+	mipi_dsi_ahb_ctrl(1);
+	mipi_dsi_phy_ctrl(1);
+	mipi_dsi_clk_enable();
+
 	if (on && !mdp_footswitch_on) {
 		pr_debug("Enable MDP FS\n");
 		regulator_enable(footswitch);
@@ -2669,6 +2731,17 @@ void mdp_footswitch_ctrl(boolean on)
 		regulator_disable(footswitch);
 		mdp_footswitch_on = 0;
 	}
+
+	mipi_dsi_clk_disable();
+	mipi_dsi_phy_ctrl(0);
+	mipi_dsi_ahb_ctrl(0);
+	mipi_dsi_unprepare_clocks();
+
+	if (dsi_pll_vdda)
+		regulator_disable(dsi_pll_vdda);
+
+	if (dsi_pll_vddio)
+		regulator_disable(dsi_pll_vddio);
 
 	mutex_unlock(&mdp_suspend_mutex);
 }

@@ -14,11 +14,13 @@
 #include <linux/pm_runtime.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_bus.h>
+#include <linux/delay.h>
 
 #include "kgsl.h"
 #include "kgsl_pwrscale.h"
 #include "kgsl_device.h"
 #include "kgsl_trace.h"
+#include "adreno.h"
 
 #define KGSL_PWRFLAGS_POWER_ON 0
 #define KGSL_PWRFLAGS_CLK_ON   1
@@ -835,6 +837,8 @@ EXPORT_SYMBOL(kgsl_pwrctrl_sleep);
 void kgsl_pwrctrl_wake(struct kgsl_device *device)
 {
 	int status;
+	unsigned int cpdebug;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	kgsl_pwrctrl_request_state(device, KGSL_STATE_ACTIVE);
 	switch (device->state) {
 	case KGSL_STATE_SLUMBER:
@@ -869,6 +873,15 @@ void kgsl_pwrctrl_wake(struct kgsl_device *device)
 				kgsl_pwrstate_to_str(device->state));
 		kgsl_pwrctrl_request_state(device, KGSL_STATE_NONE);
 		break;
+	}
+	if ((adreno_is_a225(adreno_dev)) && (KGSL_DEVICE_3D0 == device->id)) {
+		/* CP Hang workaround */
+		adreno_regread(device, REG_CP_DEBUG, &cpdebug);
+		cpdebug |= CP_DEBUG__DYNAMIC_CLK_DISABLE;
+		adreno_regwrite(device, REG_CP_DEBUG, cpdebug);
+		usleep(500);
+		cpdebug &= ~CP_DEBUG__DYNAMIC_CLK_DISABLE;
+		adreno_regwrite(device, REG_CP_DEBUG, cpdebug);
 	}
 }
 EXPORT_SYMBOL(kgsl_pwrctrl_wake);

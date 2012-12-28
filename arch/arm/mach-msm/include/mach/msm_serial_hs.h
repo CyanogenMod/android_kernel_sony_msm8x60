@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  * Author: Nick Pelly <npelly@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -25,6 +26,7 @@ struct msm_serial_hs_platform_data {
 	unsigned char inject_rx_on_wakeup;
 	char rx_to_inject;
 	int (*gpio_config)(int);
+	int (*pre_startup)(struct uart_port *);
 };
 
 unsigned int msm_hs_tx_empty(struct uart_port *uport);

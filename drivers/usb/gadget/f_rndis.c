@@ -6,6 +6,7 @@
  * Copyright (C) 2008 Nokia Corporation
  * Copyright (C) 2009 Samsung Electronics
  *                    Author: Michal Nazarewicz (m.nazarewicz@samsung.com)
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -378,16 +379,16 @@ static void rndis_response_complete(struct usb_ep *ep, struct usb_request *req)
 static void rndis_command_complete(struct usb_ep *ep, struct usb_request *req)
 {
 	struct f_rndis			*rndis = req->context;
-	struct usb_composite_dev	*cdev = rndis->port.func.config->cdev;
 	int				status;
 	rndis_init_msg_type		*buf;
 
 	/* received RNDIS command from USB_CDC_SEND_ENCAPSULATED_COMMAND */
 //	spin_lock(&dev->lock);
 	status = rndis_msg_parser(rndis->config, (u8 *) req->buf);
-	if (status < 0)
-		ERROR(cdev, "RNDIS command error %d, %d/%d\n",
+	if (status < 0) {
+		pr_err("RNDIS command error %d, %d/%d\n",
 			status, req->actual, req->length);
+	}
 
 	buf = (rndis_init_msg_type *)req->buf;
 
@@ -396,7 +397,7 @@ static void rndis_command_complete(struct usb_ep *ep, struct usb_request *req)
 			rndis->port.multi_pkt_xfer = 1;
 		else
 			rndis->port.multi_pkt_xfer = 0;
-		DBG(cdev, "%s: MaxTransferSize: %d : Multi_pkt_txr: %s\n",
+		pr_debug("%s: MaxTransferSize: %d : Multi_pkt_txr: %s\n",
 				__func__, buf->MaxTransferSize,
 				rndis->port.multi_pkt_xfer ? "enabled" :
 							    "disabled");

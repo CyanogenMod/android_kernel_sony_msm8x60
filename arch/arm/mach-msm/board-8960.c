@@ -1060,6 +1060,12 @@ static struct msm_bus_vectors qseecom_clks_init_vectors[] = {
 		.ab = 0,
 	},
 	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_SPS,
+		.ib = 0,
+		.ab = 0,
+	},
+	{
 		.src = MSM_BUS_MASTER_SPDM,
 		.dst = MSM_BUS_SLAVE_SPDM,
 		.ib = 0,
@@ -1075,6 +1081,12 @@ static struct msm_bus_vectors qseecom_enable_dfab_vectors[] = {
 		.ab = (492 * 8) *  100000UL,
 	},
 	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_SPS,
+		.ib = (492 * 8) * 1000000UL,
+		.ab = (492 * 8) * 100000UL,
+	},
+	{
 		.src = MSM_BUS_MASTER_SPDM,
 		.dst = MSM_BUS_SLAVE_SPDM,
 		.ib = 0,
@@ -1086,6 +1098,12 @@ static struct msm_bus_vectors qseecom_enable_sfpb_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_SPS,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ib = 0,
+		.ab = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPS,
+		.dst = MSM_BUS_SLAVE_SPS,
 		.ib = 0,
 		.ab = 0,
 	},
@@ -1104,7 +1122,7 @@ static struct msm_bus_paths qseecom_hw_bus_scale_usecases[] = {
 	},
 	{
 		ARRAY_SIZE(qseecom_enable_dfab_vectors),
-		qseecom_enable_sfpb_vectors,
+		qseecom_enable_dfab_vectors,
 	},
 	{
 		ARRAY_SIZE(qseecom_enable_sfpb_vectors),
@@ -1428,7 +1446,7 @@ static struct msm_otg_platform_data msm_otg_pdata;
 static int wr_phy_init_seq[] = {
 	0x44, 0x80, /* set VBUS valid threshold
 			and disconnect valid threshold */
-	0x38, 0x81, /* update DC voltage level */
+	0x68, 0x81, /* update DC voltage level */
 	0x14, 0x82, /* set preemphasis and rise/fall time */
 	0x13, 0x83, /* set source impedance adjusment */
 	-1};
@@ -1436,7 +1454,7 @@ static int wr_phy_init_seq[] = {
 static int liquid_v1_phy_init_seq[] = {
 	0x44, 0x80,/* set VBUS valid threshold
 			and disconnect valid threshold */
-	0x3C, 0x81,/* update DC voltage level */
+	0x6C, 0x81,/* update DC voltage level */
 	0x18, 0x82,/* set preemphasis and rise/fall time */
 	0x23, 0x83,/* set source impedance sdjusment */
 	-1};

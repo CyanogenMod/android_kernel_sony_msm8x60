@@ -74,9 +74,11 @@ struct pm8xxx_ccadc_chip {
 	int			eoc_irq;
 	int			r_sense;
 	struct delayed_work	calib_ccadc_work;
+	struct delayed_work	first_prog_trim_work;
 };
 
 static struct pm8xxx_ccadc_chip *the_chip;
+static int first_program_trim = 1;
 
 #ifdef DEBUG
 static s64 microvolt_to_ccadc_reading(struct pm8xxx_ccadc_chip *chip, s64 cc)
@@ -312,6 +314,8 @@ static int calib_ccadc_program_trim(struct pm8xxx_ccadc_chip *chip,
 	return 0;
 }
 
+#define DELAY_FIRST_PROGRAM_TRIM_RETRY 1000
+
 void pm8xxx_calib_ccadc(void)
 {
 	u8 data_msb, data_lsb, sec_cntrl;
@@ -392,8 +396,15 @@ void pm8xxx_calib_ccadc(void)
 	if (rc) {
 		pr_debug("error = %d programming offset trim 0x%02x 0x%02x\n",
 					rc, data_msb, data_lsb);
-		/* enable the interrupt and write it when it fires */
-		enable_irq(the_chip->eoc_irq);
+		if (first_program_trim) {
+			schedule_delayed_work(&the_chip->first_prog_trim_work,
+				round_jiffies_relative(msecs_to_jiffies
+				(DELAY_FIRST_PROGRAM_TRIM_RETRY)));
+			first_program_trim = 0;
+		} else {
+			/* enable the interrupt and write it when it fires */
+			enable_irq(the_chip->eoc_irq);
+		}
 	}
 
 	rc = calib_ccadc_enable_arbiter(the_chip);
@@ -462,6 +473,17 @@ bail:
 	pm8xxx_writeb(the_chip->dev->parent, ADC_ARB_SECP_CNTRL, sec_cntrl);
 }
 EXPORT_SYMBOL(pm8xxx_calib_ccadc);
+
+static void first_prog_trim_work(struct work_struct *work)
+{
+	u8 data_msb, data_lsb;
+
+	pr_info("Calling calib_ccadc_program_trim()\n");
+	data_msb = the_chip->ccadc_offset >> 8;
+	data_lsb = the_chip->ccadc_offset;
+	calib_ccadc_program_trim(the_chip, CCADC_OFFSET_TRIM1,
+					data_msb, data_lsb, 0);
+}
 
 static void calibrate_ccadc_work(struct work_struct *work)
 {
@@ -691,6 +713,7 @@ static int __devinit pm8xxx_ccadc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, chip);
 	the_chip = chip;
 	INIT_DELAYED_WORK(&chip->calib_ccadc_work, calibrate_ccadc_work);
+	INIT_DELAYED_WORK(&chip->first_prog_trim_work, first_prog_trim_work);
 	schedule_delayed_work(&chip->calib_ccadc_work, 0);
 
 	create_debugfs_entries(chip);

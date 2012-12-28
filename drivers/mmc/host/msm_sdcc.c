@@ -1068,7 +1068,7 @@ msmsdcc_start_command_deferred(struct msmsdcc_host *host,
 		*c |= MCI_CSPM_DATCMD;
 
 	/* Check if AUTO CMD19 is required or not? */
-	if (host->tuning_needed &&
+	if (host->tuning_needed && host->en_auto_cmd19 &&
 		!(host->mmc->ios.timing == MMC_TIMING_MMC_HS200)) {
 
 		/*
@@ -1084,7 +1084,9 @@ msmsdcc_start_command_deferred(struct msmsdcc_host *host,
 			(cmd->opcode == MMC_READ_SINGLE_BLOCK ||
 			cmd->opcode == MMC_READ_MULTIPLE_BLOCK))) {
 			msmsdcc_enable_cdr_cm_sdc4_dll(host);
-			*c |= MCI_CSPM_AUTO_CMD19;
+			if (host->en_auto_cmd19 &&
+			    host->mmc->ios.timing == MMC_TIMING_UHS_SDR104)
+				*c |= MCI_CSPM_AUTO_CMD19;
 		}
 	}
 
@@ -1267,9 +1269,11 @@ msmsdcc_data_err(struct msmsdcc_host *host, struct mmc_data *data,
 		 */
 		if (!(data->mrq->cmd->opcode == MMC_BUS_TEST_W
 			|| data->mrq->cmd->opcode == MMC_BUS_TEST_R)) {
-			pr_err("%s: CMD%d: Data timeout\n",
+			pr_err("%s: CMD%d: Data timeout. DAT0 => %d\n",
 				 mmc_hostname(host->mmc),
-				 data->mrq->cmd->opcode);
+				 data->mrq->cmd->opcode,
+				 (readl_relaxed(host->base
+				 + MCI_TEST_INPUT) & 0x2) ? 1 : 0);
 			data->error = -ETIMEDOUT;
 			msmsdcc_dump_sdcc_state(host);
 		}
@@ -2287,8 +2291,10 @@ static int msmsdcc_setup_vreg(struct msmsdcc_host *host, bool enable,
 	struct msm_mmc_reg_data *vreg_table[2];
 
 	curr_slot = host->plat->vreg_data;
-	if (!curr_slot)
+	if (!curr_slot) {
+		rc = -EINVAL;
 		goto out;
+	}
 
 	vreg_table[0] = curr_slot->vdd_data;
 	vreg_table[1] = curr_slot->vdd_io_data;
@@ -3055,7 +3061,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		 * For DDR50 mode, controller needs clock rate to be
 		 * double than what is required on the SD card CLK pin.
 		 */
-		if (ios->timing == MMC_TIMING_UHS_DDR50) {
+		if (ios->ddr || (ios->timing == MMC_TIMING_UHS_DDR50)) {
 			/*
 			 * Make sure that we don't double the clock if
 			 * doubled clock rate is already set
@@ -3116,7 +3122,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		/* Card clock frequency must be > 100MHz to enable tuning */
 		clk |= (4 << 14);
 		host->tuning_needed = 1;
-	} else if (ios->timing == MMC_TIMING_UHS_DDR50) {
+	} else if (ios->ddr || ios->timing == MMC_TIMING_UHS_DDR50) {
 		clk |= (3 << 14);
 	} else {
 		clk |= (2 << 14); /* feedback clock */
@@ -3256,10 +3262,10 @@ static void msmsdcc_print_rpm_info(struct msmsdcc_host *host)
 {
 	struct device *dev = mmc_dev(host->mmc);
 
-	pr_info("%s: PM: sdcc_suspended=%d, pending_resume=%d, sdcc_suspending=%d\n",
+	pr_err("%s: PM: sdcc_suspended=%d, pending_resume=%d, sdcc_suspending=%d\n",
 		mmc_hostname(host->mmc), host->sdcc_suspended,
 		host->pending_resume, host->sdcc_suspending);
-	pr_info("%s: RPM: runtime_status=%d, usage_count=%d,"
+	pr_err("%s: RPM: runtime_status=%d, usage_count=%d,"
 		" is_suspended=%d, disable_depth=%d, runtime_error=%d,"
 		" request_pending=%d, request=%d\n",
 		mmc_hostname(host->mmc), dev->power.runtime_status,
@@ -3946,6 +3952,51 @@ exit:
 	return rc;
 }
 
+/*
+ * Work around of the unavailability of a power_reset functionality in SD cards
+ * by turning the OFF & back ON the regulators supplying the SD card.
+ */
+void msmsdcc_hw_reset(struct mmc_host *mmc)
+{
+	struct mmc_card *card = mmc->card;
+	struct msmsdcc_host *host = mmc_priv(mmc);
+	int rc;
+
+	/* Write-protection bits would be lost on a hardware reset in emmc */
+	if (!card || !mmc_card_sd(card))
+		return;
+
+	/*
+	 * Continuing on failing to disable regulator would lead to a panic
+	 * anyway, since the commands would fail and console would be flooded
+	 * with prints, eventually leading to a watchdog bark
+	 */
+	rc = msmsdcc_setup_vreg(host, false, false);
+	if (rc) {
+		pr_err("%s: %s disable regulator: failed: %d\n",
+		       mmc_hostname(mmc), __func__, rc);
+		BUG_ON(rc);
+	}
+
+	/* 10ms delay for the supply to reach the desired voltage level */
+	usleep_range(10000, 12000);
+
+	/*
+	 * Continuing on failing to enable regulator would lead to a panic
+	 * anyway, since the commands would fail and console would be flooded
+	 * with prints, eventually leading to a watchdog bark
+	 */
+	rc = msmsdcc_setup_vreg(host, true, false);
+	if (rc) {
+		pr_err("%s: %s enable regulator: failed: %d\n",
+		       mmc_hostname(mmc), __func__, rc);
+		BUG_ON(rc);
+	}
+
+	/* 10ms delay for the supply to reach the desired voltage level */
+	usleep_range(10000, 12000);
+}
+
 static const struct mmc_host_ops msmsdcc_ops = {
 	.enable		= msmsdcc_enable,
 	.disable	= msmsdcc_disable,
@@ -3956,7 +4007,8 @@ static const struct mmc_host_ops msmsdcc_ops = {
 	.get_ro		= msmsdcc_get_ro,
 	.enable_sdio_irq = msmsdcc_enable_sdio_irq,
 	.start_signal_voltage_switch = msmsdcc_switch_io_voltage,
-	.execute_tuning = msmsdcc_execute_tuning
+	.execute_tuning = msmsdcc_execute_tuning,
+	.hw_reset = msmsdcc_hw_reset,
 };
 
 static unsigned int
@@ -4664,6 +4716,42 @@ store_idle_timeout(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
+static inline void set_auto_cmd_setting(struct device *dev,
+					 const char *buf,
+					 bool is_cmd19)
+{
+	struct mmc_host *mmc = dev_get_drvdata(dev);
+	struct msmsdcc_host *host = mmc_priv(mmc);
+	unsigned int long flags;
+	int temp;
+
+	if (!kstrtou32(buf, 0, &temp)) {
+		spin_lock_irqsave(&host->lock, flags);
+		if (is_cmd19)
+			host->en_auto_cmd19 = !!temp;
+		spin_unlock_irqrestore(&host->lock, flags);
+	}
+}
+
+static ssize_t
+show_enable_auto_cmd19(struct device *dev, struct device_attribute *attr,
+		       char *buf)
+{
+	struct mmc_host *mmc = dev_get_drvdata(dev);
+	struct msmsdcc_host *host = mmc_priv(mmc);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", host->en_auto_cmd19);
+}
+
+static ssize_t
+store_enable_auto_cmd19(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	set_auto_cmd_setting(dev, buf, true);
+
+	return count;
+}
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void msmsdcc_early_suspend(struct early_suspend *h)
 {
@@ -4699,10 +4787,10 @@ static void msmsdcc_print_regs(const char *name, void __iomem *base,
 	if (!base)
 		return;
 
-	pr_info("===== %s: Register Dumps @phys_base=0x%x, @virt_base=0x%x"
+	pr_err("===== %s: Register Dumps @phys_base=0x%x, @virt_base=0x%x"
 		" =====\n", name, phys_base, (u32)base);
 	for (i = 0; i < no_of_regs; i = i + 4) {
-		pr_info("Reg=0x%.2x: 0x%.8x, 0x%.8x, 0x%.8x, 0x%.8x\n", i*4,
+		pr_err("Reg=0x%.2x: 0x%.8x, 0x%.8x, 0x%.8x, 0x%.8x\n", i*4,
 			(u32)readl_relaxed(base + i*4),
 			(u32)readl_relaxed(base + ((i+1)*4)),
 			(u32)readl_relaxed(base + ((i+2)*4)),
@@ -4713,25 +4801,29 @@ static void msmsdcc_print_regs(const char *name, void __iomem *base,
 static void msmsdcc_dump_sdcc_state(struct msmsdcc_host *host)
 {
 	/* Dump current state of SDCC clocks, power and irq */
-	pr_info("%s: SDCC PWR is %s\n", mmc_hostname(host->mmc),
+	pr_err("%s: SDCC PWR is %s\n", mmc_hostname(host->mmc),
 		(host->pwr ? "ON" : "OFF"));
-	pr_info("%s: SDCC clks are %s, MCLK rate=%d\n",
+	pr_err("%s: SDCC clks are %s, MCLK rate=%d\n",
 		mmc_hostname(host->mmc),
 		(atomic_read(&host->clks_on) ? "ON" : "OFF"),
 		(u32)clk_get_rate(host->clk));
-	pr_info("%s: SDCC irq is %s\n", mmc_hostname(host->mmc),
+	pr_err("%s: SDCC irq is %s\n", mmc_hostname(host->mmc),
 		(host->sdcc_irq_disabled ? "disabled" : "enabled"));
 
 	/* Now dump SDCC registers. Don't print FIFO registers */
-	if (atomic_read(&host->clks_on))
+	if (atomic_read(&host->clks_on)) {
 		msmsdcc_print_regs("SDCC-CORE", host->base,
 				   host->core_memres->start, 28);
+		pr_err("%s: MCI_TEST_INPUT = 0x%.8x\n",
+			mmc_hostname(host->mmc),
+			readl_relaxed(host->base + MCI_TEST_INPUT));
+	}
 
 	if (host->curr.data) {
 		if (!msmsdcc_is_dma_possible(host, host->curr.data))
-			pr_info("%s: PIO mode\n", mmc_hostname(host->mmc));
+			pr_err("%s: PIO mode\n", mmc_hostname(host->mmc));
 		else if (host->is_dma_mode)
-			pr_info("%s: ADM mode: busy=%d, chnl=%d, crci=%d\n",
+			pr_err("%s: ADM mode: busy=%d, chnl=%d, crci=%d\n",
 				mmc_hostname(host->mmc), host->dma.busy,
 				host->dma.channel, host->dma.crci);
 		else if (host->is_sps_mode) {
@@ -4739,16 +4831,16 @@ static void msmsdcc_dump_sdcc_state(struct msmsdcc_host *host)
 				msmsdcc_print_regs("SDCC-DML", host->dml_base,
 						   host->dml_memres->start,
 						   16);
-			pr_info("%s: SPS mode: busy=%d\n",
+			pr_err("%s: SPS mode: busy=%d\n",
 				mmc_hostname(host->mmc), host->sps.busy);
 		}
 
-		pr_info("%s: xfer_size=%d, data_xfered=%d, xfer_remain=%d\n",
+		pr_err("%s: xfer_size=%d, data_xfered=%d, xfer_remain=%d\n",
 			mmc_hostname(host->mmc), host->curr.xfer_size,
 			host->curr.data_xfered, host->curr.xfer_remain);
 	}
 
-	pr_info("%s: got_dataend=%d, prog_enable=%d,"
+	pr_err("%s: got_dataend=%d, prog_enable=%d,"
 		" wait_for_auto_prog_done=%d, got_auto_prog_done=%d,"
 		" req_tout_ms=%d\n", mmc_hostname(host->mmc),
 		host->curr.got_dataend, host->prog_enable,
@@ -5203,7 +5295,7 @@ msmsdcc_probe(struct platform_device *pdev)
 
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED;
 	mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_ERASE;
-
+	mmc->caps |= MMC_CAP_HW_RESET;
 	/*
 	 * If we send the CMD23 before multi block write/read command
 	 * then we need not to send CMD12 at the end of the transfer.
@@ -5239,8 +5331,6 @@ msmsdcc_probe(struct platform_device *pdev)
 	if (plat->nonremovable)
 		mmc->caps |= MMC_CAP_NONREMOVABLE;
 	mmc->caps |= MMC_CAP_SDIO_IRQ;
-
-	mmc->caps2 |= MMC_CAP2_INIT_BKOPS | MMC_CAP2_BKOPS;
 
 	if (plat->is_sdio_al_client)
 		mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;
@@ -5456,8 +5546,25 @@ msmsdcc_probe(struct platform_device *pdev)
 	ret = device_create_file(&pdev->dev, &host->idle_timeout);
 	if (ret)
 		goto remove_polling_file;
+
+	if (!host->sdcc_version)
+		goto exit;
+
+	/* Sysfs entry for AUTO CMD19 control */
+	host->auto_cmd19_attr.show = show_enable_auto_cmd19;
+	host->auto_cmd19_attr.store = store_enable_auto_cmd19;
+	sysfs_attr_init(&host->auto_cmd19_attr.attr);
+	host->auto_cmd19_attr.attr.name = "enable_auto_cmd19";
+	host->auto_cmd19_attr.attr.mode = S_IRUGO | S_IWUSR;
+	ret = device_create_file(&pdev->dev, &host->auto_cmd19_attr);
+	if (ret)
+		goto remove_idle_timeout_file;
+
+ exit:
 	return 0;
 
+ remove_idle_timeout_file:
+	device_remove_file(&pdev->dev, &host->idle_timeout);
  remove_polling_file:
 	if (!plat->status_irq)
 		device_remove_file(&pdev->dev, &host->polling);
@@ -5539,6 +5646,8 @@ static int msmsdcc_remove(struct platform_device *pdev)
 	DBG(host, "Removing SDCC device = %d\n", pdev->id);
 	plat = host->plat;
 
+	if (host->sdcc_version)
+		device_remove_file(&pdev->dev, &host->auto_cmd19_attr);
 	device_remove_file(&pdev->dev, &host->max_bus_bw);
 	if (!plat->status_irq)
 		device_remove_file(&pdev->dev, &host->polling);

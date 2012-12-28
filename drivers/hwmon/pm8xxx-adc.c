@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,6 +33,7 @@
 #include <linux/mfd/pm8xxx/core.h>
 #include <linux/regulator/consumer.h>
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
+#include <mach/msm_xo.h>
 
 /* User Bank register set */
 #define PM8XXX_ADC_ARB_USRP_CNTRL1			0x197
@@ -145,6 +147,7 @@ struct pm8xxx_adc {
 	int					msm_suspend_check;
 	struct pm8xxx_adc_amux_properties	*conv;
 	struct pm8xxx_adc_arb_btm_param		batt;
+	struct msm_xo_voter			*voter;
 	struct sensor_device_attribute		sens_attr[0];
 };
 
@@ -1120,8 +1123,14 @@ hwmon_err_sens:
 static int pm8xxx_adc_suspend_noirq(struct device *dev)
 {
 	struct pm8xxx_adc *adc_pmic = pmic_adc;
+	int rc;
 
 	adc_pmic->msm_suspend_check = 1;
+
+	rc = msm_xo_mode_vote(adc_pmic->voter, MSM_XO_MODE_OFF);
+	if (rc)
+		pr_err("%s failed to vote for TCXO D0 buffer%d\n",
+			__func__, rc);
 
 	return 0;
 }
@@ -1129,8 +1138,14 @@ static int pm8xxx_adc_suspend_noirq(struct device *dev)
 static int pm8xxx_adc_resume_noirq(struct device *dev)
 {
 	struct pm8xxx_adc *adc_pmic = pmic_adc;
+	int rc;
 
 	adc_pmic->msm_suspend_check = 0;
+
+	rc = msm_xo_mode_vote(adc_pmic->voter, MSM_XO_MODE_ON);
+	if (rc)
+		pr_err("%s failed to vote for TCXO D0 buffer%d\n",
+			__func__, rc);
 
 	return 0;
 }
@@ -1249,6 +1264,18 @@ static int __devinit pm8xxx_adc_probe(struct platform_device *pdev)
 						rc, adc_pmic->btm_cool_irq);
 		dev_err(&pdev->dev, "failed to request btm irq\n");
 	}
+
+	adc_pmic->voter = msm_xo_get(MSM_XO_TCXO_D0, "pm8xxx-adc");
+	if (IS_ERR(adc_pmic->voter)) {
+		rc = PTR_ERR(adc_pmic->voter);
+		pr_err("failed to request voter with error %d\n", rc);
+		adc_pmic->voter = NULL;
+		return rc;
+	}
+	rc = msm_xo_mode_vote(adc_pmic->voter, MSM_XO_MODE_ON);
+	if (rc)
+		pr_err("%s failed to vote for TCXO D0 buffer%d\n",
+			__func__, rc);
 
 	disable_irq_nosync(adc_pmic->btm_cool_irq);
 	platform_set_drvdata(pdev, adc_pmic);

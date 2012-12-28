@@ -217,6 +217,8 @@ union reg_cp_rb_cntl {
 #define CP_INT_CNTL__IB1_INT_MASK                          0x40000000L
 #define CP_INT_CNTL__RB_INT_MASK                           0x80000000L
 
+#define CP_DEBUG__DYNAMIC_CLK_DISABLE                      0x08000000L
+
 #define MASTER_INT_SIGNAL__MH_INT_STAT                     0x00000020L
 #define MASTER_INT_SIGNAL__SQ_INT_STAT                     0x04000000L
 #define MASTER_INT_SIGNAL__CP_INT_STAT                     0x40000000L

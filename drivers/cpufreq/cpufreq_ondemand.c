@@ -990,7 +990,7 @@ static void dbs_input_disconnect(struct input_handle *handle)
 }
 
 static const struct input_device_id dbs_ids[] = {
-	{ .driver_info = 1 },
+	{ .driver_info = 0 },
 	{ },
 };
 

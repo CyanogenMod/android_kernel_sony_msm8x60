@@ -93,6 +93,10 @@
 #define FIRST_GPIO_IRQ MSM_GPIO_TO_INT(0)
 #define MSM_INT_TO_REG(base, irq) (base + irq / 32)
 
+#if defined(CONFIG_MSM_WATCHDOG)
+#define ARCH_HAS_NMI_WATCHDOG
+#endif
+
 #if defined(CONFIG_PCI_MSI) && defined(CONFIG_MSM_PCIE)
 #define MSM_PCIE_MSI_INT(n) (NR_MSM_IRQS + NR_GPIO_IRQS + NR_PM8921_IRQS +  \
 		NR_PM8821_IRQS + NR_TABLA_IRQS + NR_GPIO_EXPANDER_IRQS + (n))

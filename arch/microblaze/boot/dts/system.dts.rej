@@ -1,0 +1,4 @@
+--- arch/microblaze/boot/dts/system.dts
++++ /dev/null
+@@ -1 +0,0 @@
+-../../platform/generic/system.dts

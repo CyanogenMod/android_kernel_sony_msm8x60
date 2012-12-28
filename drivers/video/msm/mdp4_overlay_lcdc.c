@@ -360,7 +360,6 @@ int mdp_lcdc_off(struct platform_device *pdev)
 
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-	mdp4_mixer_pipe_cleanup(lcdc_pipe->mixer_num);
 	MDP_OUTP(MDP_BASE + LCDC_BASE, 0);
 	lcdc_enabled = 0;
 	/* MDP cmd block disable */
@@ -373,7 +372,7 @@ int mdp_lcdc_off(struct platform_device *pdev)
 	mutex_unlock(&mfd->dma->ov_mutex);
 
 	/* delay to make sure the last frame finishes */
-	msleep(20);
+	msleep(16);
 
 	/* dis-engage rgb0 from mixer0 */
 	if (lcdc_pipe) {
@@ -644,9 +643,12 @@ static void mdp4_lcdc_do_blt(struct msm_fb_data_type *mfd, int enable)
 	if (!change)
 		return;
 
-	mdp4_overlay_lcdc_wait4event(mfd, INTR_DMA_P_DONE);
-	MDP_OUTP(MDP_BASE + LCDC_BASE, 0);	/* stop lcdc */
-	msleep(20);
+	if (lcdc_enabled) {
+		mdp4_overlay_lcdc_wait4event(mfd, INTR_DMA_P_DONE);
+		MDP_OUTP(MDP_BASE + LCDC_BASE, 0);	/* stop lcdc */
+		msleep(20);
+	}
+
 	mdp4_overlay_dmap_xy(lcdc_pipe);
 	mdp4_overlayproc_cfg(lcdc_pipe);
 	if (lcdc_pipe->ov_blt_addr) {

@@ -17,6 +17,7 @@
  * and processes may not get killed until the normal oom killer is triggered.
  *
  * Copyright (C) 2007-2008 Google, Inc.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -119,9 +120,15 @@ static void lowmem_notify_killzone_approach(void);
 static inline void get_free_ram(int *other_free, int *other_file)
 {
 	struct zone *zone;
+	int mapped_file = global_page_state(NR_FILE_MAPPED);
 	*other_free = global_page_state(NR_FREE_PAGES);
-	*other_file = global_page_state(NR_FILE_PAGES) -
-						global_page_state(NR_SHMEM);
+	*other_file = global_page_state(NR_ACTIVE_FILE) +
+			global_page_state(NR_INACTIVE_FILE);
+
+	if (*other_file > mapped_file)
+		*other_file -= mapped_file;
+	else
+		*other_file = 0;
 
 	if (offlining) {
 		/* Discount all free space in the section being offlined */

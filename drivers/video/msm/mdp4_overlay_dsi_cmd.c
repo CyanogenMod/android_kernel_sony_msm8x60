@@ -1,4 +1,6 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/*
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -631,6 +633,7 @@ void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
 	unsigned long flag;
+	struct msm_fb_panel_data *pdata = mfd->pdev->dev.platform_data;
 
 	mdp4_iommu_attach();
 	/* change mdp clk */
@@ -652,6 +655,9 @@ void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
 	mdp4_stat.kickoff_ov0++;
+
+	if (pdata && pdata->power_on_panel_at_pan)
+		mdp4_dsi_cmd_dma_busy_wait(mfd);
 }
 
 void mdp_dsi_cmd_overlay_suspend(void)

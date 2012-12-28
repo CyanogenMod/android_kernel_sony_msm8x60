@@ -614,13 +614,23 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	mult = mmc_card_sd(card) ? 100 : 10;
 
 	/*
+	 * eMMC also uses a 100 multiplier because timeout is seen
+	 * with specific eMMC devices.
+	 */
+	if (mmc_card_mmc(card))
+		mult = 100;
+
+	/*
 	 * Scale up the multiplier (and therefore the timeout) by
 	 * the r2w factor for writes.
 	 */
 	if (data->flags & MMC_DATA_WRITE)
 		mult <<= card->csd.r2w_factor;
 
-	data->timeout_ns = card->csd.tacc_ns * mult;
+	if ((unsigned long long)card->csd.tacc_ns * mult > UINT_MAX)
+		data->timeout_ns = UINT_MAX;
+	else
+		data->timeout_ns = card->csd.tacc_ns * mult;
 	data->timeout_clks = card->csd.tacc_clks * mult;
 
 	/*
@@ -2089,11 +2099,15 @@ int mmc_can_reset(struct mmc_card *card)
 {
 	u8 rst_n_function;
 
-	if (!mmc_card_mmc(card))
+	if (mmc_card_sdio(card))
 		return 0;
-	rst_n_function = card->ext_csd.rst_n_function;
-	if ((rst_n_function & EXT_CSD_RST_N_EN_MASK) != EXT_CSD_RST_N_ENABLED)
-		return 0;
+
+	if (mmc_card_mmc(card)) {
+		rst_n_function = card->ext_csd.rst_n_function;
+		if ((rst_n_function & EXT_CSD_RST_N_EN_MASK) !=
+		    EXT_CSD_RST_N_ENABLED)
+			return 0;
+	}
 	return 1;
 }
 EXPORT_SYMBOL(mmc_can_reset);

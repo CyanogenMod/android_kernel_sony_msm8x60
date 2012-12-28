@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -260,6 +261,7 @@ struct msm_cam_media_controller {
 	const char *apps_id; /*ID for app that open this session*/
 	struct mutex lock;
 	struct wake_lock wake_lock; /*avoid low power mode when active*/
+	struct wake_lock suspend_lock;
 	struct pm_qos_request_list pm_qos_req_list;
 	struct msm_mctl_pp_info pp_info;
 	struct msm_mctl_stats_t stats_info; /*stats pmem info*/

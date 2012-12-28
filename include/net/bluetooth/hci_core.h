@@ -355,6 +355,7 @@ struct hci_conn {
 	__u8		auth;
 	void		*smp_conn;
 	struct timer_list smp_timer;
+	__u8		conn_valid;
 
 
 	void (*connect_cfm_cb)	(struct hci_conn *conn, u8 status);
@@ -1039,7 +1040,7 @@ int mgmt_new_key(u16 index, struct link_key *key, u8 bonded);
 int mgmt_connected(u16 index, bdaddr_t *bdaddr, u8 le);
 int mgmt_le_conn_params(u16 index, bdaddr_t *bdaddr, u16 interval,
 						u16 latency, u16 timeout);
-int mgmt_disconnected(u16 index, bdaddr_t *bdaddr);
+int mgmt_disconnected(u16 index, bdaddr_t *bdaddr, u8 reason);
 int mgmt_disconnect_failed(u16 index);
 int mgmt_connect_failed(u16 index, bdaddr_t *bdaddr, u8 status);
 int mgmt_pin_code_request(u16 index, bdaddr_t *bdaddr);

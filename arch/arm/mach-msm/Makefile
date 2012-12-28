@@ -45,6 +45,11 @@ else
 endif
 obj-$(CONFIG_HOTPLUG_CPU) += hotplug.o
 
+ifdef CONFIG_ARCH_MSM8960
+	obj-$(CONFIG_PM8921_MIC_BIAS) += pm8921-mic_bias.o
+	obj-$(CONFIG_SIMPLE_REMOTE_PLATFORM) += simple_remote_msm8960_pf.o
+endif
+
 obj-$(CONFIG_MSM_CPU_AVS) += avs.o
 obj-$(CONFIG_MSM_AVS_HW) += avs_hw.o
 obj-$(CONFIG_CPU_V6) += idle-v6.o
@@ -292,6 +297,14 @@ obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
+
+#blue
+board-blue-all-objs += board-blue.o board-blue-display.o board-blue-storage.o
+
+
+obj-$(CONFIG_MACH_BLUE_TSUBASA) += board-blue-all.o board-blue_tsubasa-pmic.o board-blue_tsubasa-gpiomux.o board-blue_tsubasa-regulator.o battery-blue_august.o
+obj-$(CONFIG_MACH_BLUE_TSUBASA) +=  gyro-sony_common.o board-sony_blue-gyro.o board-blue_tsubasa-camera.o
+
 
 CFLAGS_msm_vibrator.o += -Idrivers/staging/android
 CFLAGS_board-9615.o += -Idrivers/usb/gadget

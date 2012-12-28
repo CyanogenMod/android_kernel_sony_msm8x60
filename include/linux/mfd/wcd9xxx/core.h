@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -151,6 +152,7 @@ void wcd9xxx_unlock_sleep(struct wcd9xxx *wcd9xxx);
 enum wcd9xxx_pm_state wcd9xxx_pm_cmpxchg(struct wcd9xxx *wcd9xxx,
 				enum wcd9xxx_pm_state o,
 				enum wcd9xxx_pm_state n);
+int tabla_codec_hp_amp_enable(u8 enable);
 
 static inline int wcd9xxx_request_irq(struct wcd9xxx *wcd9xxx, int irq,
 				     irq_handler_t handler, const char *name,
