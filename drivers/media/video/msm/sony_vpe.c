@@ -14,7 +14,6 @@
 #include <mach/irqs.h>
 #include <linux/io.h>
 #include <linux/slab.h>
-#include <linux/pm_qos_params.h>
 #include <linux/regulator/consumer.h>
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 #include <linux/ion.h>
