@@ -43,6 +43,8 @@ allowed_warnings = set([
     "alignment.c:327",
     "mmu.c:602",
     "return_address.c:62",
+    "sony_sensor_main_v4l2.c:749",
+    "sony_sensor_sub_v4l2.c:749",
  ])
 
 # Capture the name of the object file, can find it.

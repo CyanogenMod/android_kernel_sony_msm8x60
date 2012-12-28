@@ -14,7 +14,6 @@
 #include <mach/irqs.h>
 #include <linux/io.h>
 #include <linux/slab.h>
-#include <linux/pm_qos_params.h>
 #include <linux/regulator/consumer.h>
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 #include <linux/ion.h>
@@ -22,6 +21,7 @@
 #include <linux/android_pmem.h>
 #endif
 #include <linux/clk.h>
+#include <linux/module.h>
 #include <mach/clk.h>
 #include <asm/div64.h>
 #include "msm.h"
@@ -624,7 +624,7 @@ static int msm_vpe_start_transfer(struct msm_vpe_transfer_cfg *transfercmd,
 		put_pmem = true;
 		/* get pmem file for source */
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-		src_ionhandle = ion_import_fd(vpe_client, src_info->fd);
+		src_ionhandle = ion_import_dma_buf(vpe_client, src_info->fd);
 		if (IS_ERR_OR_NULL(src_ionhandle))
 			return 0;
 		rc = ion_phys(vpe_client,
@@ -655,7 +655,7 @@ static int msm_vpe_start_transfer(struct msm_vpe_transfer_cfg *transfercmd,
 
 	  /* get pmem file for destination */
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-		dst_ionhandle = ion_import_fd(vpe_client, dst_info->fd);
+		dst_ionhandle = ion_import_dma_buf(vpe_client, dst_info->fd);
 		if (IS_ERR_OR_NULL(src_ionhandle))
 			return 0;
 		rc = ion_phys(vpe_client,
@@ -772,7 +772,7 @@ static int msm_vpe_pmem_register(struct msm_vpe_register_cfg *registercmd,
 	CDBG("=== msm_vpe_pmem_register start ===\n");
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-	ionhandle = ion_import_fd(vpe_client, registercmd->inf.fd);
+	ionhandle = ion_import_dma_buf(vpe_client, registercmd->inf.fd);
 	if (IS_ERR_OR_NULL(ionhandle))
 		return 0;
 #ifdef CONFIG_MSM_IOMMU
