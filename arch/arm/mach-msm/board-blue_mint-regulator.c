@@ -38,8 +38,8 @@ VREG_CONSUMERS(L2) = {
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_imx074.0"),
 	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_camera_ov2720.0"),
 #if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
-	REGULATOR_SUPPLY("mipi_csi_vdd", "msm_csid.0"),
-	REGULATOR_SUPPLY("mipi_csi_vdd", "msm_csid.1"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_csid.0"),
+	REGULATOR_SUPPLY("mipi_csi_vdd",	"msm_csid.1"),
 #endif
 };
 VREG_CONSUMERS(L3) = {
@@ -104,7 +104,7 @@ VREG_CONSUMERS(L15) = {
 	REGULATOR_SUPPLY("8921_l15",		NULL),
 };
 VREG_CONSUMERS(L16) = {
-	REGULATOR_SUPPLY("8921_l16",            NULL),
+	REGULATOR_SUPPLY("8921_l16",		NULL),
 };
 VREG_CONSUMERS(L17) = {
 	REGULATOR_SUPPLY("8921_l17",		NULL),
