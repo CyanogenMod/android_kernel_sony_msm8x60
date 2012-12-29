@@ -669,13 +669,6 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	 */
 	mult = mmc_card_sd(card) ? 100 : 10;
 
-        /*
-	 * eMMC also uses a 100 multiplier because timeout is seen
-	 * with specific eMMC devices.
-	 */
-	if (mmc_card_mmc(card))
-		mult = 100;
-
 	/*
 	 * Scale up the multiplier (and therefore the timeout) by
 	 * the r2w factor for writes.
@@ -683,10 +676,7 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	if (data->flags & MMC_DATA_WRITE)
 		mult <<= card->csd.r2w_factor;
 
-	if ((unsigned long long)card->csd.tacc_ns * mult > UINT_MAX)
-		data->timeout_ns = UINT_MAX;
-	else
-		data->timeout_ns = card->csd.tacc_ns * mult;
+	data->timeout_ns = card->csd.tacc_ns * mult;
 	data->timeout_clks = card->csd.tacc_clks * mult;
 
 	/*

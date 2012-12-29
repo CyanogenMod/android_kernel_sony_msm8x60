@@ -401,7 +401,6 @@ struct msmsdcc_host {
 	bool io_pad_pwr_switch;
 	bool tuning_in_progress;
 	bool tuning_needed;
-	bool en_auto_cmd19;
 	bool sdio_gpio_lpm;
 	bool irq_wake_enabled;
 	struct pm_qos_request pm_qos_req_dma;
@@ -418,7 +417,6 @@ struct msmsdcc_host {
 	struct device_attribute	max_bus_bw;
 	struct device_attribute	polling;
 	struct device_attribute idle_timeout;
-	struct device_attribute auto_cmd19_attr;
 };
 
 #define MSMSDCC_VERSION_MASK	0xFFFF
