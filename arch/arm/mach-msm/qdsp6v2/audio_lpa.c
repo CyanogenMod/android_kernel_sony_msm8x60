@@ -744,8 +744,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 		pr_debug("%s: AUDIO_GET_STATS cmd\n", __func__);
 		memset(&stats, 0, sizeof(stats));
-		timestamp = q6asm_get_session_time(audio->ac);
-		if (timestamp < 0) {
+		rc = q6asm_get_session_time(audio->ac, &timestamp);
+		if (rc < 0) {
 			pr_err("%s: Get Session Time return value =%lld\n",
 				__func__, timestamp);
 			return -EAGAIN;
