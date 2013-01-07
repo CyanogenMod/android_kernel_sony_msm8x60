@@ -2122,6 +2122,11 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *rqc)
 			break;
 		case MMC_BLK_NOMEDIUM:
 			goto cmd_abort;
+		default:
+			pr_err("%s:%s: Unhandled return value (%d)",
+					req->rq_disk->disk_name,
+					__func__, status);
+			goto cmd_abort;
 		}
 
 		if (ret) {
