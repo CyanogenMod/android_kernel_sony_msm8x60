@@ -208,8 +208,8 @@ static void modem_crash_shutdown(const struct subsys_desc *crashed_subsys)
 {
 	/* If modem hasn't already crashed, send SMSM_RESET. */
 	if (!(smsm_get_state(SMSM_MODEM_STATE) & SMSM_RESET)) {
-		modem_unregister_notifier(&modem_notif_nb);
-		smsm_reset_modem(SMSM_RESET);
+	ignore_smsm_ack = 1;		
+        smsm_reset_modem(SMSM_RESET);
 	}
 
 	/* Wait to allow the modem to clean up caches etc. */

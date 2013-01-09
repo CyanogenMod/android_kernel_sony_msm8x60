@@ -403,6 +403,13 @@ static struct mfd_cell gpio_cell __devinitdata = {
 	.num_resources	= ARRAY_SIZE(gpio_cell_resources),
 };
 
+#ifdef CONFIG_FUJI_PMIC_KEYPAD
+static struct mfd_cell keypad_pmic_cell __devinitdata = {
+  	.name = KP_NAME,
+  	.id = -1,
+};
+#endif /* CONFIG_FUJI_PMIC_KEYPAD */
+
 static int __devinit
 pm8058_add_subdevices(const struct pm8058_platform_data *pdata,
 				struct pm8058_chip *pmic)
@@ -675,6 +682,21 @@ pm8058_add_subdevices(const struct pm8058_platform_data *pdata,
 			goto bail;
 		}
 	}
+
+#ifdef CONFIG_FUJI_PMIC_KEYPAD
+	if (pdata->keypad_pmic_pdata) {
+		keypad_pmic_cell.platform_data = pdata->keypad_pmic_pdata;
+		keypad_pmic_cell.pdata_size =
+			sizeof(struct keypad_pmic_fuji_platform_data);
+		rc = mfd_add_devices(pmic->dev, 0, &keypad_pmic_cell,
+						1, NULL, irq_base);
+		if (rc) {
+			pr_err("Failed to add keypad pmic subdevice"
+			       "ret=%d\n", rc);
+			goto bail;
+		}
+	}
+#endif
 
 	rc = mfd_add_devices(pmic->dev, 0, &debugfs_cell, 1, NULL, irq_base);
 	if (rc) {

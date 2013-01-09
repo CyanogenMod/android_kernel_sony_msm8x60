@@ -526,6 +526,13 @@ mx53_ard		MACH_MX53_ARD		MX53_ARD		3010
 mx53_smd		MACH_MX53_SMD		MX53_SMD		3011
 msm8x60_rumi3		MACH_MSM8X60_RUMI3	MSM8X60_RUMI3		3016
 msm8x60_ffa		MACH_MSM8X60_FFA	MSM8X60_FFA		3017
+semc_fuji	       MACH_SEMC_FUJI         SEMC_FUJI    	     3017
+semc_nozomi    	       MACH_SEMC_NOZOMI       SEMC_NOZOMI            3017
+semc_nozomi_DCM        MACH_SEMC_NOZOMI       SEMC_NOZOMI_DCM        3017
+semc_hikari            MACH_SEMC_HIKARI       SEMC_HIKARI            3017
+semc_hikari_row        MACH_SEMC_HIKARI       SEMC_HIKARI_ROW        3017
+semc_hayate            MACH_SEMC_HAYATE       SEMC_HAYATE            3017
+semc_aoba              MACH_SEMC_AOBA         SEMC_AOBA             3017
 cm_a510			MACH_CM_A510		CM_A510			3020
 fsm9xxx_surf		MACH_FSM9XXX_SURF	FSM9XXX_SURF		3028
 fsm9xxx_ffa		MACH_FSM9XXX_FFA	FSM9XXX_FFA		3029
