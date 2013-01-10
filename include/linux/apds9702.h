@@ -28,5 +28,6 @@ struct apds9702_platform_data {
 	unsigned int is_irq_wakeup:1;
 	void (*hw_config)(int enable);
 	int (*gpio_setup)(int request);
+	void (*power_mode)(int enable);
 };
 #endif

@@ -42,6 +42,7 @@ struct xoadc_conv_state {
 #define CHANNEL_INTERNAL_2	0Xe
 #define CHANNEL_MUXOFF		0xf
 
+#define XOADC_MPP_2             0x1
 #define XOADC_MPP_3		0x2
 #define XOADC_MPP_4             0X3
 #define XOADC_MPP_5             0x4
