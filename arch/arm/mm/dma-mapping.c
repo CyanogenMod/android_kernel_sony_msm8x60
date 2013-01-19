@@ -747,7 +747,6 @@ static void dma_cache_maint_page(struct page *page, unsigned long offset,
 		if (PageHighMem(page)) {
 			if (len + offset > PAGE_SIZE)
 				len = PAGE_SIZE - offset;
-			}
 
 			if (cache_is_vipt_nonaliasing()) {
 				vaddr = kmap_atomic(page);
