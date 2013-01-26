@@ -18,6 +18,7 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/err.h>
+#include <linux/kconfig.h>
 
 #include <mach/irqs.h>
 #include <mach/scm.h>
@@ -142,10 +143,7 @@ static void lpass_smsm_state_cb(void *data, uint32_t old_state,
 static void send_q6_nmi(void)
 {
 	/* Send NMI to QDSP6 via an SCM call. */
-	uint32_t cmd = 0x1;
-
-	scm_call(SCM_SVC_UTIL, SCM_Q6_NMI_CMD,
-	&cmd, sizeof(cmd), NULL, 0);
+	scm_call_atomic1(SCM_SVC_UTIL, SCM_Q6_NMI_CMD, 0x1);
 
 	/* Q6 requires worstcase 100ms to dump caches etc.*/
 	mdelay(100);
@@ -168,8 +166,11 @@ static int lpass_powerup(const struct subsys_data *subsys)
 	return ret;
 }
 /* RAM segments - address and size for 8960 */
-static struct ramdump_segment q6_segments[] = { {0x8da00000, 0x8f200000 -
-					0x8da00000}, {0x28400000, 0x20000} };
+static struct ramdump_segment q6_segments[] = {
+	{CONFIG_LPASS_RAMDUMP_START,
+		CONFIG_LPASS_RAMDUMP_END - CONFIG_LPASS_RAMDUMP_START},
+	{0x28400000, 0x20000}
+};
 static int lpass_ramdump(int enable, const struct subsys_data *subsys)
 {
 	pr_debug("%s: enable[%d]\n", __func__, enable);

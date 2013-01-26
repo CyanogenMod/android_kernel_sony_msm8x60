@@ -66,6 +66,9 @@ do {									\
 	msg_mask_tbl_ptr += 4;						\
 	*(int *)(msg_mask_tbl_ptr) = MSG_SSID_ ## XX ## _LAST;		\
 	msg_mask_tbl_ptr += 4;						\
+	/* mimic the last entry as actual_last while creation */	\
+	*(int *)(msg_mask_tbl_ptr) = MSG_SSID_ ## XX ## _LAST;		\
+	msg_mask_tbl_ptr += 4;						\
 	/* increment by MAX_SSID_PER_RANGE cells */			\
 	msg_mask_tbl_ptr += MAX_SSID_PER_RANGE * sizeof(int);		\
 } while (0)
@@ -129,7 +132,6 @@ int chk_config_get_id(void)
 		case MSM_CPU_8X60:
 			return APQ8060_TOOLS_ID;
 		case MSM_CPU_8960:
-		case MSM_CPU_8960AB:
 			return AO8960_TOOLS_ID;
 		case MSM_CPU_8064:
 			return APQ8064_TOOLS_ID;
@@ -157,7 +159,6 @@ int chk_apps_only(void)
 
 	switch (socinfo_get_msm_cpu()) {
 	case MSM_CPU_8960:
-	case MSM_CPU_8960AB:
 	case MSM_CPU_8064:
 	case MSM_CPU_8930:
 	case MSM_CPU_8930AA:
@@ -180,8 +181,7 @@ int chk_apps_master(void)
 	if (driver->use_device_tree)
 		return 1;
 	else if (cpu_is_msm8960() || cpu_is_msm8930() || cpu_is_msm8930aa() ||
-		cpu_is_msm9615() || cpu_is_apq8064() || cpu_is_msm8627() ||
-		cpu_is_msm8960ab())
+		cpu_is_msm9615() || cpu_is_apq8064() || cpu_is_msm8627())
 		return 1;
 	else
 		return 0;
@@ -307,6 +307,26 @@ int diag_device_write(void *buf, int proc_num, struct diag_request *write_ptr)
 					break;
 				}
 		}
+
+#ifdef CONFIG_DIAG_BRIDGE_CODE
+		else if (proc_num == HSIC_DATA) {
+			for (i = 0; i < driver->poolsize_hsic_write; i++) {
+				if (driver->hsic_buf_tbl[i].length == 0) {
+					driver->hsic_buf_tbl[i].buf = buf;
+					driver->hsic_buf_tbl[i].length =
+							driver->write_len_mdm;
+					driver->num_hsic_buf_tbl_entries++;
+#ifdef DIAG_DEBUG
+					pr_debug("diag: ENQUEUE HSIC buf ptr and length is %x , %d\n",
+						(unsigned int)
+						(driver->hsic_buf_tbl[i].buf),
+						driver->hsic_buf_tbl[i].length);
+#endif
+					break;
+				}
+			}
+		}
+#endif
 		for (i = 0; i < driver->num_clients; i++)
 			if (driver->client_map[i].pid ==
 						 driver->logging_process_id)
@@ -343,8 +363,6 @@ int diag_device_write(void *buf, int proc_num, struct diag_request *write_ptr)
 #endif
 #ifdef CONFIG_DIAG_BRIDGE_CODE
 		else if (proc_num == HSIC_DATA) {
-			driver->in_busy_hsic_read = 0;
-			driver->in_busy_hsic_write_on_device = 0;
 			if (driver->hsic_ch)
 				queue_work(driver->diag_bridge_wq,
 					&(driver->diag_read_hsic_work));
@@ -396,11 +414,33 @@ int diag_device_write(void *buf, int proc_num, struct diag_request *write_ptr)
 #ifdef CONFIG_DIAG_BRIDGE_CODE
 		else if (proc_num == HSIC_DATA) {
 			if (driver->hsic_device_enabled) {
-				write_ptr->buf = buf;
-				err = usb_diag_write(driver->mdm_ch, write_ptr);
-			} else
+				struct diag_request *write_ptr_mdm;
+				write_ptr_mdm = (struct diag_request *)
+						diagmem_alloc(driver,
+						sizeof(struct diag_request),
+							POOL_TYPE_HSIC_WRITE);
+				if (write_ptr_mdm) {
+					write_ptr_mdm->buf = buf;
+					write_ptr_mdm->length =
+						driver->write_len_mdm;
+					err = usb_diag_write(driver->mdm_ch,
+								write_ptr_mdm);
+					/* Return to the pool immediately */
+					if (err) {
+						diagmem_free(driver,
+							write_ptr_mdm,
+							POOL_TYPE_HSIC_WRITE);
+					pr_err("diag: HSIC write failure\n");
+					}
+				} else {
+					pr_err("diag: allocate write fail\n");
+					err = -1;
+				}
+			} else {
 				pr_err("diag: Incorrect hsic data "
 						"while USB write\n");
+				err = -1;
+			}
 		} else if (proc_num == SMUX_DATA) {
 				write_ptr->buf = buf;
 				pr_debug("diag: writing SMUX data\n");
@@ -512,8 +552,7 @@ static void diag_print_mask_table(void)
 {
 /* Enable this to print mask table when updated */
 #ifdef MASK_DEBUG
-	int first;
-	int last;
+	int first, last, actual_last;
 	uint8_t *ptr = driver->msg_masks;
 	int i = 0;
 	pr_info("diag: F3 message mask table\n");
@@ -522,11 +561,12 @@ static void diag_print_mask_table(void)
 		ptr += 4;
 		last = *(uint32_t *)ptr;
 		ptr += 4;
-		printk(KERN_INFO "SSID %d - %d\n", first, last);
-		for (i = 0 ; i <= last - first ; i++)
-			printk(KERN_INFO "MASK:%x\n", *((uint32_t *)ptr + i));
+		actual_last = *(uint32_t *)ptr;
+		ptr += 4;
+		pr_info("diag: SSID %d, %d - %d\n", first, last, actual_last);
+		for (i = 0 ; i <= actual_last - first ; i++)
+			pr_info("diag: MASK:%x\n", *((uint32_t *)ptr + i));
 		ptr += MAX_SSID_PER_RANGE*4;
-
 	}
 #endif
 }
@@ -569,7 +609,7 @@ static void diag_set_msg_mask(int rt_mask)
 	mutex_lock(&driver->diagchar_mutex);
 	while (*(uint32_t *)(ptr + 4)) {
 		first_ssid = *(uint32_t *)ptr;
-		ptr += 4;
+		ptr += 8; /* increment by 8 to skip 'last' */
 		last_ssid = *(uint32_t *)ptr;
 		ptr += 4;
 		parse_ptr = ptr;
@@ -585,9 +625,8 @@ static void diag_set_msg_mask(int rt_mask)
 
 static void diag_update_msg_mask(int start, int end , uint8_t *buf)
 {
-	int found = 0;
-	int first;
-	int last;
+	int found = 0, first, last, actual_last;
+	uint8_t *actual_last_ptr;
 	uint8_t *ptr = driver->msg_masks;
 	uint8_t *ptr_buffer_start = &(*(driver->msg_masks));
 	uint8_t *ptr_buffer_end = &(*(driver->msg_masks)) + MSG_MASK_SIZE;
@@ -600,23 +639,23 @@ static void diag_update_msg_mask(int start, int end , uint8_t *buf)
 		ptr += 4;
 		last = *(uint32_t *)ptr;
 		ptr += 4;
-		if (start >= first && start <= last) {
+		actual_last = *(uint32_t *)ptr;
+		actual_last_ptr = ptr;
+		ptr += 4;
+		if (start >= first && start <= actual_last) {
 			ptr += (start - first)*4;
-			if (end <= last)
-				if (CHK_OVERFLOW(ptr_buffer_start, ptr,
-						  ptr_buffer_end,
-						  (((end - start)+1)*4))) {
-					pr_debug("diag: update ssid start %d,"
-						 " end %d\n", start, end);
-					memcpy(ptr, buf , ((end - start)+1)*4);
-				} else
-					printk(KERN_CRIT "Not enough"
-							 " buffer space for"
-							 " MSG_MASK\n");
-			else
-				printk(KERN_INFO "Unable to copy"
-						 " mask change\n");
-
+			if (end > actual_last) {
+				pr_info("diag: ssid range mismatch\n");
+				actual_last = end;
+				*(uint32_t *)(actual_last_ptr) = end;
+			}
+			if (CHK_OVERFLOW(ptr_buffer_start, ptr, ptr_buffer_end,
+					  (((end - start)+1)*4))) {
+				pr_debug("diag: update ssid start %d, end %d\n",
+								 start, end);
+				memcpy(ptr, buf , ((end - start)+1)*4);
+			} else
+				pr_alert("diag: Not enough space MSG_MASK\n");
 			found = 1;
 			break;
 		} else {
@@ -631,16 +670,16 @@ static void diag_update_msg_mask(int start, int end , uint8_t *buf)
 			ptr += 4;
 			memcpy(ptr, &(end), 4);
 			ptr += 4;
+			memcpy(ptr, &(end), 4); /* create actual_last entry */
+			ptr += 4;
 			pr_debug("diag: adding NEW ssid start %d, end %d\n",
 								 start, end);
 			memcpy(ptr, buf , ((end - start) + 1)*4);
 		} else
-			printk(KERN_CRIT " Not enough buffer"
-					 " space for MSG_MASK\n");
+			pr_alert("diag: Not enough buffer space for MSG_MASK\n");
 	}
 	mutex_unlock(&driver->diagchar_mutex);
 	diag_print_mask_table();
-
 }
 
 void diag_toggle_event_mask(int toggle)
@@ -916,7 +955,7 @@ void diag_send_msg_mask_update(smd_channel_t *ch, int updated_ssid_first,
 						int updated_ssid_last, int proc)
 {
 	void *buf = driver->buf_msg_mask_update;
-	int first, last, size = -ENOMEM, retry_count = 0, timer;
+	int first, last, actual_last, size = -ENOMEM, retry_count = 0, timer;
 	int header_size = sizeof(struct diag_ctrl_msg_mask);
 	uint8_t *ptr = driver->msg_masks;
 
@@ -926,18 +965,21 @@ void diag_send_msg_mask_update(smd_channel_t *ch, int updated_ssid_first,
 		ptr += 4;
 		last = *(uint32_t *)ptr;
 		ptr += 4;
-		if ((updated_ssid_first >= first && updated_ssid_last <= last)
-					 || (updated_ssid_first == ALL_SSID)) {
+		actual_last = *(uint32_t *)ptr;
+		ptr += 4;
+		if ((updated_ssid_first >= first && updated_ssid_last <=
+			 actual_last) || (updated_ssid_first == ALL_SSID)) {
 			/* send f3 mask update */
 			driver->msg_mask->cmd_type = DIAG_CTRL_MSG_F3_MASK;
-			driver->msg_mask->msg_mask_size = last - first + 1;
+			driver->msg_mask->msg_mask_size = actual_last -
+								 first + 1;
 			driver->msg_mask->data_len = 11 +
 					 4 * (driver->msg_mask->msg_mask_size);
 			driver->msg_mask->stream_id = 1; /* 2, if dual stream */
 			driver->msg_mask->status = 3; /* status valid mask */
 			driver->msg_mask->msg_mode = 0; /* Legcay mode */
 			driver->msg_mask->ssid_first = first;
-			driver->msg_mask->ssid_last = last;
+			driver->msg_mask->ssid_last = actual_last;
 			memcpy(buf, driver->msg_mask, header_size);
 			memcpy(buf+header_size, ptr,
 				 4 * (driver->msg_mask->msg_mask_size));
@@ -959,8 +1001,8 @@ void diag_send_msg_mask_update(smd_channel_t *ch, int updated_ssid_first,
 	 "fail %d, tried %d\n", proc, size,
 	 header_size + 4*(driver->msg_mask->msg_mask_size));
 				else
-					pr_debug("diag: sending mask update for"
-		"ssid first %d, last %d on PROC %d\n", first, last, proc);
+					pr_debug("diag: sending mask update for ssid first %d, last %d on PROC %d\n",
+						first, actual_last, proc);
 			} else
 				pr_err("diag: proc %d, ch invalid msg mask"
 						 "update\n", proc);
@@ -1052,7 +1094,7 @@ static int diag_process_apps_pkt(unsigned char *buf, int len)
 			rt_mask_ptr = driver->msg_masks;
 			while (*(uint32_t *)(rt_mask_ptr + 4)) {
 				rt_first_ssid = *(uint32_t *)rt_mask_ptr;
-				rt_mask_ptr += 4;
+				rt_mask_ptr += 8; /* +8 to skip 'last' */
 				rt_last_ssid = *(uint32_t *)rt_mask_ptr;
 				rt_mask_ptr += 4;
 				if (ssid_first == rt_first_ssid && ssid_last ==

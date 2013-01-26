@@ -875,6 +875,7 @@ const int read_msm_cpu_type(void)
 	case 0x510F04D1:
 	case 0x510F04D2:
 	case 0x511F04D0:
+	case 0x511F04D3:
 	case 0x512F04D0:
 		return MSM_CPU_8960;
 
@@ -884,14 +885,13 @@ const int read_msm_cpu_type(void)
 	case 0x510F06F0:
 		return MSM_CPU_8064;
 
+	case 0x511F06F1:
+	case 0x512F06F0:
+		return MSM_CPU_8974;
+
 	default:
 		return MSM_CPU_UNKNOWN;
 	};
-}
-
-const int cpu_is_krait(void)
-{
-	return ((read_cpuid_id() & 0xFF00FC00) == 0x51000400);
 }
 
 const int cpu_is_krait_v1(void)
@@ -900,39 +900,6 @@ const int cpu_is_krait_v1(void)
 	case 0x510F04D0:
 	case 0x510F04D1:
 	case 0x510F04D2:
-		return 1;
-
-	default:
-		return 0;
-	};
-}
-
-const int cpu_is_krait_v2(void)
-{
-	switch (read_cpuid_id()) {
-	case 0x511F04D0:
-	case 0x511F04D1:
-	case 0x511F04D2:
-	case 0x511F04D3:
-	case 0x511F04D4:
-
-	case 0x510F06F0:
-	case 0x510F06F1:
-	case 0x510F06F2:
-		return 1;
-
-	default:
-		return 0;
-	};
-}
-
-const int cpu_is_krait_v3(void)
-{
-	switch (read_cpuid_id()) {
-	case 0x512F04D0:
-	case 0x511F06F0:
-	case 0x511F06F1:
-	case 0x510F05D0:
 		return 1;
 
 	default:

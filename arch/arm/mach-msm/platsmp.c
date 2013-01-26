@@ -109,23 +109,17 @@ static int __cpuinit krait_release_secondary(unsigned long base, int cpu)
 
 	msm_spm_turn_on_cpu_rail(cpu);
 
-	if (cpu_is_krait_v1() || cpu_is_krait_v2()) {
-		writel_relaxed(0x109, base_ptr+0x04);
-		writel_relaxed(0x101, base_ptr+0x04);
-		mb();
-		ndelay(300);
-		writel_relaxed(0x121, base_ptr+0x04);
-	} else
-		writel_relaxed(0x021, base_ptr+0x04);
-	mb();
+	writel_relaxed(0x109, base_ptr+0x04);
+	writel_relaxed(0x101, base_ptr+0x04);
+	ndelay(300);
+
+	writel_relaxed(0x121, base_ptr+0x04);
 	udelay(2);
 
 	writel_relaxed(0x020, base_ptr+0x04);
-	mb();
 	udelay(2);
 
 	writel_relaxed(0x000, base_ptr+0x04);
-	mb();
 	udelay(100);
 
 	writel_relaxed(0x080, base_ptr+0x04);
@@ -149,7 +143,7 @@ static int __cpuinit release_secondary(unsigned int cpu)
 		return krait_release_secondary_sim(0xf9088000, cpu);
 
 	if (cpu_is_msm8960() || cpu_is_msm8930() || cpu_is_msm8930aa() ||
-	    cpu_is_apq8064() || cpu_is_msm8627() || cpu_is_msm8960ab())
+	    cpu_is_apq8064() || cpu_is_msm8627())
 		return krait_release_secondary(0x02088000, cpu);
 
 	WARN(1, "unknown CPU case in release_secondary\n");

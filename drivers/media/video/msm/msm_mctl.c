@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -435,12 +436,12 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 	struct device_driver *driver;
 	struct device *dev;
 	int rc = -ENODEV;
-
+#if !defined(CONFIG_SONY_VPE)
 	struct msm_sensor_ctrl_t *s_ctrl = get_sctrl(p_mctl->sensor_sdev);
 	struct msm_camera_sensor_info *sinfo =
 		(struct msm_camera_sensor_info *) s_ctrl->sensordata;
 	struct msm_camera_device_platform_data *pdata = sinfo->pdata;
-
+#endif
 	rc = msm_csi_register_subdevs(p_mctl, core_index,
 				msm_mctl_subdev_match_core);
 
@@ -459,6 +460,7 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 
 	p_mctl->isp_sdev->sd = dev_get_drvdata(dev);
 
+#if !defined(CONFIG_SONY_VPE)
 	if (pdata->is_vpe) {
 		/* register vfe subdev */
 		driver = driver_find(MSM_VPE_DRV_NAME, &platform_bus_type);
@@ -472,7 +474,7 @@ static int msm_mctl_register_subdevs(struct msm_cam_media_controller *p_mctl,
 
 		p_mctl->vpe_sdev = dev_get_drvdata(dev);
 	}
-
+#endif
 	rc = 0;
 
 
@@ -528,6 +530,7 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 		uint32_t csid_version;
 		pm_qos_update_request(&p_mctl->idle_pm_qos,
 			msm_cpuidle_get_deep_idle_latency());
+		wake_lock(&p_mctl->suspend_lock);
 
 		csid_core = camdev->csid_core;
 		rc = msm_mctl_register_subdevs(p_mctl, csid_core);
@@ -673,6 +676,7 @@ act_power_up_failed:
 sensor_sdev_failed:
 register_sdev_failed:
 	pm_qos_update_request(&p_mctl->idle_pm_qos, PM_QOS_DEFAULT_VALUE);
+	wake_unlock(&p_mctl->suspend_lock);
 	mutex_unlock(&p_mctl->lock);
 	return rc;
 }
@@ -729,6 +733,7 @@ static int msm_mctl_release(struct msm_cam_media_controller *p_mctl)
 	v4l2_subdev_call(p_mctl->sensor_sdev, core, s_power, 0);
 
 	pm_qos_update_request(&p_mctl->idle_pm_qos, PM_QOS_DEFAULT_VALUE);
+	wake_unlock(&p_mctl->suspend_lock);
 	return rc;
 }
 
@@ -814,6 +819,8 @@ int msm_mctl_init(struct msm_cam_v4l2_device *pcam)
 
 	pm_qos_add_request(&pmctl->idle_pm_qos, PM_QOS_CPU_DMA_LATENCY,
 		PM_QOS_DEFAULT_VALUE);
+	wake_lock_init(&pmctl->suspend_lock, WAKE_LOCK_SUSPEND,
+			"msm_camera_suspend");
 	mutex_init(&pmctl->lock);
 	pmctl->opencnt = 0;
 
@@ -854,6 +861,7 @@ int msm_mctl_free(struct msm_cam_v4l2_device *pcam)
 
 	mutex_destroy(&pmctl->lock);
 	pm_qos_remove_request(&pmctl->idle_pm_qos);
+	wake_lock_destroy(&pmctl->suspend_lock);
 	msm_camera_free_mctl(pcam->mctl_handle);
 	return rc;
 }

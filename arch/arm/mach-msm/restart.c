@@ -1,4 +1,5 @@
 /* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,6 +27,7 @@
 #include <linux/mfd/pm8xxx/misc.h>
 
 #include <asm/mach-types.h>
+#include <asm/system_misc.h>
 
 #include <mach/msm_iomap.h>
 #include <mach/restart.h>
@@ -53,8 +55,9 @@ void *restart_reason;
 int pmic_reset_irq;
 static void __iomem *msm_tmr0_base;
 
-#ifdef CONFIG_MSM_DLOAD_MODE
 static int in_panic;
+
+#ifdef CONFIG_MSM_DLOAD_MODE
 static void *dload_mode_addr;
 
 /* Download mode master kill-switch */
@@ -62,11 +65,33 @@ static int dload_set(const char *val, struct kernel_param *kp);
 static int download_mode = 1;
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
+#endif
+
+extern void arm_machine_flush_console(void);
+#include <asm/proc-fns.h>
+#include <asm/cacheflush.h>
+#include <mach/system.h>
+
+static void msm_panic_restart(char mode, const char *cmd)
+{
+	arm_machine_flush_console();
+	local_irq_disable();
+	local_fiq_disable();
+	flush_cache_all();
+	cpu_proc_fin();
+	flush_cache_all();
+	msm_restart(mode, cmd);
+	mdelay(1000);
+	printk(KERN_ERR "Reboot failed -- System halted\n");
+	while (1)
+		;
+}
 
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
 	in_panic = 1;
+	arm_pm_restart = msm_panic_restart;
 	return NOTIFY_DONE;
 }
 
@@ -74,6 +99,7 @@ static struct notifier_block panic_blk = {
 	.notifier_call	= panic_prep_restart,
 };
 
+#ifdef CONFIG_MSM_DLOAD_MODE
 static void set_dload_mode(int on)
 {
 	if (dload_mode_addr) {
@@ -213,7 +239,12 @@ void msm_restart(char mode, const char *cmd)
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
+	} else {
+		__raw_writel(0x776655AA, restart_reason);
 	}
+
+	if (in_panic)
+		__raw_writel(0xC0DEDEAD, restart_reason);
 
 	__raw_writel(0, msm_tmr0_base + WDT0_EN);
 	if (!(machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa())) {
@@ -253,8 +284,8 @@ late_initcall(msm_pmic_restart_init);
 
 static int __init msm_restart_init(void)
 {
-#ifdef CONFIG_MSM_DLOAD_MODE
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+#ifdef CONFIG_MSM_DLOAD_MODE
 	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
 	set_dload_mode(download_mode);
 #endif

@@ -1,0 +1,40 @@
+Configuration files can be found in arch/arm/configs.
+
+Xperia T LT30a => blue_mint_defconfig
+
+
+
+How to flash your kernel using Fastboot:
+
+
+Prerequisites:
+
+* zImage      - the kernel you built, located in arch/arm/boot
+
+* mkelf.py    - image generation script. Can be downloaded from eg http://developer.sonymobile.com/2012/03/20/xperia-s-open-source-archive-released-with-building-instructions/
+
+* ramdisk.img - root fs
+* RPM.bin     - RPM firmware
+
+  How to obtain these two files is beyond the scope of this document,
+  but note that they should match the phone model and the rest of the
+  software.
+
+  NB: Do NOT use the RPM.bin you can download from the link above.
+
+
+Do:
+
+1. Create a textfile, cmdline.txt, and add
+
+   androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x3F androidboot.baseband=msm ehci-hcd.park=3 maxcpus=2 kgsl.mmutype=gpummu
+
+2. Assemble flashable image
+
+   $ python mkelf.py -o kernel.elf zImage@0x80208000 \
+     ramdisk.img@0x81400000,ramdisk \
+     RPM.bin@0x20000,rpm cmdline.txt@0x0,cmdline
+
+3. Flash
+
+   $ fastboot flash boot kernel.elf

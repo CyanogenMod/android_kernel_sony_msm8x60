@@ -667,6 +667,12 @@ static void msmsdcc_sps_complete_tlet(unsigned long data)
 		mmc_hostname(host->mmc), __func__,
 		notify->event_id);
 
+	if (msmsdcc_is_dml_busy(host)) {
+		/* oops !!! this should never happen. */
+		pr_err("%s: %s: Received SPS EOT event"
+			" but DML HW is still busy !!!\n",
+			mmc_hostname(host->mmc), __func__);
+	}
 	/*
 	 * Got End of transfer event!!! Check if all of the data
 	 * has been transferred?
@@ -1176,12 +1182,25 @@ msmsdcc_start_data(struct msmsdcc_host *host, struct mmc_data *data,
 		if (is_dma_mode(host) && !msmsdcc_config_dma(host, data)) {
 			datactrl |= MCI_DPSM_DMAENABLE;
 		} else if (is_sps_mode(host)) {
-			if (!msmsdcc_sps_start_xfer(host, data)) {
-				/* Now kick start DML transfer */
-				mb();
-				msmsdcc_dml_start_xfer(host, data);
-				datactrl |= MCI_DPSM_DMAENABLE;
-				host->sps.busy = 1;
+			if (!msmsdcc_is_dml_busy(host)) {
+				if (!msmsdcc_sps_start_xfer(host, data)) {
+					/* Now kick start DML transfer */
+					mb();
+					msmsdcc_dml_start_xfer(host, data);
+					datactrl |= MCI_DPSM_DMAENABLE;
+					host->sps.busy = 1;
+				}
+			} else {
+				/*
+				 * Can't proceed with new transfer as
+				 * previous trasnfer is already in progress.
+				 * There is no point of going into PIO mode
+				 * as well. Is this a time to do kernel panic?
+				 */
+				pr_err("%s: %s: DML HW is busy!!!"
+					" Can't perform new SPS transfers"
+					" now\n", mmc_hostname(host->mmc),
+					__func__);
 			}
 		}
 	}
@@ -3085,7 +3104,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		 * For DDR50 mode, controller needs clock rate to be
 		 * double than what is required on the SD card CLK pin.
 		 */
-		if (ios->timing == MMC_TIMING_UHS_DDR50) {
+		if (ios->ddr || (ios->timing == MMC_TIMING_UHS_DDR50)) {
 			/*
 			 * Make sure that we don't double the clock if
 			 * doubled clock rate is already set
@@ -3146,7 +3165,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		/* Card clock frequency must be > 100MHz to enable tuning */
 		clk |= (4 << 14);
 		host->tuning_needed = 1;
-	} else if (ios->timing == MMC_TIMING_UHS_DDR50) {
+	} else if (ios->ddr || ios->timing == MMC_TIMING_UHS_DDR50) {
 		clk |= (3 << 14);
 	} else {
 		clk |= (2 << 14); /* feedback clock */
@@ -5366,8 +5385,6 @@ msmsdcc_probe(struct platform_device *pdev)
 	if (plat->nonremovable)
 		mmc->caps |= MMC_CAP_NONREMOVABLE;
 	mmc->caps |= MMC_CAP_SDIO_IRQ;
-
-	mmc->caps2 |= MMC_CAP2_INIT_BKOPS | MMC_CAP2_BKOPS;
 
 	if (plat->is_sdio_al_client)
 		mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;

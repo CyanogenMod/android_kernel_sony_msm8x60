@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2012 Sony Mobile Communications AB
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,6 +20,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/wcnss_wlan.h>
+#include <linux/kconfig.h>
 #include <mach/irqs.h>
 #include <mach/scm.h>
 #include <mach/subsystem_restart.h>
@@ -59,9 +61,6 @@ static void smsm_state_cb_hdlr(void *data, uint32_t old_state,
 		return;
 	}
 
-	if (!enable_riva_ssr)
-		panic(MODULE_NAME ": SMSM reset request received from Riva");
-
 	smem_reset_reason = smem_get_entry(SMEM_SSR_REASON_WCNSS0,
 			&smem_reset_size);
 
@@ -81,6 +80,9 @@ static void smsm_state_cb_hdlr(void *data, uint32_t old_state,
 		memset(smem_reset_reason, 0, smem_reset_size);
 		wmb();
 	}
+
+	if (!enable_riva_ssr)
+		panic(MODULE_NAME ": SMSM reset request received from Riva");
 
 	ss_restart_inprogress = true;
 	subsystem_restart("riva");
@@ -159,8 +161,10 @@ static int riva_powerup(const struct subsys_data *subsys)
 }
 
 /* 5MB RAM segments for Riva SS */
-static struct ramdump_segment riva_segments[] = {{0x8f200000,
-						0x8f700000 - 0x8f200000} };
+static struct ramdump_segment riva_segments[] = {
+	{CONFIG_RIVA_RAMDUMP_START,
+		CONFIG_RIVA_RAMDUMP_END - CONFIG_RIVA_RAMDUMP_START}
+};
 
 static int riva_ramdump(int enable, const struct subsys_data *subsys)
 {

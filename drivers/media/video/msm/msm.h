@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,6 +36,7 @@
 #include <linux/ion.h>
 #include <linux/iommu.h>
 #include <media/msm_gestures.h>
+#include <linux/wakelock.h>
 
 #define MSM_V4L2_DIMENSION_SIZE 96
 #define MAX_DEV_NAME_LEN 50
@@ -260,6 +262,7 @@ struct msm_cam_media_controller {
 	struct mutex lock;
 	struct pm_qos_request idle_pm_qos; /*avoid low power mode when active*/
 	struct pm_qos_request pm_qos_req_list;
+	struct wake_lock suspend_lock;
 	struct msm_mctl_pp_info pp_info;
 	struct msm_mctl_stats_t stats_info; /*stats pmem info*/
 	uint32_t vfe_output_mode; /* VFE output mode */

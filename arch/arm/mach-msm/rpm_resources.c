@@ -925,7 +925,8 @@ static void *msm_rpmrs_lowest_limits(bool from_idle,
 					irqs_detectable, gpio_detectable))
 			continue;
 
-		if (MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE == sleep_mode)
+		if ((MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE == sleep_mode)
+			|| (MSM_PM_SLEEP_MODE_POWER_COLLAPSE == sleep_mode))
 			if (!cpu && msm_rpm_local_request_is_outstanding())
 					break;
 
@@ -1106,7 +1107,7 @@ static struct msm_pm_sleep_ops msm_rpmrs_ops = {
 static int __init msm_rpmrs_l2_init(void)
 {
 	if (cpu_is_msm8960() || cpu_is_msm8930() || cpu_is_msm8930aa() ||
-	    cpu_is_apq8064() || cpu_is_msm8627() || cpu_is_msm8960ab()) {
+	    cpu_is_apq8064() || cpu_is_msm8627()) {
 
 		msm_pm_set_l2_flush_flag(0);
 

@@ -26,6 +26,7 @@
 #include <linux/slab.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>
+#include <linux/elf.h>
 
 #include <asm-generic/poll.h>
 
@@ -46,6 +47,8 @@ struct ramdump_device {
 	wait_queue_head_t dump_wait_q;
 	int nsegments;
 	struct ramdump_segment *segments;
+	Elf32_Ehdr *header;
+	int header_size;
 };
 
 static int ramdump_open(struct inode *inode, struct file *filep)
@@ -71,6 +74,16 @@ static unsigned long offset_translate(loff_t user_offset,
 		struct ramdump_device *rd_dev, unsigned long *data_left)
 {
 	int i = 0;
+
+	/* send elf header first */
+	if (rd_dev->header) {
+		if (user_offset < rd_dev->header_size) {
+			*data_left = rd_dev->header_size - user_offset;
+			return ((unsigned long) rd_dev->header) + user_offset;
+		} else {
+			user_offset -= rd_dev->header_size;
+		}
+	}
 
 	for (i = 0; i < rd_dev->nsegments; i++)
 		if (user_offset >= rd_dev->segments[i].size)
@@ -126,7 +139,10 @@ static int ramdump_read(struct file *filep, char __user *buf, size_t count,
 
 	copy_size = min(count, (size_t)MAX_IOREMAP_SIZE);
 	copy_size = min((unsigned long)copy_size, data_left);
-	device_mem = ioremap_nocache(addr, copy_size);
+	if (*pos >= rd_dev->header_size)
+		device_mem = ioremap_nocache(addr, copy_size);
+	else
+		device_mem = (void *)addr;
 
 	if (device_mem == NULL) {
 		pr_err("Ramdump(%s): Unable to ioremap: addr %lx, size %x\n",
@@ -139,13 +155,15 @@ static int ramdump_read(struct file *filep, char __user *buf, size_t count,
 	if (copy_to_user(buf, device_mem, copy_size)) {
 		pr_err("Ramdump(%s): Couldn't copy all data to user.",
 			rd_dev->name);
-		iounmap(device_mem);
+		if (*pos >= rd_dev->header_size)
+			iounmap(device_mem);
 		rd_dev->ramdump_status = -1;
 		ret = -EFAULT;
 		goto ramdump_done;
 	}
 
-	iounmap(device_mem);
+	if (*pos >= rd_dev->header_size)
+		iounmap(device_mem);
 	*pos += copy_size;
 
 	pr_debug("Ramdump(%s): Read %d bytes from address %lx.",
@@ -225,7 +243,7 @@ void *create_ramdump_device(const char *dev_name)
 int do_ramdump(void *handle, struct ramdump_segment *segments,
 		int nsegments)
 {
-	int ret, i;
+	int ret, i, next_offset;
 	struct ramdump_device *rd_dev = (struct ramdump_device *)handle;
 
 	if (!rd_dev->consumer_present) {
@@ -236,6 +254,49 @@ int do_ramdump(void *handle, struct ramdump_segment *segments,
 	for (i = 0; i < nsegments; i++)
 		segments[i].size = PAGE_ALIGN(segments[i].size);
 
+	/* initialise a basic elf header for the dump */
+	rd_dev->header_size = sizeof(Elf32_Ehdr) + nsegments \
+		* sizeof(Elf32_Phdr);
+	rd_dev->header = kzalloc(rd_dev->header_size, GFP_KERNEL);
+	if (rd_dev->header) {
+		rd_dev->header->e_ident[0] = ELFMAG0;
+		rd_dev->header->e_ident[1] = ELFMAG1;
+		rd_dev->header->e_ident[2] = ELFMAG2;
+		rd_dev->header->e_ident[3] = ELFMAG3;
+		rd_dev->header->e_ident[4] = ELFCLASS32;
+		rd_dev->header->e_ident[5] = ELFDATA2LSB;
+		rd_dev->header->e_ident[6] = EV_CURRENT;
+
+		rd_dev->header->e_type = ET_CORE;
+		rd_dev->header->e_machine = EM_ARM;
+		rd_dev->header->e_version = EV_CURRENT;
+		rd_dev->header->e_phoff = sizeof(Elf32_Ehdr);
+		rd_dev->header->e_ehsize = sizeof(Elf32_Ehdr);
+		rd_dev->header->e_phentsize = sizeof(Elf32_Phdr);
+		rd_dev->header->e_phnum = nsegments;
+
+		next_offset = rd_dev->header_size;
+		for (i = 0; i < nsegments; ++i) {
+			Elf32_Phdr *segment_header = \
+				(void *) (((unsigned long) rd_dev->header) \
+				+ sizeof(Elf32_Ehdr) + sizeof(Elf32_Phdr)*i);
+
+			segment_header->p_type = PT_LOAD;
+			segment_header->p_offset = next_offset;
+			segment_header->p_vaddr = segments[i].address;
+			segment_header->p_paddr = segments[i].address;
+			segment_header->p_filesz = segments[i].size;
+			segment_header->p_memsz = segments[i].size;
+			segment_header->p_flags = PF_X | PF_W | PF_R;
+
+			next_offset += segment_header->p_memsz;
+		}
+	} else {
+		rd_dev->header_size = 0;
+		pr_err("Ramdump(%s): Failed to allocate elf buffer header..\n",
+			rd_dev->name);
+		return -EPIPE;
+	}
 	rd_dev->segments = segments;
 	rd_dev->nsegments = nsegments;
 
@@ -259,5 +320,7 @@ int do_ramdump(void *handle, struct ramdump_segment *segments,
 		ret = (rd_dev->ramdump_status == 0) ? 0 : -EPIPE;
 
 	rd_dev->data_ready = 0;
+	kfree(rd_dev->header);
+	rd_dev->header = 0;
 	return ret;
 }

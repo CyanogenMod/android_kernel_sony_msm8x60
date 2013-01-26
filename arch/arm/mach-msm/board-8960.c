@@ -26,6 +26,7 @@
 #include <linux/spi/spi.h>
 #include <linux/slimbus/slimbus.h>
 #include <linux/bootmem.h>
+#include <linux/msm_kgsl.h>
 #ifdef CONFIG_ANDROID_PMEM
 #include <linux/android_pmem.h>
 #endif
@@ -86,7 +87,6 @@
 #include <mach/scm.h>
 #include <mach/iommu_domains.h>
 
-#include <mach/kgsl.h>
 #include <linux/fmem.h>
 
 #include "timer.h"
@@ -874,6 +874,10 @@ static struct wcd9xxx_pdata tabla_platform_data = {
 		.bias2_cfilt_sel = TABLA_CFILT2_SEL,
 		.bias3_cfilt_sel = TABLA_CFILT3_SEL,
 		.bias4_cfilt_sel = TABLA_CFILT3_SEL,
+		.bias1_ext_cap = 0,
+		.bias2_ext_cap = 1,
+		.bias3_ext_cap = 0,
+		.bias4_ext_cap = 0,
 	},
 	.regulator = {
 	{
@@ -941,6 +945,10 @@ static struct wcd9xxx_pdata tabla20_platform_data = {
 		.bias2_cfilt_sel = TABLA_CFILT2_SEL,
 		.bias3_cfilt_sel = TABLA_CFILT3_SEL,
 		.bias4_cfilt_sel = TABLA_CFILT3_SEL,
+		.bias1_ext_cap = 0,
+		.bias2_ext_cap = 1,
+		.bias3_ext_cap = 0,
+		.bias4_ext_cap = 0,
 	},
 	.regulator = {
 	{
@@ -1479,6 +1487,8 @@ static struct msm_bus_scale_pdata usb_bus_scale_pdata = {
 };
 #endif
 
+#define MSM_MPM_PIN_USB1_OTGSESSVLD	40
+
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.mode			= USB_OTG,
 	.otg_control		= OTG_PMIC_CONTROL,
@@ -1487,6 +1497,7 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.power_budget		= 750,
 #ifdef CONFIG_MSM_BUS_SCALING
 	.bus_scale_table	= &usb_bus_scale_pdata,
+	.mpm_otgsessvld_int	= MSM_MPM_PIN_USB1_OTGSESSVLD,
 #endif
 };
 #endif
@@ -2472,6 +2483,7 @@ static struct msm_serial_hs_platform_data msm_uart_dm9_pdata;
 #endif
 
 static struct platform_device *common_devices[] __initdata = {
+	&msm8960_device_acpuclk,
 	&msm8960_device_dmov,
 	&msm_device_smd,
 	&msm_device_uart_dm6,
@@ -2517,6 +2529,7 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_android_pmem_audio_device,
 #endif
 #endif
+	&msm_device_vidc,
 	&msm_device_bam_dmux,
 	&msm_fm_platform_init,
 #if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
@@ -2646,6 +2659,11 @@ static struct platform_device *cdp_devices[] __initdata = {
 	&msm_cpudai_auxpcm_tx,
 	&msm_cpu_fe,
 	&msm_stub_codec,
+	&msm_kgsl_3d0,
+#ifdef CONFIG_MSM_KGSL_2D
+	&msm_kgsl_2d0,
+	&msm_kgsl_2d1,
+#endif
 #ifdef CONFIG_MSM_GEMINI
 	&msm8960_gemini_device,
 #endif
@@ -2689,30 +2707,12 @@ static void __init msm8960_i2c_init(void)
 
 static void __init msm8960_gfx_init(void)
 {
-	struct kgsl_device_platform_data *kgsl_3d0_pdata =
-		msm_kgsl_3d0.dev.platform_data;
 	uint32_t soc_platform_version = socinfo_get_version();
-
-	if (cpu_is_msm8960ab()) {
-		kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 0);
-	} else if (SOCINFO_VERSION_MAJOR(soc_platform_version) == 1) {
+	if (SOCINFO_VERSION_MAJOR(soc_platform_version) == 1) {
+		struct kgsl_device_platform_data *kgsl_3d0_pdata =
+				msm_kgsl_3d0.dev.platform_data;
 		kgsl_3d0_pdata->pwrlevel[0].gpu_freq = 320000000;
 		kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 266667000;
-	} else if (SOCINFO_VERSION_MAJOR(soc_platform_version) >= 3) {
-		/* 8960v3 GPU registers returns 5 for patch release
-		 * but it should be 6, so dummy up the chipid here
-		 * based the platform type
-		 */
-		kgsl_3d0_pdata->chipid = ADRENO_CHIPID(2, 2, 0, 6);
-	}
-
-	/* Register the 3D core */
-	platform_device_register(&msm_kgsl_3d0);
-
-	/* Register the 2D cores if we are not 8960PRO */
-	if (!cpu_is_msm8960ab()) {
-		platform_device_register(&msm_kgsl_2d0);
-		platform_device_register(&msm_kgsl_2d1);
 	}
 }
 
@@ -3147,14 +3147,6 @@ static void __init msm8960_cdp_init(void)
 	}
 
 	platform_add_devices(common_devices, ARRAY_SIZE(common_devices));
-	msm8960_add_vidc_device();
-
-	if (cpu_is_msm8960ab())
-		platform_device_register(&msm8960ab_device_acpuclk);
-	else
-		platform_device_register(&msm8960_device_acpuclk);
-	platform_add_devices(common_devices, ARRAY_SIZE(common_devices));
-
 	msm8960_pm8921_gpio_mpp_init();
 	platform_add_devices(cdp_devices, ARRAY_SIZE(cdp_devices));
 	msm8960_init_smsc_hub();

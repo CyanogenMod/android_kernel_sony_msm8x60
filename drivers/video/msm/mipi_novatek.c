@@ -302,23 +302,27 @@ static char manufacture_id[2] = {0x04, 0x00}; /* DTYPE_DCS_READ */
 static struct dsi_cmd_desc novatek_manufacture_id_cmd = {
 	DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(manufacture_id), manufacture_id};
 
-struct dcs_cmd_req cmdreq;
 static u32 manu_id;
 
-static void mipi_novatek_manufature_cb(u32 data)
+static void mipi_novatek_manufacture_cb(u32 data)
 {
 	manu_id = data;
-	pr_info("%s: manufature_id=%x\n", __func__, manu_id);
+	pr_info("%s: manufacture_id=%x\n", __func__, manu_id);
 }
 
 static uint32 mipi_novatek_manufacture_id(struct msm_fb_data_type *mfd)
 {
+	struct dcs_cmd_req cmdreq;
+
 	cmdreq.cmds = &novatek_manufacture_id_cmd;
 	cmdreq.cmds_cnt = 1;
 	cmdreq.flags = CMD_REQ_RX | CMD_REQ_COMMIT;
 	cmdreq.rlen = 3;
-	cmdreq.cb = mipi_novatek_manufature_cb;
+	cmdreq.cb = mipi_novatek_manufacture_cb; /* call back */
 	mipi_dsi_cmdlist_put(&cmdreq);
+	/*
+	 * blocked here, untill call back called
+	 */
 
 	return manu_id;
 }
@@ -386,6 +390,7 @@ static int mipi_novatek_lcd_on(struct platform_device *pdev)
 	struct msm_fb_data_type *mfd;
 	struct mipi_panel_info *mipi;
 	struct msm_panel_info *pinfo;
+	struct dcs_cmd_req cmdreq;
 
 	mfd = platform_get_drvdata(pdev);
 	if (!mfd)
@@ -424,6 +429,7 @@ static int mipi_novatek_lcd_on(struct platform_device *pdev)
 static int mipi_novatek_lcd_off(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
+	struct dcs_cmd_req cmdreq;
 
 	mfd = platform_get_drvdata(pdev);
 
@@ -452,6 +458,7 @@ static struct dsi_cmd_desc backlight_cmd = {
 
 static void mipi_novatek_set_backlight(struct msm_fb_data_type *mfd)
 {
+	struct dcs_cmd_req cmdreq;
 
 	if ((mipi_novatek_pdata->enable_wled_bl_ctrl)
 	    && (wled_trigger_initialized)) {

@@ -23,8 +23,6 @@
 #include <linux/regulator/consumer.h>
 #include <linux/mm.h>
 
-#include <mach/kgsl.h>
-
 #define KGSL_NAME "kgsl"
 
 /* The number of memstore arrays limits the number of contexts allowed.
@@ -138,6 +136,7 @@ struct kgsl_memdesc {
 	unsigned int sglen;
 	struct kgsl_memdesc_ops *ops;
 	int flags;
+	int *faulted;
 };
 
 /* List of different memory entry types */
