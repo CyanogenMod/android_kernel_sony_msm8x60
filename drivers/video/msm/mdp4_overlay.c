@@ -3295,7 +3295,7 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 		if (pipe->flags & MDP_SECURE_OVERLAY_SESSION) {
 			pipe->blt_forced = 0;
 			pipe->req_clk = 0;
-			mdp4_overlay_mdp_perf_req(mfd, ctrl->plist);
+			mdp4_overlay_mdp_perf_req(mfd);
 		}
 	}
 
