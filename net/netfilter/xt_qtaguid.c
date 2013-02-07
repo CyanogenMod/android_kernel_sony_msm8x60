@@ -19,6 +19,7 @@
 #include <linux/module.h>
 #include <linux/netfilter/x_tables.h>
 #include <linux/netfilter/xt_qtaguid.h>
+#include <linux/ratelimit.h>
 #include <linux/skbuff.h>
 #include <linux/workqueue.h>
 #include <net/addrconf.h>
@@ -53,25 +54,22 @@ static unsigned int proc_stats_perms = S_IRUGO;
 module_param_named(stats_perms, proc_stats_perms, uint, S_IRUGO | S_IWUSR);
 
 static struct proc_dir_entry *xt_qtaguid_ctrl_file;
-#ifdef CONFIG_ANDROID_PARANOID_NETWORK
+
+/* Everybody can write. But proc_ctrl_write_limited is true by default which
+ * limits what can be controlled. See the can_*() functions.
+ */
 static unsigned int proc_ctrl_perms = S_IRUGO | S_IWUGO;
-#else
-static unsigned int proc_ctrl_perms = S_IRUGO | S_IWUSR;
-#endif
 module_param_named(ctrl_perms, proc_ctrl_perms, uint, S_IRUGO | S_IWUSR);
 
-#ifdef CONFIG_ANDROID_PARANOID_NETWORK
-#include <linux/android_aid.h>
-static gid_t proc_stats_readall_gid = AID_NET_BW_STATS;
-static gid_t proc_ctrl_write_gid = AID_NET_BW_ACCT;
-#else
-/* 0 means, don't limit anybody */
-static gid_t proc_stats_readall_gid;
-static gid_t proc_ctrl_write_gid;
-#endif
-module_param_named(stats_readall_gid, proc_stats_readall_gid, uint,
+/* Limited by default, so the gid of the ctrl and stats proc entries
+ * will limit what can be done. See the can_*() functions.
+ */
+static bool proc_stats_readall_limited = true;
+static bool proc_ctrl_write_limited = true;
+
+module_param_named(stats_readall_limited, proc_stats_readall_limited, bool,
 		   S_IRUGO | S_IWUSR);
-module_param_named(ctrl_write_gid, proc_ctrl_write_gid, uint,
+module_param_named(ctrl_write_limited, proc_ctrl_write_limited, bool,
 		   S_IRUGO | S_IWUSR);
 
 /*
@@ -242,8 +240,9 @@ static struct qtaguid_event_counts qtu_events;
 static bool can_manipulate_uids(void)
 {
 	/* root pwnd */
-	return unlikely(!current_fsuid()) || unlikely(!proc_ctrl_write_gid)
-		|| in_egroup_p(proc_ctrl_write_gid);
+	return in_egroup_p(xt_qtaguid_ctrl_file->gid)
+		|| unlikely(!current_fsuid()) || unlikely(!proc_ctrl_write_limited)
+		|| unlikely(current_fsuid() == xt_qtaguid_ctrl_file->uid);
 }
 
 static bool can_impersonate_uid(uid_t uid)
@@ -254,9 +253,10 @@ static bool can_impersonate_uid(uid_t uid)
 static bool can_read_other_uid_stats(uid_t uid)
 {
 	/* root pwnd */
-	return unlikely(!current_fsuid()) || uid == current_fsuid()
-		|| unlikely(!proc_stats_readall_gid)
-		|| in_egroup_p(proc_stats_readall_gid);
+	return in_egroup_p(xt_qtaguid_stats_file->gid)
+		|| unlikely(!current_fsuid()) || uid == current_fsuid()
+		|| unlikely(!proc_stats_readall_limited)
+		|| unlikely(current_fsuid() == xt_qtaguid_ctrl_file->uid);
 }
 
 static inline void dc_add_byte_packets(struct data_counters *counters, int set,
@@ -1109,18 +1109,13 @@ static void iface_stat_create(struct net_device *net_dev,
 	spin_lock_bh(&iface_stat_list_lock);
 	entry = get_iface_entry(ifname);
 	if (entry != NULL) {
-		bool activate = !ipv4_is_loopback(ipaddr);
 		IF_DEBUG("qtaguid: iface_stat: create(%s): entry=%p\n",
 			 ifname, entry);
 		iface_check_stats_reset_and_adjust(net_dev, entry);
-		_iface_stat_set_active(entry, net_dev, activate);
+		_iface_stat_set_active(entry, net_dev, true);
 		IF_DEBUG("qtaguid: %s(%s): "
 			 "tracking now %d on ip=%pI4\n", __func__,
-			 entry->ifname, activate, &ipaddr);
-		goto done_unlock_put;
-	} else if (ipv4_is_loopback(ipaddr)) {
-		IF_DEBUG("qtaguid: iface_stat: create(%s): "
-			 "ignore loopback dev. ip=%pI4\n", ifname, &ipaddr);
+			 entry->ifname, true, &ipaddr);
 		goto done_unlock_put;
 	}
 
@@ -1171,19 +1166,13 @@ static void iface_stat_create_ipv6(struct net_device *net_dev,
 	spin_lock_bh(&iface_stat_list_lock);
 	entry = get_iface_entry(ifname);
 	if (entry != NULL) {
-		bool activate = !(addr_type & IPV6_ADDR_LOOPBACK);
 		IF_DEBUG("qtaguid: %s(%s): entry=%p\n", __func__,
 			 ifname, entry);
 		iface_check_stats_reset_and_adjust(net_dev, entry);
-		_iface_stat_set_active(entry, net_dev, activate);
+		_iface_stat_set_active(entry, net_dev, true);
 		IF_DEBUG("qtaguid: %s(%s): "
 			 "tracking now %d on ip=%pI6c\n", __func__,
-			 entry->ifname, activate, &ifa->addr);
-		goto done_unlock_put;
-	} else if (addr_type & IPV6_ADDR_LOOPBACK) {
-		IF_DEBUG("qtaguid: %s(%s): "
-			 "ignore loopback dev. ip=%pI6c\n", __func__,
-			 ifname, &ifa->addr);
+			 entry->ifname, true, &ifa->addr);
 		goto done_unlock_put;
 	}
 
@@ -1340,12 +1329,12 @@ static void iface_stat_update_from_skb(const struct sk_buff *skb,
 	}
 
 	if (unlikely(!el_dev)) {
-		pr_err("qtaguid[%d]: %s(): no par->in/out?!!\n",
-		       par->hooknum, __func__);
+		pr_err_ratelimited("qtaguid[%d]: %s(): no par->in/out?!!\n",
+				   par->hooknum, __func__);
 		BUG();
 	} else if (unlikely(!el_dev->name)) {
-		pr_err("qtaguid[%d]: %s(): no dev->name?!!\n",
-		       par->hooknum, __func__);
+		pr_err_ratelimited("qtaguid[%d]: %s(): no dev->name?!!\n",
+				   par->hooknum, __func__);
 		BUG();
 	} else {
 		proto = ipx_proto(skb, par);
@@ -1428,8 +1417,8 @@ static void if_tag_stat_update(const char *ifname, uid_t uid,
 
 	iface_entry = get_iface_entry(ifname);
 	if (!iface_entry) {
-		pr_err("qtaguid: iface_stat: stat_update() %s not found\n",
-		       ifname);
+		pr_err_ratelimited("qtaguid: iface_stat: stat_update() "
+				   "%s not found\n", ifname);
 		return;
 	}
 	/* It is ok to process data when an iface_entry is inactive */
@@ -2315,11 +2304,12 @@ static int ctrl_cmd_tag(const char *input)
 	}
 	CT_DEBUG("qtaguid: ctrl_tag(%s): "
 		 "pid=%u tgid=%u uid=%u euid=%u fsuid=%u "
-		 "in_group=%d in_egroup=%d\n",
+		 "ctrl.gid=%u in_group()=%d in_egroup()=%d\n",
 		 input, current->pid, current->tgid, current_uid(),
 		 current_euid(), current_fsuid(),
-		 in_group_p(proc_ctrl_write_gid),
-		 in_egroup_p(proc_ctrl_write_gid));
+		 xt_qtaguid_ctrl_file->gid,
+		 in_group_p(xt_qtaguid_ctrl_file->gid),
+		 in_egroup_p(xt_qtaguid_ctrl_file->gid));
 	if (argc < 4) {
 		uid = current_fsuid();
 	} else if (!can_impersonate_uid(uid)) {
@@ -2610,10 +2600,11 @@ static int pp_stats_line(struct proc_print_info *ppi, int cnt_set)
 		if (!can_read_other_uid_stats(stat_uid)) {
 			CT_DEBUG("qtaguid: stats line: "
 				 "%s 0x%llx %u: insufficient priv "
-				 "from pid=%u tgid=%u uid=%u\n",
+				 "from pid=%u tgid=%u uid=%u stats.gid=%u\n",
 				 ppi->iface_entry->ifname,
 				 get_atag_from_tag(tag), stat_uid,
-				 current->pid, current->tgid, current_fsuid());
+				 current->pid, current->tgid, current_fsuid(),
+				 xt_qtaguid_stats_file->gid);
 			return 0;
 		}
 		if (ppi->item_index++ < ppi->items_to_skip)
