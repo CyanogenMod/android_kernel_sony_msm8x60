@@ -91,6 +91,8 @@
 #define EOC_CHECK_PERIOD_MS	10000
 /* check for USB unplug every 200 msecs */
 #define UNPLUG_CHECK_WAIT_PERIOD_MS 200
+/* wait for 1s to complete the chg gone handling */
+#define CHG_GONE_WAIT_TIMEOUT 1000
 
 /* how many times low bat is checked */
 #define RETRY_NUM_FOR_FORCE_SHUTDOWN	5
@@ -2908,6 +2910,9 @@ static irqreturn_t chg_gone_irq_handler(int irq, void *data)
 {
 	struct pm8921_chg_chip *chip = data;
 	int chg_gone, usb_chg_plugged_in;
+
+	wake_lock_timeout(&chip->chg_gone_wake_lock,
+			msecs_to_jiffies(CHG_GONE_WAIT_TIMEOUT));
 
 	usb_chg_plugged_in = is_usb_chg_plugged_in(chip);
 	chg_gone = pm_chg_get_rt_status(chip, CHG_GONE_IRQ);
