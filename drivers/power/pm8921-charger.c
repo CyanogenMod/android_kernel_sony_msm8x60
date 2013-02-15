@@ -91,6 +91,8 @@
 #define EOC_CHECK_PERIOD_MS	10000
 /* check for USB unplug every 200 msecs */
 #define UNPLUG_CHECK_WAIT_PERIOD_MS 200
+/* wait for 1s to complete the chg gone handling */
+#define CHG_GONE_WAIT_TIMEOUT 1000
 
 /* how many times low bat is checked */
 #define RETRY_NUM_FOR_FORCE_SHUTDOWN	5
@@ -413,6 +415,7 @@ struct pm8921_chg_chip {
 	struct delayed_work		delayed_notify_work;
 	struct wake_lock		eoc_wake_lock;
 	struct wake_lock		low_voltage_wake_lock;
+	struct wake_lock		chg_gone_wake_lock;
 	enum pm8921_chg_cold_thr	cold_thr;
 	enum pm8921_chg_hot_thr		hot_thr;
 	bool				ibat_calib_enable;
@@ -2909,6 +2912,9 @@ static irqreturn_t chg_gone_irq_handler(int irq, void *data)
 	struct pm8921_chg_chip *chip = data;
 	int chg_gone, usb_chg_plugged_in;
 
+	wake_lock_timeout(&chip->chg_gone_wake_lock,
+			msecs_to_jiffies(CHG_GONE_WAIT_TIMEOUT));
+
 	usb_chg_plugged_in = is_usb_chg_plugged_in(chip);
 	chg_gone = pm_chg_get_rt_status(chip, CHG_GONE_IRQ);
 
@@ -4945,6 +4951,9 @@ static int __devinit pm8921_charger_probe(struct platform_device *pdev)
 	wake_lock_init(&chip->dock_wake_lock, WAKE_LOCK_SUSPEND, "pm8921_dock");
 	spin_lock_init(&chip->dock_lock);
 #endif /* CONFIG_SWITCH */
+	wake_lock_init(&chip->chg_gone_wake_lock,
+			WAKE_LOCK_SUSPEND, "pm8921_chg_gone");
+
 	INIT_DELAYED_WORK(&chip->eoc_work, eoc_worker);
 	INIT_DELAYED_WORK(&chip->vin_collapse_check_work,
 						vin_collapse_check_worker);
@@ -5035,6 +5044,8 @@ static int __devexit pm8921_charger_remove(struct platform_device *pdev)
 	int rc, rc_notify;
 
 	remove_sysfs_entries(chip);
+	wake_lock_destroy(&chip->chg_gone_wake_lock);
+	device_remove_file(&pdev->dev, &dev_attr_charge);
 	free_irqs(chip);
 #ifdef CONFIG_SWITCH
 	switch_dev_unregister(&chip->swdev);
