@@ -161,11 +161,13 @@ struct mdss_panel_info {
 	struct lcdc_panel_info lcdc;
 	struct mipi_panel_info mipi;
 	struct lvds_panel_info lvds;
+	struct fb_info *fbi;
 };
 
 struct mdss_panel_data {
 	struct mdss_panel_info panel_info;
 	void (*set_backlight) (u32 bl_level);
+	unsigned char *dsi_base;
 
 	/* function entry chain */
 	int (*on) (struct mdss_panel_data *pdata);

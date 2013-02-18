@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -11,33 +11,26 @@
  *
  */
 
-#ifndef MIPI_DSI_H
-#define MIPI_DSI_H
+#ifndef MDSS_DSI_H
+#define MDSS_DSI_H
 
-#include <mach/scm-io.h>
 #include <linux/list.h>
+#include <mach/scm-io.h>
 
-#ifdef BIT
-#undef BIT
-#endif
+#include "mdss_panel.h"
 
-#define BIT(x)  (1<<(x))
-
-#define MMSS_CC_BASE_PHY 0x04000000	/* mmss clcok control */
-#define MMSS_SFPB_BASE_PHY 0x05700000	/* mmss SFPB CFG */
+#define MMSS_MDSS_CC_BASE_PHY 0xFD8C2300	/* mmss clcok control */
 #define MMSS_SERDES_BASE_PHY 0x04f01000 /* mmss (De)Serializer CFG */
 
-#define MIPI_DSI_BASE mipi_dsi_base
-
-#define MIPI_OUTP(addr, data) writel((data), (addr))
-#define MIPI_INP(addr) readl(addr)
+#define MIPI_OUTP(addr, data) writel_relaxed((data), (addr))
+#define MIPI_INP(addr) readl_relaxed(addr)
 
 #ifdef CONFIG_MSM_SECURE_IO
 #define MIPI_OUTP_SECURE(addr, data) secure_writel((data), (addr))
 #define MIPI_INP_SECURE(addr) secure_readl(addr)
 #else
-#define MIPI_OUTP_SECURE(addr, data) writel((data), (addr))
-#define MIPI_INP_SECURE(addr) readl(addr)
+#define MIPI_OUTP_SECURE(addr, data) writel_relaxed((data), (addr))
+#define MIPI_INP_SECURE(addr) readl_relaxed(addr)
 #endif
 
 #define MIPI_DSI_PRIM 1
@@ -88,7 +81,6 @@ enum dsi_trigger_type {
 #define DSI_NON_BURST_SYNCH_EVENT	1
 #define DSI_BURST_MODE			2
 
-
 #define DSI_RGB_SWAP_RGB	0
 #define DSI_RGB_SWAP_RBG	1
 #define DSI_RGB_SWAP_BGR	2
@@ -117,9 +109,6 @@ enum dsi_trigger_type {
 #define DSI_INTR_CMD_DMA_DONE_MASK	BIT(1)
 #define DSI_INTR_CMD_DMA_DONE		BIT(0)
 
-#define DSI_MDP_TERM	BIT(8)
-#define DSI_CMD_TERM	BIT(0)
-
 #define DSI_CMD_TRIGGER_NONE		0x0	/* mdp trigger */
 #define DSI_CMD_TRIGGER_TE		0x02
 #define DSI_CMD_TRIGGER_SW		0x04
@@ -127,13 +116,8 @@ enum dsi_trigger_type {
 #define DSI_CMD_TRIGGER_SW_TE		0x06
 
 extern struct device dsi_dev;
-extern int mipi_dsi_clk_on;
+extern int mdss_dsi_clk_on;
 extern u32 dsi_irq;
-extern u32 esc_byte_ratio;
-
-extern void  __iomem *periph_base;
-extern char *mmss_cc_base;	/* mutimedia sub system clock control */
-extern char *mmss_sfpb_base;	/* mutimedia sub system sfpb */
 
 struct dsiphy_pll_divider_config {
 	u32 clk_rate;
@@ -141,41 +125,39 @@ struct dsiphy_pll_divider_config {
 	u32 ref_divider_ratio;
 	u32 bit_clk_divider;	/* oCLK1 */
 	u32 byte_clk_divider;	/* oCLK2 */
-	u32 dsi_clk_divider;	/* oCLK3 */
+	u32 analog_posDiv;
+	u32 digital_posDiv;
 };
 
 extern struct dsiphy_pll_divider_config pll_divider_config;
 
 struct dsi_clk_mnd_table {
-	uint8 lanes;
-	uint8 bpp;
-	uint8 dsiclk_div;
-	uint8 dsiclk_m;
-	uint8 dsiclk_n;
-	uint8 dsiclk_d;
-	uint8 pclk_m;
-	uint8 pclk_n;
-	uint8 pclk_d;
+	u8 lanes;
+	u8 bpp;
+	u8 pll_digital_posDiv;
+	u8 pclk_m;
+	u8 pclk_n;
+	u8 pclk_d;
 };
 
 static const struct dsi_clk_mnd_table mnd_table[] = {
-	{ 1, 2, 8, 1, 1, 0, 1,  2, 1},
-	{ 1, 3, 8, 1, 1, 0, 1,  3, 2},
-	{ 2, 2, 4, 1, 1, 0, 1,  2, 1},
-	{ 2, 3, 4, 1, 1, 0, 1,  3, 2},
-	{ 3, 2, 1, 3, 8, 4, 3, 16, 8},
-	{ 3, 3, 1, 3, 8, 4, 1,  8, 4},
-	{ 4, 2, 2, 1, 1, 0, 1,  2, 1},
-	{ 4, 3, 2, 1, 1, 0, 1,  3, 2},
+	{ 1, 2,  8, 1, 1, 0},
+	{ 1, 3, 12, 1, 1, 0},
+	{ 2, 2,  4, 1, 1, 0},
+	{ 2, 3,  6, 1, 1, 0},
+	{ 3, 2,  1, 3, 8, 4},
+	{ 3, 3,  4, 1, 1, 0},
+	{ 4, 2,  2, 1, 1, 0},
+	{ 4, 3,  3, 1, 1, 0},
 };
 
 struct dsi_clk_desc {
-	uint32 src;
-	uint32 m;
-	uint32 n;
-	uint32 d;
-	uint32 mnd_mode;
-	uint32 pre_div_func;
+	u32 src;
+	u32 m;
+	u32 n;
+	u32 d;
+	u32 mnd_mode;
+	u32 pre_div_func;
 };
 
 #define DSI_HOST_HDR_SIZE	4
@@ -188,13 +170,13 @@ struct dsi_clk_desc {
 #define DSI_HDR_DATA1(data)	((data) & 0x0ff)
 #define DSI_HDR_WC(wc)		((wc) & 0x0ffff)
 
-#define DSI_BUF_SIZE	64
-#define MIPI_DSI_MRPS	0x04	/* Maximum Return Packet Size */
+#define DSI_BUF_SIZE	1024
+#define MDSS_DSI_MRPS	0x04  /* Maximum Return Packet Size */
 
-#define MIPI_DSI_LEN 8 /* 4 x 4 - 6 - 2, bytes dcs header+crc-align  */
+#define MDSS_DSI_LEN 8 /* 4 x 4 - 6 - 2, bytes dcs header+crc-align  */
 
 struct dsi_buf {
-	uint32 *hdr;	/* dsi host header */
+	u32 *hdr;	/* dsi host header */
 	char *start;	/* buffer start addr */
 	char *end;	/* buffer end addr */
 	int size;	/* size of buffer */
@@ -250,104 +232,63 @@ struct dsi_cmd_desc {
 	char *payload;
 };
 
-typedef void (*kickoff_act)(void *);
-
 struct dsi_kickoff_action {
 	struct list_head act_entry;
-	kickoff_act	action;
+	void (*action) (void *);
 	void *data;
 };
 
-
-#define CMD_REQ_MAX	4
-
-typedef void (*fxn)(u32 data);
-
-#define CMD_REQ_RX	0x0001
-#define CMD_REQ_COMMIT 0x0002
-#define CMD_REQ_NO_MAX_PKT_SIZE 0x0008
-
-struct dcs_cmd_req {
-	struct dsi_cmd_desc *cmds;
-	int cmds_cnt;
-	u32 flags;
-	int rlen;	/* rx length */
-	fxn cb;
+struct mdss_panel_common_pdata {
+	struct mdss_panel_info panel_info;
+	int (*on) (struct mdss_panel_data *pdata);
+	int (*off) (struct mdss_panel_data *pdata);
 };
 
-struct dcs_cmd_list {
-	int put;
-	int get;
-	int tot;
-	struct dcs_cmd_req list[CMD_REQ_MAX];
-};
+int dsi_panel_device_register(struct platform_device *pdev,
+			      struct mdss_panel_common_pdata *panel_data);
 
+char *mdss_dsi_buf_reserve_hdr(struct dsi_buf *dp, int hlen);
+char *mdss_dsi_buf_init(struct dsi_buf *dp);
+void mdss_dsi_init(void);
+int mdss_dsi_buf_alloc(struct dsi_buf *, int size);
+int mdss_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm);
+int mdss_dsi_cmds_tx(struct mdss_panel_data *pdata,
+		struct dsi_buf *dp, struct dsi_cmd_desc *cmds, int cnt);
 
-char *mipi_dsi_buf_reserve_hdr(struct dsi_buf *dp, int hlen);
-char *mipi_dsi_buf_init(struct dsi_buf *dp);
-void mipi_dsi_init(void);
-void mipi_dsi_lane_cfg(void);
-void mipi_dsi_bist_ctrl(void);
-int mipi_dsi_buf_alloc(struct dsi_buf *, int size);
-int mipi_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm);
-int mipi_dsi_cmds_tx(struct dsi_buf *dp, struct dsi_cmd_desc *cmds, int cnt);
-
-int mipi_dsi_cmd_dma_tx(struct dsi_buf *dp);
-int mipi_dsi_cmd_reg_tx(uint32 data);
-int mipi_dsi_cmds_rx(struct msm_fb_data_type *mfd,
+int mdss_dsi_cmd_dma_tx(struct dsi_buf *dp,
+				struct mdss_panel_data *pdata);
+int mdss_dsi_cmd_reg_tx(u32 data,
+				struct mdss_panel_data *pdata);
+int mdss_dsi_cmds_rx(struct mdss_panel_data *pdata,
 			struct dsi_buf *tp, struct dsi_buf *rp,
 			struct dsi_cmd_desc *cmds, int len);
-int mipi_dsi_cmd_dma_rx(struct dsi_buf *tp, int rlen);
-void mipi_dsi_host_init(struct mipi_panel_info *pinfo);
-void mipi_dsi_op_mode_config(int mode);
-void mipi_dsi_cmd_mode_ctrl(int enable);
+int mdss_dsi_cmd_dma_rx(struct dsi_buf *tp, int rlen,
+				struct mdss_panel_data *pdata);
+void mdss_dsi_host_init(struct mipi_panel_info *pinfo,
+				struct mdss_panel_data *pdata);
+void mdss_dsi_op_mode_config(int mode,
+				struct mdss_panel_data *pdata);
+void mdss_dsi_cmd_mode_ctrl(int enable);
 void mdp4_dsi_cmd_trigger(void);
-void mipi_dsi_cmd_mdp_start(void);
-int mipi_dsi_ctrl_lock(int mdp);
-int mipi_dsi_ctrl_lock_query(void);
-void mipi_dsi_cmd_bta_sw_trigger(void);
-void mipi_dsi_ack_err_status(void);
-void mipi_dsi_set_tear_on(struct msm_fb_data_type *mfd);
-void mipi_dsi_set_tear_off(struct msm_fb_data_type *mfd);
-void mipi_dsi_set_backlight(struct msm_fb_data_type *mfd, int level);
-void mipi_dsi_cmd_backlight_tx(struct dsi_buf *dp);
-void mipi_dsi_clk_enable(void);
-void mipi_dsi_clk_disable(void);
-void mipi_dsi_pre_kickoff_action(void);
-void mipi_dsi_post_kickoff_action(void);
-void mipi_dsi_pre_kickoff_add(struct dsi_kickoff_action *act);
-void mipi_dsi_post_kickoff_add(struct dsi_kickoff_action *act);
-void mipi_dsi_pre_kickoff_del(struct dsi_kickoff_action *act);
-void mipi_dsi_post_kickoff_del(struct dsi_kickoff_action *act);
-void mipi_dsi_controller_cfg(int enable);
-void mipi_dsi_sw_reset(void);
-void mipi_dsi_mdp_busy_wait(struct msm_fb_data_type *mfd);
+void mdss_dsi_cmd_mdp_start(void);
+void mdss_dsi_cmd_bta_sw_trigger(struct mdss_panel_data *pdata);
+void mdss_dsi_ack_err_status(unsigned char *dsi_base);
+void mdss_dsi_clk_enable(void);
+void mdss_dsi_clk_disable(void);
+void mdss_dsi_controller_cfg(int enable,
+				struct mdss_panel_data *pdata);
+void mdss_dsi_sw_reset(struct mdss_panel_data *pdata);
 
-irqreturn_t mipi_dsi_isr(int irq, void *ptr);
+irqreturn_t mdss_dsi_isr(int irq, void *ptr);
 
-void mipi_set_tx_power_mode(int mode);
-void mipi_dsi_phy_ctrl(int on);
-void mipi_dsi_phy_init(int panel_ndx, struct msm_panel_info const *panel_info,
-	int target_type);
-int mipi_dsi_clk_div_config(uint8 bpp, uint8 lanes,
-			    uint32 *expected_dsi_pclk);
-int mipi_dsi_clk_init(struct platform_device *pdev);
-void mipi_dsi_clk_deinit(struct device *dev);
-void mipi_dsi_prepare_clocks(void);
-void mipi_dsi_unprepare_clocks(void);
-void mipi_dsi_ahb_ctrl(u32 enable);
+void mipi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata);
+int mdss_dsi_clk_div_config(u8 bpp, u8 lanes,
+			    u32 *expected_dsi_pclk);
+int mdss_dsi_clk_init(struct platform_device *pdev);
+void mdss_dsi_clk_deinit(struct device *dev);
+void mdss_dsi_prepare_clocks(void);
+void mdss_dsi_unprepare_clocks(void);
 void cont_splash_clk_ctrl(int enable);
-void mipi_dsi_turn_on_clks(void);
-void mipi_dsi_turn_off_clks(void);
-void mipi_dsi_clk_cfg(int on);
+unsigned char *mdss_dsi_get_base_adr(void);
 
-int mipi_dsi_cmdlist_put(struct dcs_cmd_req *cmdreq);
-struct dcs_cmd_req *mipi_dsi_cmdlist_get(void);
-void mipi_dsi_cmdlist_commit(int from_mdp);
-void mipi_dsi_cmd_mdp_busy(void);
-
-#ifdef CONFIG_FB_MSM_MDP303
-void update_lane_config(struct msm_panel_info *pinfo);
-#endif
-
-#endif /* MIPI_DSI_H */
+#endif /* MDSS_DSI_H */

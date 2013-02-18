@@ -314,8 +314,6 @@ void mdp4_hw_init(void)
 	clk_rate = mdp_get_core_clk();
 	mdp4_fetch_cfg(clk_rate);
 
-	mdp4_overlay_cfg_init();
-
 	/* Mark hardware as initialized. Only revisions > v2.1 have a register
 	 * for tracking core reset status. */
 	if (mdp_hw_revision > MDP4_REVISION_V2_1)
@@ -361,6 +359,7 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 	uint32 isr, mask, panel;
 	struct mdp_dma_data *dma;
 	struct mdp_hist_mgmt *mgmt = NULL;
+	char *base_addr;
 	int i, ret;
 
 	mdp_is_in_isr = TRUE;
@@ -388,7 +387,12 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 			mgmt = mdp_hist_mgmt_array[i];
 			if (!mgmt)
 				continue;
+			base_addr = MDP_BASE + mgmt->base;
+			MDP_OUTP(base_addr + 0x010, 1);
+			outpdw(base_addr + 0x01c, INTR_HIST_DONE |
+						INTR_HIST_RESET_SEQ_DONE);
 			mgmt->mdp_is_hist_valid = FALSE;
+			__mdp_histogram_reset(mgmt);
 		}
 	}
 
@@ -3232,71 +3236,92 @@ static uint32_t mdp4_pp_block2qseed(uint32_t block)
 	return valid;
 }
 
-static int mdp4_qseed_write_cfg(struct mdp_qseed_cfg_data *cfg)
+int mdp4_qseed_access_cfg(struct mdp_qseed_cfg *config, uint32_t base)
 {
 	int i, ret = 0;
-	uint32_t base = (uint32_t) (MDP_BASE + mdp_block2base(cfg->block));
 	uint32_t *values;
 
-	if ((cfg->table_num != 1) && (cfg->table_num != 2)) {
+	if ((config->table_num != 1) && (config->table_num != 2)) {
 		ret = -ENOTTY;
 		goto error;
 	}
 
-	if (((cfg->table_num == 1) && (cfg->len != QSEED_TABLE_1_COUNT)) ||
-		((cfg->table_num == 2) && (cfg->len != QSEED_TABLE_2_COUNT))) {
+	if (((config->table_num == 1) && (config->len != QSEED_TABLE_1_COUNT))
+			|| ((config->table_num == 2) &&
+				(config->len != QSEED_TABLE_2_COUNT))) {
 		ret = -EINVAL;
 		goto error;
 	}
 
-	values = kmalloc(cfg->len * sizeof(uint32_t), GFP_KERNEL);
+	values = kmalloc(config->len * sizeof(uint32_t), GFP_KERNEL);
 	if (!values) {
 		ret = -ENOMEM;
 		goto error;
 	}
 
-	ret = copy_from_user(values, cfg->data, sizeof(uint32_t) * cfg->len);
+	base += (config->table_num == 1) ? MDP4_QSEED_TABLE1_OFF :
+							MDP4_QSEED_TABLE2_OFF;
 
-	base += (cfg->table_num == 1) ? MDP4_QSEED_TABLE1_OFF :
-						MDP4_QSEED_TABLE2_OFF;
-	for (i = 0; i < cfg->len; i++) {
-		MDP_OUTP(base , values[i]);
-		base += sizeof(uint32_t);
+	if (config->ops & MDP_PP_OPS_WRITE) {
+		ret = copy_from_user(values, config->data,
+						sizeof(uint32_t) * config->len);
+		if (ret) {
+			pr_warn("%s: Error copying from user, %d", __func__,
+									ret);
+			ret = -EINVAL;
+			goto err_mem;
+		}
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		for (i = 0; i < config->len; i++) {
+			if (!(base & 0x3FF))
+				wmb();
+			MDP_OUTP(base , values[i]);
+			base += sizeof(uint32_t);
+		}
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	} else if (config->ops & MDP_PP_OPS_READ) {
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		for (i = 0; i < config->len; i++) {
+			values[i] = inpdw(base);
+			if (!(base & 0x3FF))
+				rmb();
+			base += sizeof(uint32_t);
+		}
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+		ret = copy_to_user(config->data, values,
+						sizeof(uint32_t) * config->len);
+		if (ret) {
+			pr_warn("%s: Error copying to user, %d", __func__, ret);
+			ret = -EINVAL;
+			goto err_mem;
+		}
 	}
 
+err_mem:
 	kfree(values);
 error:
 	return ret;
 }
 
-int mdp4_qseed_cfg(struct mdp_qseed_cfg_data *cfg)
+int mdp4_qseed_cfg(struct mdp_qseed_cfg_data *config)
 {
 	int ret = 0;
+	struct mdp_qseed_cfg *cfg = &config->qseed_data;
+	uint32_t base;
 
-	if (!mdp4_pp_block2qseed(cfg->block)) {
+	if (!mdp4_pp_block2qseed(config->block)) {
 		ret = -ENOTTY;
 		goto error;
 	}
 
-	if (cfg->table_num != 1) {
-		ret = -ENOTTY;
-		pr_info("%s: Only QSEED table1 supported.\n", __func__);
+	if ((cfg->ops & MDP_PP_OPS_READ) && (cfg->ops & MDP_PP_OPS_WRITE)) {
+		ret = -EPERM;
+		pr_warn("%s: Cannot read and write on the same request\n",
+								__func__);
 		goto error;
 	}
-
-	switch ((cfg->ops & 0x6) >> 1) {
-	case 0x1:
-		pr_info("%s: QSEED read not supported\n", __func__);
-		ret = -ENOTTY;
-		break;
-	case 0x2:
-		ret = mdp4_qseed_write_cfg(cfg);
-		if (ret)
-			goto error;
-		break;
-	default:
-		break;
-	}
+	base = (uint32_t) (MDP_BASE + mdp_block2base(config->block));
+	ret = mdp4_qseed_access_cfg(cfg, base);
 
 error:
 	return ret;
