@@ -17,6 +17,7 @@
 #include "adreno_drawctxt.h"
 #include "adreno_ringbuffer.h"
 #include "kgsl_iommu.h"
+#include <mach/ocmem.h>
 
 #define DEVICE_3D_NAME "kgsl-3d"
 #define DEVICE_3D0_NAME "kgsl-3d0"
@@ -24,10 +25,15 @@
 #define ADRENO_DEVICE(device) \
 		KGSL_CONTAINER_OF(device, struct adreno_device, dev)
 
+#define ADRENO_CHIPID_CORE(_id) (((_id) >> 24) & 0xFF)
+#define ADRENO_CHIPID_MAJOR(_id) (((_id) >> 16) & 0xFF)
+#define ADRENO_CHIPID_MINOR(_id) (((_id) >> 8) & 0xFF)
+#define ADRENO_CHIPID_PATCH(_id) ((_id) & 0xFF)
+
 /* Flags to control command packet settings */
 #define KGSL_CMD_FLAGS_NONE             0x00000000
 #define KGSL_CMD_FLAGS_PMODE		0x00000001
-#define KGSL_CMD_FLAGS_NO_TS_CMP	0x00000002
+#define KGSL_CMD_FLAGS_DUMMY_INTR_CMD	0x00000002
 
 /* Command identifiers */
 #define KGSL_CONTEXT_TO_MEM_IDENTIFIER	0x2EADBEEF
@@ -42,6 +48,8 @@
 #else
 #define ADRENO_DEFAULT_PWRSCALE_POLICY  NULL
 #endif
+
+void adreno_debugfs_init(struct kgsl_device *device);
 
 #define ADRENO_ISTORE_START 0x5000 /* Istore offset */
 
@@ -62,6 +70,7 @@ enum adreno_gpurev {
 	ADRENO_REV_A225 = 225,
 	ADRENO_REV_A305 = 305,
 	ADRENO_REV_A320 = 320,
+	ADRENO_REV_A330 = 330,
 };
 
 struct adreno_gpudev;
@@ -76,9 +85,11 @@ struct adreno_device {
 	const char *pfp_fwfile;
 	unsigned int *pfp_fw;
 	size_t pfp_fw_size;
+	unsigned int pfp_fw_version;
 	const char *pm4_fwfile;
 	unsigned int *pm4_fw;
 	size_t pm4_fw_size;
+	unsigned int pm4_fw_version;
 	struct adreno_ringbuffer ringbuffer;
 	unsigned int mharb;
 	struct adreno_gpudev *gpudev;
@@ -88,6 +99,8 @@ struct adreno_device {
 	unsigned int instruction_size;
 	unsigned int ib_check_level;
 	unsigned int fast_hang_detect;
+	unsigned int gpulist_index;
+	struct ocmem_buf *ocmem_hdl;
 };
 
 struct adreno_gpudev {
@@ -163,6 +176,8 @@ void adreno_regread(struct kgsl_device *device, unsigned int offsetwords,
 				unsigned int *value);
 void adreno_regwrite(struct kgsl_device *device, unsigned int offsetwords,
 				unsigned int value);
+
+int adreno_dump(struct kgsl_device *device, int manual);
 
 struct kgsl_memdesc *adreno_find_region(struct kgsl_device *device,
 						unsigned int pt_base,
@@ -290,7 +305,6 @@ static inline int adreno_add_change_mh_phys_limit_cmds(unsigned int *cmds,
 {
 	unsigned int *start = cmds;
 
-	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
 	*cmds++ = cp_type0_packet(MH_MMU_MPU_END, 1);
 	*cmds++ = new_phys_limit;
 	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
@@ -303,7 +317,6 @@ static inline int adreno_add_bank_change_cmds(unsigned int *cmds,
 {
 	unsigned int *start = cmds;
 
-	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
 	*cmds++ = cp_type0_packet(REG_CP_STATE_DEBUG_INDEX, 1);
 	*cmds++ = (cur_ctx_bank ? 0 : 0x20);
 	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
@@ -332,6 +345,28 @@ static inline int adreno_add_read_cmds(struct kgsl_device *device,
 	*cmds++ = 0xFFFFFFFF;
 	*cmds++ = 0xFFFFFFFF;
 	cmds += __adreno_add_idle_indirect_cmds(cmds, nop_gpuaddr);
+	return cmds - start;
+}
+
+/*
+ * adreno_idle_cmds - Add pm4 packets for GPU idle
+ * @adreno_dev - Pointer to device structure
+ * @cmds - Pointer to memory where idle commands need to be added
+ */
+static inline int adreno_add_idle_cmds(struct adreno_device *adreno_dev,
+							unsigned int *cmds)
+{
+	unsigned int *start = cmds;
+
+	*cmds++ = cp_type3_packet(CP_WAIT_FOR_IDLE, 1);
+	*cmds++ = 0x00000000;
+
+	if ((adreno_dev->gpurev == ADRENO_REV_A305) ||
+		(adreno_dev->gpurev == ADRENO_REV_A320)) {
+		*cmds++ = cp_type3_packet(CP_WAIT_FOR_ME, 1);
+		*cmds++ = 0x00000000;
+	}
+
 	return cmds - start;
 }
 

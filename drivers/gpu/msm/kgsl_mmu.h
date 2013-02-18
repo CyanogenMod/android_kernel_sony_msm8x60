@@ -141,6 +141,12 @@ struct kgsl_mmu_ops {
 				enum kgsl_iommu_context_id ctx_id);
 	int (*mmu_get_reg_map_desc)(struct kgsl_mmu *mmu,
 				void **reg_map_desc);
+	unsigned int (*mmu_sync_lock)
+			(struct kgsl_mmu *mmu,
+			unsigned int *cmds);
+	unsigned int (*mmu_sync_unlock)
+			(struct kgsl_mmu *mmu,
+			unsigned int *cmds);
 };
 
 struct kgsl_mmu_pt_ops {
@@ -158,6 +164,8 @@ struct kgsl_mmu_pt_ops {
 	unsigned int (*mmu_pt_get_base_addr)
 			(struct kgsl_pagetable *pt);
 };
+
+#define KGSL_MMU_FLAGS_IOMMU_SYNC BIT(31)
 
 struct kgsl_mmu {
 	unsigned int     refcnt;
@@ -205,6 +213,7 @@ int kgsl_mmu_enabled(void);
 void kgsl_mmu_set_mmutype(char *mmutype);
 enum kgsl_mmutype kgsl_mmu_get_mmutype(void);
 unsigned int kgsl_mmu_get_ptsize(void);
+int kgsl_mmu_gpuaddr_in_range(unsigned int gpuaddr);
 
 /*
  * Static inline functions of MMU that simply call the SMMU specific
@@ -303,10 +312,24 @@ static inline unsigned int kgsl_mmu_get_int_mask(void)
 			MH_INTERRUPT_MASK__AXI_WRITE_ERROR);
 }
 
-static inline int kgsl_mmu_gpuaddr_in_range(unsigned int gpuaddr)
+static inline int kgsl_mmu_sync_lock(struct kgsl_mmu *mmu,
+				unsigned int *cmds)
 {
-	return ((gpuaddr >= KGSL_PAGETABLE_BASE) &&
-		(gpuaddr < (KGSL_PAGETABLE_BASE + kgsl_mmu_get_ptsize())));
+	if ((mmu->flags & KGSL_MMU_FLAGS_IOMMU_SYNC) &&
+		mmu->mmu_ops && mmu->mmu_ops->mmu_sync_lock)
+		return mmu->mmu_ops->mmu_sync_lock(mmu, cmds);
+	else
+		return 0;
+}
+
+static inline int kgsl_mmu_sync_unlock(struct kgsl_mmu *mmu,
+				unsigned int *cmds)
+{
+	if ((mmu->flags & KGSL_MMU_FLAGS_IOMMU_SYNC) &&
+		mmu->mmu_ops && mmu->mmu_ops->mmu_sync_unlock)
+		return mmu->mmu_ops->mmu_sync_unlock(mmu, cmds);
+	else
+		return 0;
 }
 
 #endif /* __KGSL_MMU_H */
