@@ -874,6 +874,10 @@ static struct wcd9xxx_pdata tabla_platform_data = {
 		.bias2_cfilt_sel = TABLA_CFILT2_SEL,
 		.bias3_cfilt_sel = TABLA_CFILT3_SEL,
 		.bias4_cfilt_sel = TABLA_CFILT3_SEL,
+		.bias1_ext_cap = 0,
+		.bias2_ext_cap = 1,
+		.bias3_ext_cap = 0,
+		.bias4_ext_cap = 0,
 	},
 	.regulator = {
 	{
@@ -941,6 +945,10 @@ static struct wcd9xxx_pdata tabla20_platform_data = {
 		.bias2_cfilt_sel = TABLA_CFILT2_SEL,
 		.bias3_cfilt_sel = TABLA_CFILT3_SEL,
 		.bias4_cfilt_sel = TABLA_CFILT3_SEL,
+		.bias1_ext_cap = 0,
+		.bias2_ext_cap = 1,
+		.bias3_ext_cap = 0,
+		.bias4_ext_cap = 0,
 	},
 	.regulator = {
 	{

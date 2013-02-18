@@ -459,11 +459,16 @@ static void __subsystem_restart(struct subsys_data *subsys)
 int subsystem_restart(const char *subsys_name)
 {
 	struct subsys_data *subsys;
+	int last_restart_level = restart_level;
 
 	if (!subsys_name) {
 		pr_err("Invalid subsystem name.\n");
 		return -EINVAL;
 	}
+
+	/* for riva we want to restart wifi */
+	if (!strncmp("riva", subsys_name, SUBSYS_NAME_MAX_LENGTH))
+		restart_level = RESET_SUBSYS_INDEPENDENT;
 
 	pr_info("Restart sequence requested for %s, restart_level = %d.\n",
 		subsys_name, restart_level);
@@ -496,6 +501,8 @@ int subsystem_restart(const char *subsys_name)
 
 	}
 
+	/* restore restart_level in case it was changed for riva */
+	restart_level = last_restart_level;
 	return 0;
 }
 EXPORT_SYMBOL(subsystem_restart);

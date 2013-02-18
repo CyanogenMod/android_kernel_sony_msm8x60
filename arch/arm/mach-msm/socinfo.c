@@ -875,6 +875,7 @@ const int read_msm_cpu_type(void)
 	case 0x510F04D1:
 	case 0x510F04D2:
 	case 0x511F04D0:
+	case 0x511F04D3:
 	case 0x512F04D0:
 		return MSM_CPU_8960;
 
