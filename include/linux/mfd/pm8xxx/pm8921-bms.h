@@ -1,4 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +15,7 @@
 #define __PM8XXX_BMS_H
 
 #include <linux/errno.h>
+#include <linux/types.h>
 
 #define PM8921_BMS_DEV_NAME	"pm8921-bms"
 
@@ -27,6 +29,9 @@
 #define PC_TEMP_COLS		8
 
 #define MAX_SINGLE_LUT_COLS	20
+
+#define MAX_DOUBLE_LUT_ROWS	20
+#define MAX_DOUBLE_LUT_COLS	20
 
 struct single_row_lut {
 	int x[MAX_SINGLE_LUT_COLS];
@@ -72,6 +77,22 @@ struct pc_temp_ocv_lut {
 };
 
 /**
+ * struct double_row_lut -
+ * @rows:	number of rows should be <= MAX_DOUBLE_LUT_ROWS
+ * @cols:	number of columns should be <= MAX_DOUBLE_LUT_COLS
+ * @in_1:	The 1st input parameter for lut and must be in increasing order
+ * @in_2:	The 2nd input parameter for lut and must be in decreasing order
+ * @out:	The output parameter for lut
+ */
+struct double_row_lut {
+	int rows;
+	int cols;
+	int in_1[MAX_DOUBLE_LUT_COLS];
+	int in_2[MAX_DOUBLE_LUT_ROWS][MAX_DOUBLE_LUT_COLS];
+	int out[MAX_DOUBLE_LUT_ROWS];
+};
+
+/**
  * struct pm8921_bms_battery_data -
  * @fcc:		full charge capacity (mAmpHour)
  * @fcc_temp_lut:	table to get fcc at a given temp
@@ -80,6 +101,7 @@ struct pc_temp_ocv_lut {
  *			and percent charge
  * @rbatt_sf_lut:	table to get battery resistance scaling factor given
  *			temperature and percent charge
+ * @rbatt_temp_soc_lut:	table to get rbatt given batt temp and soc
  * @default_rbatt_mohm:	the default value of battery resistance to use when
  *			readings from bms are not available.
  * @delta_rbatt_mohm:	the resistance to be added towards lower soc to
@@ -92,6 +114,7 @@ struct pm8921_bms_battery_data {
 	struct pc_temp_ocv_lut	*pc_temp_ocv_lut;
 	struct sf_lut		*pc_sf_lut;
 	struct sf_lut		*rbatt_sf_lut;
+	struct double_row_lut	*rbatt_temp_soc_lut;
 	int			default_rbatt_mohm;
 	int			delta_rbatt_mohm;
 };
@@ -120,20 +143,24 @@ enum battery_type {
  *			is considered empty(mV)
  * @enable_fcc_learning:	if set the driver will learn full charge
  *				capacity of the battery upon end of charge
+ * @enable_adjust_soc:		allows to adjust SoC
  */
 struct pm8921_bms_platform_data {
 	struct pm8xxx_bms_core_data	bms_cdata;
+	struct pm8921_bms_battery_data	*battery_data;
 	enum battery_type		battery_type;
 	unsigned int			r_sense;
 	unsigned int			i_test;
 	unsigned int			v_cutoff;
 	unsigned int			max_voltage_uv;
+	unsigned int			default_rbatt_mohms;
 	unsigned int			rconn_mohm;
 	int				enable_fcc_learning;
 	int				shutdown_soc_valid_limit;
 	int				ignore_shutdown_soc;
 	int				adjust_soc_low_threshold;
-	int				chg_term_ua;
+	int				chg_term_ua;	
+	int				enable_adjust_soc;
 };
 
 #if defined(CONFIG_PM8921_BMS) || defined(CONFIG_PM8921_BMS_MODULE)
@@ -173,6 +200,12 @@ int pm8921_bms_get_battery_current(int *result);
 int pm8921_bms_get_percent_charge(void);
 
 /**
+ * pm8921_bms_get_init_fcc - returns initial fcc in mAh of the battery
+ *
+ */
+int pm8921_bms_get_init_fcc(void);
+
+/**
  * pm8921_bms_get_fcc - returns fcc in mAh of the battery depending on its age
  *			and temperature
  *
@@ -205,13 +238,6 @@ int pm8921_bms_get_simultaneous_battery_voltage_and_current(int *ibat_ua,
  * pm8921_bms_get_rbatt - function to get the battery resistance in mOhm.
  */
 int pm8921_bms_get_rbatt(void);
-/**
- * pm8921_bms_invalidate_shutdown_soc - function to notify the bms driver that
- *					the battery was replaced between reboot
- *					and so it should not use the shutdown
- *					soc stored in a coincell backed register
- */
-void pm8921_bms_invalidate_shutdown_soc(void);
 #else
 static inline int pm8921_bms_get_vsense_avg(int *result)
 {
@@ -222,6 +248,10 @@ static inline int pm8921_bms_get_battery_current(int *result)
 	return -ENXIO;
 }
 static inline int pm8921_bms_get_percent_charge(void)
+{
+	return -ENXIO;
+}
+static inline int pm8921_bms_get_init_fcc(void)
 {
 	return -ENXIO;
 }
@@ -246,9 +276,6 @@ static inline int pm8921_bms_get_simultaneous_battery_voltage_and_current(
 static inline int pm8921_bms_get_rbatt(void)
 {
 	return -EINVAL;
-}
-static inline void pm8921_bms_invalidate_shutdown_soc(void)
-{
 }
 #endif
 

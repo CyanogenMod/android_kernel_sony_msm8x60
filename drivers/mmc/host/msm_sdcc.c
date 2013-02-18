@@ -3127,7 +3127,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		 * For DDR50 mode, controller needs clock rate to be
 		 * double than what is required on the SD card CLK pin.
 		 */
-		if (ios->timing == MMC_TIMING_UHS_DDR50) {
+		if (ios->ddr || (ios->timing == MMC_TIMING_UHS_DDR50)) {
 			/*
 			 * Make sure that we don't double the clock if
 			 * doubled clock rate is already set
@@ -3188,7 +3188,7 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		/* Card clock frequency must be > 100MHz to enable tuning */
 		clk |= (4 << 14);
 		host->tuning_needed = 1;
-	} else if (ios->timing == MMC_TIMING_UHS_DDR50) {
+	} else if (ios->ddr || ios->timing == MMC_TIMING_UHS_DDR50) {
 		clk |= (3 << 14);
 	} else {
 		clk |= (2 << 14); /* feedback clock */
@@ -5412,8 +5412,6 @@ msmsdcc_probe(struct platform_device *pdev)
 	if (plat->nonremovable)
 		mmc->caps |= MMC_CAP_NONREMOVABLE;
 	mmc->caps |= MMC_CAP_SDIO_IRQ;
-
-	mmc->caps2 |= MMC_CAP2_INIT_BKOPS | MMC_CAP2_BKOPS;
 
 	if (plat->is_sdio_al_client)
 		mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;
