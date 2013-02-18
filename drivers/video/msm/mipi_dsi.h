@@ -1,4 +1,6 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/*
+ * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -289,6 +291,7 @@ void mipi_dsi_init(void);
 void mipi_dsi_lane_cfg(void);
 void mipi_dsi_bist_ctrl(void);
 int mipi_dsi_buf_alloc(struct dsi_buf *, int size);
+void mipi_dsi_buf_release(struct dsi_buf *dp);
 int mipi_dsi_cmd_dma_add(struct dsi_buf *dp, struct dsi_cmd_desc *cm);
 int mipi_dsi_cmds_tx(struct dsi_buf *dp, struct dsi_cmd_desc *cmds, int cnt);
 
@@ -321,7 +324,7 @@ void mipi_dsi_pre_kickoff_del(struct dsi_kickoff_action *act);
 void mipi_dsi_post_kickoff_del(struct dsi_kickoff_action *act);
 void mipi_dsi_controller_cfg(int enable);
 void mipi_dsi_sw_reset(void);
-void mipi_dsi_mdp_busy_wait(struct msm_fb_data_type *mfd);
+void mipi_dsi_mdp_busy_wait(void);
 
 irqreturn_t mipi_dsi_isr(int irq, void *ptr);
 
