@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+*  Copyright (C) 2012 Sony Mobile Communications AB.
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License version 2 and
@@ -13,6 +14,7 @@
 #include <linux/hrtimer.h>
 #include <linux/time.h>
 #include <linux/list.h>
+#include <linux/slab.h>
 #include <media/videobuf2-core.h>
 #include "enc-subdev.h"
 #include "vsg-subdev.h"

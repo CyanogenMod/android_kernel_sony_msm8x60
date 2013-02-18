@@ -176,6 +176,7 @@ config ARCH_MSM8960
 	select MSM_RUN_QUEUE_STATS
 	select ARM_HAS_SG_CHAIN
 	select MSM_KRAIT_WFE_FIXUP
+	select MSM_CPU_PWRCTL
 
 config ARCH_MSM8930
 	bool "MSM8930"
@@ -208,6 +209,7 @@ config ARCH_MSM8930
 	select HOLES_IN_ZONE if SPARSEMEM
 	select ARM_HAS_SG_CHAIN
 	select MSM_KRAIT_WFE_FIXUP
+	select MSM_CPU_PWRCTL
 
 config ARCH_APQ8064
 	bool "APQ8064"
@@ -235,6 +237,7 @@ config ARCH_APQ8064
 	select ARCH_SUPPORTS_MSI
 	select ARM_HAS_SG_CHAIN
 	select MSM_KRAIT_WFE_FIXUP
+	select MSM_CPU_PWRCTL
 
 config ARCH_MSM8974
 	bool "MSM8974"
@@ -879,6 +882,20 @@ config MACH_FSM9XXX_SURF
 	  Support for the Qualcomm FSM9xxx femtocell
 	  chipset based SURF evaluation board and
 	  FFA board.
+
+config MACH_BLUE_TSUBASA
+        depends on ARCH_MSM8960
+        default n
+        bool "SONY Tsubasa RoW"
+        help
+          Support for the Sony Tsubasa RoW
+
+config MACH_BLUE_MINT
+	depends on ARCH_MSM8960
+	default n
+	bool "SONY Mint"
+	help
+	  Support for the Sony Mint
 
 endmenu
 
@@ -2166,6 +2183,18 @@ config MSM_GSBI9_UART
 	help
 	  This enables GSBI9 configured into UART.
 
+config MSM_GSBI10_UART
+	bool "Enable GSBI10 UART device"
+	default n
+	help
+	  This enables GSBI10 configured into UART.
+
+config MSM_GSBI12_UART
+	bool "Enable GSBI12 UART device"
+	default n
+	help
+	  This enables GSBI12 configured into UART.
+
 config MSM_SHARED_GPIO_FOR_UART2DM
 	bool "Use shared GPIOs into UART mode"
 	depends on (ARCH_MSM7X27A && !MMC_MSM_SDC3_8_BIT_SUPPORT && !MMC_MSM_SDC4_SUPPORT)
@@ -2307,6 +2336,13 @@ config MSM_OCMEM
 	  Enable support for On-Chip Memory available on certain MSM chipsets.
 	  OCMEM is a low latency, high performance pool shared by subsystems.
 
+config PM8921_MIC_BIAS
+        bool "pm8921 mic bias driver"
+        default n
+        help
+          Provides support for activate pm8921 mic bias driver used for
+          primary and secondary mic.
+
 config MSM_RTB
 	bool "Register tracing"
 	help
@@ -2333,6 +2369,22 @@ config MSM_EBI_ERP
 	  seemingly broken memory accesses.
 
 	  For production builds, you should probably say 'N' here.
+
+config SIMPLE_REMOTE_PLATFORM
+        bool "Simple Remote platform specific driver"
+        default n
+        help
+          Provides support for detecting 3.5mm audio jack, such as wired
+          headset. This is the platform specific layer.
+
+config SIMPLE_REMOTE_INVERT_PLUG_DETECTION_STATE
+	bool "Invert state of plug detection"
+	depends on SIMPLE_REMOTE_PLATFORM
+	help
+	  This option enables to invert headphone plug detection state,
+	  currently the plug detection state was low state when headphone
+	  was inserted, but it is high state on some products, so that
+	  we need invert this state on these products.
 
 config MSM_CACHE_ERP
 	bool "Cache / CPU error reporting"
@@ -2470,5 +2522,49 @@ config MSM_HSIC_SYSMON_TEST
 	  This will create a debugfs file entry named "hsic_sysmon_test" which
 	  can be read and written to send character data to the sysmon port of
 	  the modem over USB.
+
+config MMC_MSM_POWER_SUPPLY_SDC3_VIA_MPP04
+	bool "PMIC MPP04"
+	default n
+	help
+	  The power supply for uSD is controlled via MPP04(GPIO)
+
+config SONY_SSM
+        bool "Support Super Stamina Mode"
+        default n
+        help
+          This enables support for power mode notifications, required by Super
+          Stamina Mode.
+
+config RIVA_RAMDUMP_START
+	hex "RIVA ramdump start address"
+	default "0x8f000000"
+	help
+		start address of region to dump for riva
+
+config RIVA_RAMDUMP_END
+	hex "RIVA ramdump end address"
+	default "0x8f700000"
+	help
+		end address of region to dump for riva
+
+config LPASS_RAMDUMP_START
+	hex "LPASS ramdump start address"
+	default "0x8da00000"
+	help
+		start address of region to dump for lpass
+
+config LPASS_RAMDUMP_END
+	hex "LPASS ramdump end address"
+	default "0x8f200000"
+	help
+		end address of region to dump for lpass
+
+config MSM_CPU_PWRCTL
+	bool "Ensures that krait droop detectors are always off"
+	help
+	  Droop detector mechanism can adversely affect krait plls during
+	  stand alone power collapse operation. Selecting this option
+	  ensures that they are always off.
 
 endif
