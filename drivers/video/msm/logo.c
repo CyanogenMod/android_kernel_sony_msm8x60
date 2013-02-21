@@ -111,12 +111,21 @@ int load_565rle_image(char *filename, bool bf_supported)
 				(line_pos + n > width ? width-line_pos : n);
 
 			if (fb_depth(info) == 2)
-				memset16(bits, ptr[1], j << 1);
+				memset16(bits, swab16(ptr[1]), j << 1);
 			else {
 				unsigned int widepixel = ptr[1];
-				widepixel = (widepixel & 0xf800) << (19-11) |
-						(widepixel & 0x07e0) << (10-5) |
-						(widepixel & 0x001f) << (3-0);
+				/*
+				 * Format is RGBA, but fb is big
+				 * endian so we should make widepixel
+				 * as ABGR.
+				 */
+				widepixel =
+					/* red :   f800 -> 000000f8 */
+					(widepixel & 0xf800) >> 8 |
+					/* green : 07e0 -> 0000fc00 */
+					(widepixel & 0x07e0) << 5 |
+					/* blue :  001f -> 00f80000 */
+					(widepixel & 0x001f) << 19;
 				memset32(bits, widepixel, j << 2);
 			}
 			bits += j * fb_depth(info);
