@@ -1079,7 +1079,9 @@ static void __init adjust_mem_for_liquid(void)
 {
 	unsigned int i;
 
+#ifdef CONFIG_ANDROID_PMEM
 	if (!pmem_param_set) {
+#endif
 		if (machine_is_msm8960_liquid())
 			msm_ion_sf_size = MSM_LIQUID_ION_SF_SIZE;
 
@@ -1099,7 +1101,9 @@ static void __init adjust_mem_for_liquid(void)
 				}
 			}
 		}
+#ifdef CONFIG_ANDROID_PMEM
 	}
+#endif
 }
 
 static void __init reserve_mem_for_ion(enum ion_memory_types mem_type,
