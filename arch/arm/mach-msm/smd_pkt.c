@@ -88,7 +88,7 @@ static void check_and_wakeup_reader(struct smd_pkt_dev *smd_pkt_devp);
 static void check_and_wakeup_writer(struct smd_pkt_dev *smd_pkt_devp);
 static uint32_t is_modem_smsm_inited(void);
 
-static int msm_smd_pkt_debug_mask;
+static int msm_smd_pkt_debug_mask = 0x27;
 module_param_named(debug_mask, msm_smd_pkt_debug_mask,
 		int, S_IRUGO | S_IWUSR | S_IWGRP);
 
@@ -730,6 +730,7 @@ static int smd_pkt_dummy_probe(struct platform_device *pdev)
 {
 	int i;
 
+	printk("smd_pkt_dummy_probe: entered\n");
 	for (i = 0; i < NUM_SMD_PKT_PORTS; i++) {
 		if (smd_ch_edge[i] == pdev->id
 		    && !strncmp(pdev->name, smd_ch_name[i],
@@ -741,6 +742,7 @@ static int smd_pkt_dummy_probe(struct platform_device *pdev)
 			break;
 		}
 	}
+	printk("smd_pkt_dummy_probe: exited\n");
 	return 0;
 }
 
@@ -766,6 +768,8 @@ int smd_pkt_open(struct inode *inode, struct file *file)
 		return -EINVAL;
 	}
 	D_STATUS("Begin %s on smd_pkt_dev id:%d\n", __func__, smd_pkt_devp->i);
+
+	D_STATUS("%s: driver name=%s\n",__func__,smd_ch_name[smd_pkt_devp->i]);
 
 	file->private_data = smd_pkt_devp;
 

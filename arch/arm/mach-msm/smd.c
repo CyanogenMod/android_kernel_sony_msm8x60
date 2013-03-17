@@ -186,7 +186,7 @@ enum {
 	SMSM_APPS_DEM_I = 3,
 };
 
-static int msm_smd_debug_mask;
+static int msm_smd_debug_mask = MSM_SMD_INFO | MSM_SMSM_INFO | MSM_SMx_POWER_INFO;
 module_param_named(debug_mask, msm_smd_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 
@@ -767,6 +767,8 @@ static void smd_channel_probe_worker(struct work_struct *work)
 		if (smd_ch_allocated[n])
 			continue;
 
+		if(shared[n].name[0])
+		  printk("%s: allocating channel %d with name %s and refcount %d\n",__func__,n,shared[n].name,shared[n].ref_count);
 		/* channel should be allocated only if APPS
 		   processor is involved */
 		type = SMD_CHANNEL_TYPE(shared[n].type);
@@ -2213,13 +2215,17 @@ EXPORT_SYMBOL(smd_tiocmset);
 
 int smd_is_pkt_avail(smd_channel_t *ch)
 {
+	unsigned long flags;
+
 	if (!ch || !ch->is_pkt_ch)
 		return -EINVAL;
 
 	if (ch->current_packet)
 		return 1;
 
+	spin_lock_irqsave(&smd_lock, flags);
 	update_packet_state(ch);
+	spin_unlock_irqrestore(&smd_lock, flags);
 
 	return ch->current_packet ? 1 : 0;
 }
