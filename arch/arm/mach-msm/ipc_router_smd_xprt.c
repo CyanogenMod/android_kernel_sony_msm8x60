@@ -25,7 +25,7 @@
 #include "ipc_router.h"
 #include "smd_private.h"
 
-static int msm_ipc_router_smd_xprt_debug_mask;
+static int msm_ipc_router_smd_xprt_debug_mask = 1;
 module_param_named(debug_mask, msm_ipc_router_smd_xprt_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 

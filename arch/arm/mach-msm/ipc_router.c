@@ -46,7 +46,7 @@ enum {
 	R2R_RAW_HDR = 1U << 5,
 };
 
-static int msm_ipc_router_debug_mask;
+static int msm_ipc_router_debug_mask = RTR_DBG | R2R_MSG;
 module_param_named(debug_mask, msm_ipc_router_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 
