@@ -897,6 +897,12 @@ config MACH_BLUE_MINT
 	help
 	  Support for the Sony Mint
 
+config MACH_BLUE_HAYABUSA
+        depends on ARCH_MSM8960
+        default n
+        bool "SONY Hayabusa"
+        help
+          Support for the Sony Hayabusa
 endmenu
 
 config MSM_STACKED_MEMORY
