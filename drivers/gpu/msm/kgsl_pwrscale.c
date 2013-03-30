@@ -51,6 +51,7 @@ static struct kgsl_pwrscale_policy *kgsl_pwrscale_policies[] = {
 #ifdef CONFIG_MSM_DCVS
 	&kgsl_pwrscale_policy_msm,
 #endif
+	&kgsl_pwrscale_policy_conservative,
 	NULL
 };
 
@@ -100,7 +101,7 @@ static ssize_t pwrscale_policy_show(struct kgsl_device *device, char *buf)
 	return ret;
 }
 
-PWRSCALE_ATTR(policy, 0664, pwrscale_policy_show, pwrscale_policy_store);
+PWRSCALE_ATTR(policy, 0666, pwrscale_policy_show, pwrscale_policy_store);
 
 static ssize_t pwrscale_avail_policies_show(struct kgsl_device *device,
 					    char *buf)
