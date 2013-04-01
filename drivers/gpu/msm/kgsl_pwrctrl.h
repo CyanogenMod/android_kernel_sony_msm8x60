@@ -58,7 +58,6 @@ struct kgsl_clk_stats {
  * @nap_allowed - true if the device supports naps
  * @idle_needed - true if the device needs a idle before clock change
  * @irq_name - resource name for the IRQ
- * @restore_slumber - Flag to indicate that we are in a suspend/restore sequence
  * @clk_stats - structure of clock statistics
  */
 
@@ -83,7 +82,6 @@ struct kgsl_pwrctrl {
 	unsigned int idle_needed;
 	const char *irq_name;
 	s64 time;
-	unsigned int restore_slumber;
 	struct kgsl_clk_stats clk_stats;
 };
 
