@@ -1,7 +1,7 @@
 /* drivers/video/msm/mipi_dsi_panel_common.c
  *
  * Copyright (C) [2011] Sony Ericsson Mobile Communications AB.
- * Copyright (C) 2012 Sony Mobile Communications AB.
+ * Copyright (C) 2012-2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2; as
@@ -12,6 +12,10 @@
 #include "msm_fb.h"
 #include "mipi_dsi.h"
 #include "mipi_dsi_panel.h"
+
+#if defined(CONFIG_FB_MSM_RECOVER_PANEL) || defined(CONFIG_DEBUG_FS)
+#define DSI_VIDEO_BASE	0xE0000
+#endif
 
 void mipi_dsi_set_default_panel(struct mipi_dsi_data *dsi_data)
 {
@@ -56,6 +60,7 @@ struct msm_panel_info *mipi_dsi_detect_panel(
 	int i;
 	int ret;
 	struct mipi_dsi_data *dsi_data;
+	struct device *dev = &mfd->panel_pdev->dev;
 
 	dsi_data = platform_get_drvdata(mfd->panel_pdev);
 
@@ -71,32 +76,67 @@ struct msm_panel_info *mipi_dsi_detect_panel(
 
 		if (dsi_data->default_panels[i]) {
 			dsi_data->panel = dsi_data->default_panels[i];
-			dev_info(&mfd->panel_pdev->dev,
-				"found panel vendor: %s\n",
-				dsi_data->panel->name);
+			dev_info(dev, "found panel vendor: %s\n",
+							dsi_data->panel->name);
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
 		} else {
-			dev_warn(&mfd->panel_pdev->dev,
-				"cannot detect panel vendor!\n");
-			return NULL;
+			/* The recovery can only be done if we have one default
+			panel defined, which means i will be 1 here */
+			if (i == 1) {
+				dev_warn(dev, "Unable to detect panel vendor, "
+							"try to recover.\n");
+				dsi_data->panel_nvm_ok = false;
+				dsi_data->panel = dsi_data->default_panels[0];
+				dev_info(dev, "Assume panel vendor: %s\n",
+							dsi_data->panel->name);
+#endif
+			} else {
+				dev_warn(dev, "cannot detect panel vendor!\n");
+				return NULL;
+			}
 		}
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
 	}
-
-	for (i = 0; dsi_data->panels[i]; i++) {
-		ret = panel_id_reg_check(mfd, &dsi_data->tx_buf,
+	if (dsi_data->panel_nvm_ok) {
+#endif
+		for (i = 0; dsi_data->panels[i]; i++) {
+			ret = panel_id_reg_check(mfd, &dsi_data->tx_buf,
 					 &dsi_data->rx_buf,
 					 dsi_data->panels[i]);
-		if (!ret)
-			break;
+			if (!ret)
+				break;
+		}
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
+	} else {
+		for (i = 0; dsi_data->panels[i]; i++) {
+			if (dsi_data->panels[i]->use_if_nv_fail) {
+				dev_info(dev, "Assume panel name: %s\n",
+						dsi_data->panels[i]->name);
+				break;
+			}
+		}
 	}
+#endif
 
 	if (dsi_data->panels[i]) {
 		dsi_data->panel = dsi_data->panels[i];
-		dev_info(&mfd->panel_pdev->dev, "found panel: %s\n",
-			 dsi_data->panel->name);
+		dev_info(dev, "found panel: %s\n", dsi_data->panel->name);
 	} else {
-		dev_warn(&mfd->panel_pdev->dev, "cannot detect panel!\n");
+		dev_warn(dev, "cannot detect panel!\n");
 		return NULL;
 	}
+
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
+	/* Verify NVM even if we have managed to detect panel */
+	if (dsi_data->panel_nvm_ok && dsi_data->panel->pnvrw_ctl &&
+			dsi_data->backup_nvm_to_ram && dsi_data->is_nvm_ok) {
+		dsi_data->backup_nvm_to_ram(mfd);
+		if (dsi_data->is_nvm_ok(mfd))
+			dsi_data->panel_nvm_backup_ok = true;
+		else
+			dsi_data->panel_nvm_ok = false;
+	}
+#endif
 
 	dsi_data->panel_data.panel_info =
 		*dsi_data->panel->pctrl->get_panel_info();
@@ -347,211 +387,186 @@ error:
 	return -ENODEV;
 }
 
-#ifdef CONFIG_DEBUG_FS
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
 
-#define MIPI_PANEL_DEBUG_BUF	2048
-
-#define MSNPRINTF(buf, rsize, ...)			\
-do {							\
-	ssize_t act = 0;					\
-							\
-	if (rsize > 0)					\
-		act = snprintf(buf, rsize, __VA_ARGS__);	\
-	buf += act;					\
-	rsize -= act;					\
-} while (0)
-
-static void print_cmds2buf(struct dsi_cmd_desc *cmds, int cnt,
-			 char **buf, int *rem_size)
+static ssize_t nvm_is_ok_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
 {
-	int i, j;
+	struct platform_device *pdev;
+	struct mipi_dsi_data *dsi_data;
+	struct msm_fb_data_type *mfd;
+	ssize_t ret;
 
-	if (!cmds) {
-		MSNPRINTF(*buf, *rem_size, "cmds NULL\n");
+	pdev = container_of(dev, struct platform_device, dev);
+	mfd = platform_get_drvdata(pdev);
+	dsi_data = platform_get_drvdata(mfd->panel_pdev);
+
+	if (!dsi_data || !dsi_data->panel || !dsi_data->panel->pnvrw_ctl) {
+		ret = scnprintf(buf, PAGE_SIZE, "skip");
+	} else if (dsi_data->panel_nvm_ok) {
+		dsi_data->enable_resume_check = true;
+		ret = scnprintf(buf, PAGE_SIZE, "OK");
+	} else {
+		dsi_data->enable_resume_check = true;
+		ret = scnprintf(buf, PAGE_SIZE, "NG");
+	}
+	return ret;
+}
+
+static ssize_t nvm_data_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct mipi_dsi_data *dsi_data;
+	struct msm_fb_data_type *mfd;
+	ssize_t ret;
+
+	pdev = container_of(dev, struct platform_device, dev);
+	mfd = platform_get_drvdata(pdev);
+	dsi_data = platform_get_drvdata(mfd->panel_pdev);
+
+	if (!dsi_data || !dsi_data->panel || !dsi_data->panel->pnvrw_ctl ||
+			!dsi_data->get_nvm_backup)
+		ret = scnprintf(buf, PAGE_SIZE, "NG");
+	else
+		ret = dsi_data->get_nvm_backup(dsi_data, buf);
+
+	return ret;
+}
+
+static ssize_t nvm_data_store(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct platform_device *pdev;
+	struct mipi_dsi_data *dsi_data;
+	struct msm_fb_data_type *mfd;
+	int rc;
+
+	pdev = container_of(dev, struct platform_device, dev);
+	mfd = platform_get_drvdata(pdev);
+	dsi_data = platform_get_drvdata(mfd->panel_pdev);
+
+	if (!dsi_data->panel->pnvrw_ctl)
+		goto exit;
+
+	if (dsi_data->override_nvm_data) {
+		rc = dsi_data->override_nvm_data(mfd, buf, count);
+		if (rc == 0) {
+			dev_err(dev, "%s : nvm data format error.<%s>\n",
+							__func__, buf);
+			goto exit;
+		}
+	}
+
+	if (prepare_for_reg_access(mfd))
+		goto exit;
+
+	mipi_set_tx_power_mode(1);
+
+	if (dsi_data->nvm_erase_all && dsi_data->nvm_write_trim_area &&
+					dsi_data->nvm_write_user_area) {
+		(void)dsi_data->nvm_erase_all(mfd);
+		(void)dsi_data->nvm_write_trim_area(mfd);
+		(void)dsi_data->nvm_write_user_area(mfd);
+	}
+	if (dsi_data->panel_data.on)
+		dsi_data->panel_data.on(mfd->pdev);
+
+	post_reg_access(mfd);
+
+exit:
+	return count;
+}
+
+static struct device_attribute panel_nvm_attributes[] = {
+	__ATTR(nvm_is_ok, S_IRUGO, nvm_is_ok_show, NULL),
+	__ATTR(nvm_data, S_IRUGO | S_IWUSR, nvm_data_show, nvm_data_store),
+};
+
+int create_sysfs_interfaces(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(panel_nvm_attributes); i++)
+		if (device_create_file(dev, panel_nvm_attributes + i))
+			goto failed;
+	return 0;
+
+failed:
+	for (--i; i >= 0; i--)
+		device_remove_file(dev, panel_nvm_attributes + i);
+	dev_err(dev, "%s: failed to create sysfs interface\n", __func__);
+	return -ENODEV;
+}
+
+void remove_sysfs_interfaces(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(panel_nvm_attributes); i++)
+		device_remove_file(dev, panel_nvm_attributes + i);
+
+}
+#endif /* CONFIG_FB_MSM_RECOVER_PANEL */
+
+#if defined(CONFIG_FB_MSM_RECOVER_PANEL) || defined(CONFIG_DEBUG_FS)
+int prepare_for_reg_access(struct msm_fb_data_type *mfd)
+{
+	struct device *dev = &mfd->panel_pdev->dev;
+	struct mipi_dsi_data *dsi_data;
+	int ret = 0;
+
+	dsi_data = platform_get_drvdata(mfd->panel_pdev);
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
+	mutex_lock(&mfd->nvrw_prohibit_draw);
+#endif
+	/* Needed to make sure the display stack isn't powered on/off while */
+	/* we are executing. Also locks in msm_fb.c */
+	mutex_lock(&mfd->power_lock);
+	if (!mfd->panel_power_on) {
+		dev_err(dev, "%s: panel is OFF, not supported\n", __func__);
+		mutex_unlock(&mfd->power_lock);
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
+		mutex_unlock(&mfd->nvrw_prohibit_draw);
+#endif
+		ret = -EINVAL;
 		goto exit;
 	}
 
-	for (i = 0; i < cnt; i++) {
-		switch (cmds[i].dtype) {
-		case DTYPE_DCS_WRITE:
-		case DTYPE_DCS_WRITE1:
-			MSNPRINTF(*buf, *rem_size, "DCS_WRITE: ");
-			break;
-		case DTYPE_DCS_LWRITE:
-			MSNPRINTF(*buf, *rem_size, "DCS_LONG_WRITE: ");
-			break;
-		case DTYPE_GEN_WRITE:
-		case DTYPE_GEN_WRITE1:
-		case DTYPE_GEN_WRITE2:
-			MSNPRINTF(*buf, *rem_size, "GEN_WRITE: ");
-			break;
-		case DTYPE_GEN_LWRITE:
-			MSNPRINTF(*buf, *rem_size, "GEN_LONG_WRITE: ");
-			break;
-		case DTYPE_DCS_READ:
-			MSNPRINTF(*buf, *rem_size, "DCS_READ: ");
-			break;
-		case DTYPE_GEN_READ:
-		case DTYPE_GEN_READ1:
-		case DTYPE_GEN_READ2:
-			MSNPRINTF(*buf, *rem_size, "GEN_READ: ");
-			break;
-		case DTYPE_MAX_PKTSIZE:
-			MSNPRINTF(*buf, *rem_size, "SET_MAX_PACKET_SIZE: ");
-			break;
-		case DTYPE_NULL_PKT:
-			MSNPRINTF(*buf, *rem_size, "NULL_PACKET: ");
-			break;
-		case DTYPE_BLANK_PKT:
-			MSNPRINTF(*buf, *rem_size, "BLANK_PACKET: ");
-			break;
-		case DTYPE_PERIPHERAL_ON:
-			MSNPRINTF(*buf, *rem_size, "PERIPHERAL_ON: ");
-			break;
-		case DTYPE_PERIPHERAL_OFF:
-			MSNPRINTF(*buf, *rem_size, "PERIPHERAL_OFF: ");
-			break;
-		default:
-			MSNPRINTF(*buf, *rem_size, "UnknownData: ");
-			break;
-		}
-		for (j = 0; j < cmds[i].dlen; j++)
-			MSNPRINTF(*buf, *rem_size, "0x%.2x ",
-				  cmds[i].payload[j]);
-		MSNPRINTF(*buf, *rem_size, "\n");
+	mutex_lock(&mfd->dma->ov_mutex);
+	if (mfd->panel_info.mipi.mode == DSI_VIDEO_MODE) {
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE, 0);
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+		msleep(ONE_FRAME_TRANSMIT_WAIT_MS);
+		mipi_dsi_controller_cfg(0);
+		mipi_dsi_op_mode_config(DSI_CMD_MODE);
 	}
-	MSNPRINTF(*buf, *rem_size, "---------\n");
 exit:
-	return;
+	return ret;
 }
 
-static int mipi_dsi_cmd_seq_open(struct inode *inode,
-	struct file *file)
+void post_reg_access(struct msm_fb_data_type *mfd)
 {
 	struct mipi_dsi_data *dsi_data;
 
-	dsi_data = inode->i_private;
-	if (dsi_data->debug_buf != NULL)
-		return -EBUSY;
-	dsi_data->debug_buf = kzalloc(MIPI_PANEL_DEBUG_BUF, GFP_KERNEL);
-	file->private_data = dsi_data;
-	/* non-seekable */
-	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
-	return 0;
-}
-
-static int mipi_dsi_cmd_seq_release(struct inode *inode,
-	struct file *file)
-{
-	struct mipi_dsi_data *dsi_data;
-
-	dsi_data = file->private_data;
-	kfree(dsi_data->debug_buf);
-	dsi_data->debug_buf = NULL;
-	return 0;
-}
-
-static ssize_t mipi_dsi_cmd_seq_read(struct file *file,
-	char __user *buff, size_t count, loff_t *ppos)
-{
-	char *bp;
-	int len = 0;
-	int tot = 0;
-	int dlen;
-	struct mipi_dsi_data *dsi_data;
-
-	if (*ppos)
-		return 0;
-
-	dsi_data = file->private_data;
-
-	bp = dsi_data->debug_buf;
-	if (bp == NULL)
-		return 0;
-
-	dlen = MIPI_PANEL_DEBUG_BUF;
-
-	if (dsi_data->panel) {
-		/* show panel info */
-		MSNPRINTF(bp, dlen, "Register data for panel %s\n",
-			  dsi_data->panel->name);
-		MSNPRINTF(bp, dlen, "xres = %d, yres = %d\n",
-			  dsi_data->panel_data.panel_info.xres,
-			  dsi_data->panel_data.panel_info.yres);
-		/* show commands */
-		MSNPRINTF(bp, dlen, "init cmds:\n");
-		print_cmds2buf(dsi_data->panel->pctrl->display_init_cmds,
-			     dsi_data->panel->pctrl->display_init_cmds_size,
-			       &bp, &dlen);
-		MSNPRINTF(bp, dlen, "display_on cmds:\n");
-		print_cmds2buf(dsi_data->panel->pctrl->display_on_cmds,
-			     dsi_data->panel->pctrl->display_on_cmds_size,
-			       &bp, &dlen);
-		MSNPRINTF(bp, dlen, "display_off cmds:\n");
-		print_cmds2buf(dsi_data->panel->pctrl->display_off_cmds,
-			     dsi_data->panel->pctrl->display_off_cmds_size,
-			       &bp, &dlen);
-	} else {
-		len = snprintf(bp, dlen, "No panel name\n");
-		bp += len;
-		dlen -= len;
+	dsi_data = platform_get_drvdata(mfd->panel_pdev);
+	if (mfd->panel_info.mipi.mode == DSI_VIDEO_MODE) {
+		mipi_dsi_op_mode_config(DSI_VIDEO_MODE);
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		mipi_dsi_sw_reset();
+		mipi_dsi_controller_cfg(1);
+		MDP_OUTP(MDP_BASE + DSI_VIDEO_BASE, 1);
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 	}
-
-	tot = (uint32)bp - (uint32)dsi_data->debug_buf;
-	*bp = 0;
-	tot++;
-
-	if (tot < 0)
-		return 0;
-	if (copy_to_user(buff, dsi_data->debug_buf, tot))
-		return -EFAULT;
-
-	*ppos += tot;
-
-	return tot;
+	mutex_unlock(&mfd->dma->ov_mutex);
+	mutex_unlock(&mfd->power_lock);
+#ifdef CONFIG_FB_MSM_RECOVER_PANEL
+	mutex_unlock(&mfd->nvrw_prohibit_draw);
+#endif
 }
 
-static const struct file_operations mipi_dsi_cmd_seq_fops = {
-	.open = mipi_dsi_cmd_seq_open,
-	.release = mipi_dsi_cmd_seq_release,
-	.read = mipi_dsi_cmd_seq_read,
-};
+#endif /* defined(CONFIG_FB_MSM_RECOVER_PANEL) || defined(CONFIG_DEBUG_FS) */
 
-void mipi_dsi_debugfs_init(struct platform_device *pdev,
-	const char *sub_name)
-{
-	struct dentry *root;
-	struct dentry *file;
-	struct mipi_dsi_data *dsi_data;
 
-	dsi_data = platform_get_drvdata(pdev);
-	root = msm_fb_get_debugfs_root();
-	if (root != NULL) {
-		dsi_data->panel_driver_ic_dir =
-			debugfs_create_dir(sub_name, root);
 
-		if (IS_ERR(dsi_data->panel_driver_ic_dir) ||
-			(dsi_data->panel_driver_ic_dir == NULL)) {
-			dev_err(&pdev->dev,
-				"debugfs_create_dir fail, error %ld\n",
-				PTR_ERR(dsi_data->panel_driver_ic_dir));
-		} else {
-			file = debugfs_create_file("cmd_seq", 0444,
-				dsi_data->panel_driver_ic_dir, dsi_data,
-				&mipi_dsi_cmd_seq_fops);
-			if (file == NULL)
-				dev_err(&pdev->dev,
-					"debugfs_create_file: index fail\n");
-		}
-	}
-}
-
-void mipi_dsi_debugfs_exit(struct platform_device *pdev)
-{
-	struct mipi_dsi_data *dsi_data;
-
-	dsi_data = platform_get_drvdata(pdev);
-	debugfs_remove_recursive(dsi_data->panel_driver_ic_dir);
-}
-
-#endif /* CONFIG_DEBUG_FS */

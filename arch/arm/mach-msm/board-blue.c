@@ -1,5 +1,5 @@
 /* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
- * Copyright (C) 2012 Sony Mobile Communications AB.
+ * Copyright (C) 2012-2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -3634,7 +3634,7 @@ static int lc898300_power_enable(struct device *dev, bool on)
 			dev_err(dev, "%s: enable regulator %s failed\n",
 					__func__ , vibrator_reg_name);
 	} else {
-		regulator_disable(vib_supply_ldo);
+		rc = regulator_disable(vib_supply_ldo);
 		if (rc)
 			dev_err(dev, "%s: disable regulator %s failed\n",
 					__func__ , vibrator_reg_name);

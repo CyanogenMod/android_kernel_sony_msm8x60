@@ -171,10 +171,9 @@ static const struct xpad_device {
 
 /* buttons shared with xbox and xbox360 */
 static const signed short xpad_common_btn[] = {
-	BTN_A, BTN_B, BTN_X, BTN_Y,		/* "analog" buttons */
-	BTN_START, BTN_BACK, BTN_SELECT,	/* start/back/select */
-	BTN_THUMBL, BTN_THUMBR,		/* sticks */
-	-1					/* terminating entry */
+	BTN_A, BTN_B, BTN_X, BTN_Y,			/* "analog" buttons */
+	BTN_START, BTN_SELECT, BTN_THUMBL, BTN_THUMBR,	/* start/back/sticks */
+	-1						/* terminating entry */
 };
 
 /* original xbox controllers only */
@@ -390,7 +389,7 @@ static void xpad360_process_packet(struct usb_xpad *xpad,
 
 	/* start/back buttons */
 	input_report_key(dev, BTN_START,  data[2] & 0x10);
-	input_report_key(dev, BTN_BACK, data[2] & 0x20);
+	input_report_key(dev, BTN_SELECT, data[2] & 0x20);
 
 	/* stick press left/right */
 	input_report_key(dev, BTN_THUMBL, data[2] & 0x40);

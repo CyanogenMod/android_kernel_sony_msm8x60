@@ -1,7 +1,7 @@
 /* drivers/video/msm/mipi_novatek_nt35565.c
  *
  * Copyright (C) [2011] Sony Ericsson Mobile Communications AB.
- * Copyright (C) 2012 Sony Mobile Communications AB.
+ * Copyright (C) 2012-2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2; as
@@ -158,7 +158,7 @@ static int __devexit mipi_nt35565_lcd_remove(struct platform_device *pdev)
 		return -ENODEV;
 
 #ifdef CONFIG_DEBUG_FS
-	mipi_dsi_debugfs_exit(pdev);
+	mipi_dsi_panel_remove_debugfs(pdev);
 #endif
 
 	platform_set_drvdata(pdev, NULL);
@@ -173,9 +173,7 @@ static int __devinit mipi_nt35565_lcd_probe(struct platform_device *pdev)
 	int ret;
 	struct lcd_panel_platform_data *platform_data;
 	struct mipi_dsi_data *dsi_data;
-#ifdef CONFIG_FB_MSM_PANEL_ECO_MODE
 	struct platform_device *fb_pdev;
-#endif
 
 	platform_data = pdev->dev.platform_data;
 	if (platform_data == NULL)
@@ -225,15 +223,12 @@ static int __devinit mipi_nt35565_lcd_probe(struct platform_device *pdev)
 			"platform_device_add_data failed!\n");
 		goto out_tx_release;
 	}
-#ifdef CONFIG_FB_MSM_PANEL_ECO_MODE
 	fb_pdev = msm_fb_add_device(pdev);
+#ifdef CONFIG_FB_MSM_PANEL_ECO_MODE
 	eco_mode_sysfs_register(&fb_pdev->dev);
-#else
-	msm_fb_add_device(pdev);
 #endif
-
 #ifdef CONFIG_DEBUG_FS
-	mipi_dsi_debugfs_init(pdev, "mipi_nt35565");
+	mipi_dsi_panel_create_debugfs(fb_pdev, "mipi_nt35565");
 #endif
 
 	return 0;

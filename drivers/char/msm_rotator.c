@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2013, Code Aurora Forum. All rights reserved.
  * Copyright (C) 2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -96,6 +96,9 @@
 #define ROTATOR_REVISION_V1		1
 #define ROTATOR_REVISION_V2		2
 #define ROTATOR_REVISION_NONE	0xffffffff
+#define	BASE_ADDR(height, y_stride) ((height % 64) * y_stride)
+#define	HW_BASE_ADDR(height, y_stride) (((dstp0_ystride >> 5) << 11) - \
+					((dst_height & 0x3f) * dstp0_ystride))
 
 uint32_t rotator_hw_revision;
 static char rot_iommu_split_domain;
@@ -504,7 +507,7 @@ uint32_t fast_yuv_invalid_size_checker(unsigned char rot_mode,
 	hw_limit  = is_planar420 ? 512 : 256;
 
 	/* checking image constaints for missing EOT event from pix_rot block */
-	if ((src_width > hw_limit) && ((src_width % (hw_limit/2)) == 8))
+	if ((src_width > hw_limit) && ((src_width % (hw_limit / 2)) == 8))
 		return -EINVAL;
 
 	if (rot_mode & MDP_ROT_90) {
@@ -519,45 +522,42 @@ uint32_t fast_yuv_invalid_size_checker(unsigned char rot_mode,
 		if ((rot_mode & MDP_FLIP_UD) ||
 			(rot_mode & (MDP_FLIP_UD | MDP_FLIP_LR))) {
 
-			/* image constraint checking for wrong adress
+			/* image constraint checking for wrong address
 			 * generation HW issue for Y plane checking
 			 */
 			if (((dst_height % 64) != 0) &&
 				((dst_height / 64) >= 4)) {
 
 				/* compare golden logic for second
-				 * tile base address genration in row
+				 * tile base address generation in row
 				 * with actual HW implementation
 				*/
-				if (((dst_height % 64) * dstp0_ystride)	!=
-					(((dstp0_ystride >> 5) << 11) -
-					((dst_height & 0x3f) * dstp0_ystride)))
+				if (BASE_ADDR(dst_height, dstp0_ystride) !=
+					HW_BASE_ADDR(dst_height, dstp0_ystride))
 						return -EINVAL;
 			}
 
 			if (is_planar420) {
-				dst_width  = dst_width/2;
-				dstp0_ystride = dstp0_ystride/2;
+				dst_width = dst_width / 2;
+				dstp0_ystride = dstp0_ystride / 2;
 			}
 
-			dst_height = dst_height/2;
+			dst_height = dst_height / 2;
 
 			/* image constraint checking for wrong
 			 * address generation HW issue. for
 			 * U/V (P) or UV (PP) plane checking
 			 */
-			if (((dst_height % 64) != 0) &&	((dst_height / 64) >=
+			if (((dst_height % 64) != 0) && ((dst_height / 64) >=
 				(hw_limit / 128))) {
 
 				/* compare golden logic for
 				 * second tile base address
-				 * genration in row with
+				 * generation in row with
 				 * actual HW implementation
 				*/
-				if (((dst_height % 64) * dstp0_ystride) !=
-					(((dstp0_ystride >> 5)
-					 << 11) - ((dst_height & 0x3f) *
-					dstp0_ystride)))
+				if (BASE_ADDR(dst_height, dstp0_ystride) !=
+					HW_BASE_ADDR(dst_height, dstp0_ystride))
 						return -EINVAL;
 			}
 		}
@@ -681,6 +681,8 @@ static int msm_rotator_ycxcx_h2v2(struct msm_rotator_img_info *info,
 			dst_format = info->src.format;
 			break;
 		}
+		dst_format = MDP_Y_CBCR_H2V2;
+		break;
 	case MDP_Y_CBCR_H2V2_TILE:
 		is_tile = 1;
 	case MDP_Y_CBCR_H2V2:
@@ -706,11 +708,11 @@ static int msm_rotator_ycxcx_h2v2(struct msm_rotator_img_info *info,
 			((info->dst_y * info->dst.width) + info->dst_x),
 		  MSM_ROTATOR_OUTP0_ADDR);
 	iowrite32(out_chroma_paddr +
-			((info->dst_y * info->dst.width)/2 + info->dst_x),
+			(((info->dst_y * info->dst.width)/2) + info->dst_x),
 		  MSM_ROTATOR_OUTP1_ADDR);
 	if (out_chroma2_paddr)
 		iowrite32(out_chroma2_paddr +
-			((info->dst_y * info->dst.width)/2 + info->dst_x),
+			(((info->dst_y * info->dst.width)/2) + info->dst_x),
 			  MSM_ROTATOR_OUTP2_ADDR);
 
 	if (new_session) {
@@ -1094,7 +1096,7 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	img_info = &(msm_rotator_dev->rot_session[s]->img_info);
 	if (img_info->enable == 0) {
 		dev_dbg(msm_rotator_dev->device,
-			"%s() : Session_id %d not enabled \n", __func__, s);
+			"%s() : Session_id %d not enabled\n", __func__, s);
 		rc = -EINVAL;
 		goto do_rotate_unlock_mutex;
 	}
@@ -1359,7 +1361,7 @@ do_rotate_unlock_mutex:
 	return rc;
 }
 
-static void msm_rotator_set_perf_level(u32 wh, u32 is_rgb)
+static u32 msm_rotator_set_perf_level(u32 wh, u32 is_rgb)
 {
 	u32 perf_level;
 
@@ -1376,6 +1378,7 @@ static void msm_rotator_set_perf_level(u32 wh, u32 is_rgb)
 	msm_bus_scale_client_update_request(msm_rotator_dev->bus_client_handle,
 		perf_level);
 #endif
+	return perf_level;
 
 }
 
@@ -1390,6 +1393,7 @@ static int msm_rotator_start(unsigned long arg,
 	unsigned int dst_w, dst_h;
 	unsigned int is_planar420 = 0;
 	int fast_yuv_en = 0;
+	u32 perf_level;
 
 	if (copy_from_user(&info, (void __user *)arg, sizeof(info)))
 		return -EFAULT;
@@ -1423,20 +1427,39 @@ static int msm_rotator_start(unsigned long arg,
 	switch (info.src.format) {
 	case MDP_Y_CB_CR_H2V2:
 	case MDP_Y_CR_CB_H2V2:
-	/* case MDP_Y_CR_CB_GH2V2:*/
+	/* To support Movie Studio, the following line needs to be removed */
+	/* case MDP_Y_CR_CB_GH2V2: */
 		is_planar420 = 1;
 	case MDP_Y_CBCR_H2V2:
 	case MDP_Y_CRCB_H2V2:
 	case MDP_Y_CRCB_H2V2_TILE:
 	case MDP_Y_CBCR_H2V2_TILE:
-		if (rotator_hw_revision >= ROTATOR_REVISION_V2)
-			fast_yuv_en = !fast_yuv_invalid_size_checker(
-						info.rotations,
-						info.src.width,
-						info.dst.width,
-						info.dst.height,
-						info.dst.width,
-						is_planar420);
+		if (rotator_hw_revision >= ROTATOR_REVISION_V2) {
+
+			if (!info.downscale_ratio) {
+				fast_yuv_en = !fast_yuv_invalid_size_checker(
+							     info.rotations,
+							     info.src.width,
+							     dst_w,
+							     dst_h,
+							     dst_w,
+							     is_planar420);
+			} else if ((info.src.width == 1920) &&
+				   (info.downscale_ratio == 1) &&
+				   (!info.rotations)) {
+				/*
+				 * Also allow fast_yuv when down scaling
+				 * 1080p to 720p without rotations
+				 */
+				fast_yuv_en = !fast_yuv_invalid_size_checker(
+							     info.rotations,
+							     info.src.width,
+							     info.dst.width,
+							     info.dst.height,
+							     info.dst.width,
+							     is_planar420);
+			}
+		}
 	break;
 	default:
 		fast_yuv_en = 0;
@@ -1488,18 +1511,18 @@ static int msm_rotator_start(unsigned long arg,
 
 	mutex_lock(&msm_rotator_dev->rotator_lock);
 
-	msm_rotator_set_perf_level((info.src.width*info.src.height), is_rgb);
-
-        dev_info(msm_rotator_dev->device,
-                "scale: %i, rot: %i, src: %ix%i, dst: %ix%i, s_dst: %ix%i, " \
-                "sfmt: %i, dfmt: %i => fyuv: %i \n",
-                info.downscale_ratio, info.rotations,
-                info.src.width, info.src.height,
-                info.dst.width, info.dst.height,
-                dst_w, dst_h,
-                info.src.format,
-                info.dst.format,
-                fast_yuv_en);
+	perf_level = msm_rotator_set_perf_level(
+				(info.src.width*info.src.height), is_rgb);
+	dev_info(msm_rotator_dev->device,
+		 "scale: %i, rot: %i, src: %ix%i, dst: %ix%i, s_dst: %ix%i, " \
+		 "sfmt: %i, dfmt: %i => fyuv: %i, pl: %u\n",
+		info.downscale_ratio, info.rotations,
+		info.src.width, info.src.height,
+		info.dst.width, info.dst.height,
+		dst_w, dst_h,
+		info.src.format,
+		info.dst.format,
+		fast_yuv_en, perf_level);
 
 	for (s = 0; s < MAX_SESSIONS; s++) {
 		if ((msm_rotator_dev->rot_session[s] != NULL) &&

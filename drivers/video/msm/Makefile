@@ -86,6 +86,9 @@ ifeq ($(CONFIG_FB_MSM_MIPI_DSI_RENESAS_R63306),y)
 obj-y += mipi_renesas_r63306.o
 obj-y += mipi_r63306_panels/
 obj-y += mipi_dsi_panel_common.o
+ifeq ($(CONFIG_DEBUG_FS),y)
+obj-$(CONFIG_FB_MSM_MIPI_DSI) += mipi_dsi_panel_debugfs.o
+endif
 endif
 ifeq ($(CONFIG_FB_MSM_MIPI_DSI_SAMSUNG_S6D6AA0),y)
 obj-y += mipi_samsung_s6d6aa0.o

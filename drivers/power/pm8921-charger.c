@@ -4754,7 +4754,7 @@ static int pm8921_charger_resume(struct device *dev)
 		schedule_delayed_work(&chip->btc_override_work, 0);
 
 	/* update soc and power supply at resume */
-	pm8921_update_soc_on_demand();
+	schedule_delayed_work(&chip->update_heartbeat_work, 0);
 
 	return 0;
 }
