@@ -1101,12 +1101,7 @@ irqreturn_t msm_iommu_fault_handler(int irq, void *dev_id)
 		}
 
 		SET_FSR(base, num, fsr);
-		/*
-		 * Only resume fetches if the registered fault handler
-		 * allows it
-		 */
-		if (ret != -EBUSY)
-			SET_RESUME(base, num, 1);
+		SET_RESUME(base, num, 1);
 
 		ret = IRQ_HANDLED;
 	} else
