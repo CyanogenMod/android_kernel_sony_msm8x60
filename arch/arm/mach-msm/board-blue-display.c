@@ -36,21 +36,35 @@
 #endif
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
+#ifdef CONFIG_FB_MSM_MIPI_DSI_NOVATEK_NT35565
+#define MSM_FB_PRIM_BUF_SIZE \
+		(roundup((960 * 544 * 4), 4096) * 3) /* 4 bpp x 3 pages */
+#else
 #define MSM_FB_PRIM_BUF_SIZE \
 		(roundup((roundup(1280, 32) * roundup(720, 32) * 4), 4096) * 3)
 			/* 4 bpp x 3 pages */
+#endif
+#else
+#ifdef CONFIG_FB_MSM_MIPI_DSI_NOVATEK_NT35565
+#define MSM_FB_PRIM_BUF_SIZE \
+		(roundup((960 * 544 * 4), 4096) * 2) /* 4 bpp x 2 pages */
 #else
 #define MSM_FB_PRIM_BUF_SIZE \
 		(roundup((roundup(1280, 32) * roundup(720, 32) * 4), 4096) * 2)
 			/* 4 bpp x 2 pages */
+#endif
 #endif
 
 /* Note: must be multiple of 4096 */
 #define MSM_FB_SIZE roundup(MSM_FB_PRIM_BUF_SIZE, 4096)
 
 #ifdef CONFIG_FB_MSM_OVERLAY0_WRITEBACK
+#ifdef CONFIG_FB_MSM_MIPI_DSI_NOVATEK_NT35565
+#define MSM_FB_OVERLAY0_WRITEBACK_SIZE roundup((960 * 544 * 3 * 2), 4096)
+#else
 #define MSM_FB_OVERLAY0_WRITEBACK_SIZE \
 		roundup((roundup(1280, 32) * roundup(720, 32) * 3 * 2), 4096)
+#endif
 #else
 #define MSM_FB_OVERLAY0_WRITEBACK_SIZE (0)
 #endif  /* CONFIG_FB_MSM_OVERLAY0_WRITEBACK */
@@ -1025,6 +1039,13 @@ static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 
 #endif
 
+static int mdp_core_clk_rate_table[] = {
+	85330000,
+	128000000,
+	200000000,
+	200000000,
+};
+
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = MDP_VSYNC_GPIO,
 	.mdp_max_clk = 200000000,
@@ -1365,6 +1386,8 @@ void __init msm8960_allocate_fb_region(void)
  */
 static void set_mdp_clocks_for_wuxga(void)
 {
+	int i;
+
 	mdp_ui_vectors[0].ab = 2000000000;
 	mdp_ui_vectors[0].ib = 2000000000;
 	mdp_vga_vectors[0].ab = 2000000000;
@@ -1373,6 +1396,10 @@ static void set_mdp_clocks_for_wuxga(void)
 	mdp_720p_vectors[0].ib = 2000000000;
 	mdp_1080p_vectors[0].ab = 2000000000;
 	mdp_1080p_vectors[0].ib = 2000000000;
+
+
+	for (i = 0; i < ARRAY_SIZE(mdp_core_clk_rate_table); i++)
+		mdp_core_clk_rate_table[i] = 200000000;
 
 	if (hdmi_is_primary) {
 		dtv_bus_def_vectors[0].ab = 2000000000;
@@ -1422,3 +1449,4 @@ void __init msm8960_set_display_params(char *prim_panel, char *ext_panel)
 	if (disable_splash)
 		mdp_pdata.cont_splash_enabled = 0;
 }
+
