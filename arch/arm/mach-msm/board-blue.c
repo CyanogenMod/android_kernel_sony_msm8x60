@@ -3829,6 +3829,14 @@ static struct i2c_board_info gsbi12_peripherals_info[] __initdata = {
 		.platform_data = &mpu_data,
 	},
 #endif
+#ifdef CONFIG_MPU_SENSORS_AK8972
+	{
+		/* Config-spec is 8-bit = 0x18, src-code need 7-bit => 0x0c */
+		I2C_BOARD_INFO("ak8972", 0x18 >> 1),
+		.irq = MSM_GPIO_TO_INT(AKM897X_GPIO),
+		.platform_data = &mpu_compass_data,
+	},
+#endif
 #ifdef CONFIG_INPUT_APDS9702
 	{
 		/* Config-spec is 8-bit = 0xA8, src-code need 7-bit => 0x54 */
