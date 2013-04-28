@@ -19,13 +19,13 @@
 #include <linux/leds.h>
 #include <linux/leds-pm8xxx.h>
 #include <linux/msm_ssbi.h>
-#include <linux/gpio_event.h>
 #include <linux/gpio_keys.h>
 #include <linux/platform_device.h>
 #include <asm/mach-types.h>
 #include <mach/msm_bus_board.h>
 #include <mach/restart.h>
 #include <mach/pm8921-mic_bias.h>
+#include <mach/simple_remote_msm8960_pf.h>
 #include "devices.h"
 #include "board-8960.h"
 #include "charger-semc_blue.h"
@@ -135,8 +135,6 @@ static struct pm8xxx_gpio_init pm8921_gpios[] __initdata = {
 	PM8XXX_GPIO_DISABLE(24),
 	PM8XXX_GPIO_DISABLE(25),
 	PM8XXX_GPIO_DISABLE(28),
-	PM8XXX_GPIO_DISABLE(31),
-	PM8XXX_GPIO_DISABLE(32),
 	PM8XXX_GPIO_DISABLE(35),
 	PM8XXX_GPIO_DISABLE(37),
 	PM8XXX_GPIO_DISABLE(40),
@@ -149,15 +147,31 @@ static struct pm8xxx_gpio_init pm8921_gpios[] __initdata = {
 	PM8XXX_GPIO_INPUT(20,	PM_GPIO_PULL_UP_30),	/* VOLUME_DOWN_KEY */
 	PM8XXX_GPIO_INPUT(21,	PM_GPIO_PULL_UP_30),	/* VOLUME_UP_KEY */
 	PM8XXX_GPIO_OUTPUT(22,  0),			/* RF_ID_EN */
-	PM8XXX_GPIO_INPUT(26,	PM_GPIO_PULL_NO),	/* SD_CARD_DET_N */
-#if defined(CONFIG_NFC_PN544)
+	PM8XXX_GPIO_INPUT(26,	PM_GPIO_PULL_DN),	/* SD_CARD_DET_N */
+#if defined(CONFIG_SONY_FELICA_SUPPORT) && !defined(CONFIG_NFC_PN544)
+	/* FELICA_LOCK */
+	PM8XXX_GPIO_INIT(31, PM_GPIO_DIR_IN, PM_GPIO_OUT_BUF_CMOS, 0, \
+				PM_GPIO_PULL_NO, PM_GPIO_VIN_L17, \
+				PM_GPIO_STRENGTH_NO, \
+				PM_GPIO_FUNC_NORMAL, 0, 0),
+	/* FELICA_FF */
+	PM8XXX_GPIO_INIT(32, PM_GPIO_DIR_OUT, PM_GPIO_OUT_BUF_CMOS, 0, \
+				PM_GPIO_PULL_NO, PM_GPIO_VIN_L17, \
+				PM_GPIO_STRENGTH_LOW, \
+				PM_GPIO_FUNC_NORMAL, 0, 0),
+	/* FELICA_PON */
+	PM8XXX_GPIO_INIT(33, PM_GPIO_DIR_OUT, PM_GPIO_OUT_BUF_CMOS, 0, \
+				PM_GPIO_PULL_NO, PM_GPIO_VIN_S4, \
+				PM_GPIO_STRENGTH_LOW, \
+				PM_GPIO_FUNC_NORMAL, 0, 0),
+#elif !defined(CONFIG_SONY_FELICA_SUPPORT) && defined(CONFIG_NFC_PN544)
+	PM8XXX_GPIO_DISABLE(31),
+	PM8XXX_GPIO_DISABLE(32),
 	/* NFC_EN */
 	PM8XXX_GPIO_INIT(33, PM_GPIO_DIR_OUT, PM_GPIO_OUT_BUF_OPEN_DRAIN, 0, \
 				PM_GPIO_PULL_NO, PM_GPIO_VIN_VPH, \
 				PM_GPIO_STRENGTH_LOW, \
 				PM_GPIO_FUNC_NORMAL, 0, 0),
-#else
-	PM8XXX_GPIO_DISABLE(33),
 #endif
 	/* WCD9310_RESET_N */
 	PM8XXX_GPIO_INIT(34, PM_GPIO_DIR_OUT, PM_GPIO_OUT_BUF_CMOS, 1, \
@@ -178,9 +192,10 @@ static struct pm8xxx_gpio_init pm8921_gpios[] __initdata = {
 /* Initial PM8921 MPP configurations */
 static struct pm8xxx_mpp_init pm8921_mpps[] __initdata = {
 	/* External 5V regulator enable; shared by HDMI and USB_OTG switches. */
-	PM8XXX_MPP_INIT(4, D_OUTPUT, PM8921_MPP_DIG_LEVEL_S4, DOUT_CTRL_LOW),
+	PM8XXX_MPP_INIT(7, D_INPUT, PM8921_MPP_DIG_LEVEL_VPH, DIN_TO_INT),
 	PM8XXX_MPP_INIT(PM8XXX_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH8,
 								DOUT_CTRL_LOW),
+	PM8XXX_MPP_INIT(4, D_OUTPUT, PM8921_MPP_DIG_LEVEL_S4, DOUT_CTRL_LOW),
 };
 
 void __init msm8960_pm8921_gpio_mpp_init(void)
@@ -333,57 +348,21 @@ static struct platform_device gpio_keys_device = {
 	.resource = NULL,
 };
 
-#define GPIO_SW_SIM_DETECTION		36
-
-static struct gpio_event_direct_entry gpio_sw_gpio_map[] = {
-	{PM8921_GPIO_PM_TO_SYS(GPIO_SW_SIM_DETECTION), SW_JACK_PHYSICAL_INSERT},
-
-};
-
-static struct gpio_event_input_info gpio_sw_gpio_info = {
-	.info.func = gpio_event_input_func,
-	.info.no_suspend = 1,
-	.flags = 0,
-	.type = EV_SW,
-	.keymap = gpio_sw_gpio_map,
-	.keymap_size = ARRAY_SIZE(gpio_sw_gpio_map),
-	.debounce_time.tv64 = 100 * NSEC_PER_MSEC,
-
-};
-
-static struct gpio_event_info *pmic_keypad_info[] = {
-	&gpio_sw_gpio_info.info,
-};
-
-static struct gpio_event_platform_data pmic_keypad_data = {
-	.name = "sim-detection",
-	.info = pmic_keypad_info,
-	.info_count = ARRAY_SIZE(pmic_keypad_info),
-};
-
-static struct platform_device pmic_keypad_device = {
-	.name = GPIO_EVENT_DEV_NAME,
-	.id = 0,
-	.dev = {.platform_data = &pmic_keypad_data},
-};
-
 static int __init input_devices_init(void)
 {
 	platform_device_register(&gpio_keys_device);
-	platform_device_register(&pmic_keypad_device);
 	return 0;
 }
 static void __exit input_devices_exit(void)
 {
 	platform_device_unregister(&gpio_keys_device);
-	platform_device_unregister(&pmic_keypad_device);
 }
 
 module_init(input_devices_init);
 module_exit(input_devices_exit);
 
 static int pm8921_therm_mitigation[] = {
-	1425,
+	1525,
 	825,
 	475,
 	325,
@@ -406,10 +385,10 @@ struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.hysterisis_temp	= 3,
 	.temp_check_period	= 1,
 	.dc_unplug_check	= true,
-	.safe_current		= 1425,
-	.max_bat_chg_current	= 1425,
-	.cool_bat_chg_current	= 1425,
-	.warm_bat_chg_current	= 425,
+	.safe_current		= 1525,
+	.max_bat_chg_current	= 1525,
+	.cool_bat_chg_current	= 1525,
+	.warm_bat_chg_current	= 325,
 	.cool_bat_voltage	= 4200,
 	.warm_bat_voltage	= 4000,
 	.thermal_mitigation	= pm8921_therm_mitigation,
@@ -418,13 +397,14 @@ struct pm8921_charger_platform_data pm8921_chg_pdata __devinitdata = {
 	.hot_thr		= PM_SMBC_BATT_TEMP_HOT_THR__HIGH,
 	.rconn_mohm		= 18,
 	.btc_override		= 1,
-	.btc_override_cold_degc	= 5,
+	.btc_override_cold_degc = 5,
 	.btc_override_hot_degc	= 55,
 	.btc_delay_ms		= 10000,
 	.btc_panic_if_cant_stop_chg = 1,
 };
 
 static struct pm8xxx_misc_platform_data pm8xxx_misc_pdata = {
+
 	.priority		= 0,
 };
 
@@ -436,6 +416,7 @@ struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
 	.max_voltage_uv         = MAX_VOLTAGE_MV * 1000,
 	.default_rbatt_mohms	= 170,
 	.rconn_mohm		= 30,
+	.enable_fcc_learning	= 1,
 	.shutdown_soc_valid_limit	= 20,
 	.adjust_soc_low_threshold	= 25,
 	.chg_term_ua			= CHG_TERM_MA * 1000,
@@ -451,6 +432,62 @@ struct pm8921_bms_platform_data pm8921_bms_pdata __devinitdata = {
  */
 #define PM8XXX_PWM_CHANNEL_NONE		-1
 
+static struct led_info pm8921_led_info[] = {
+	[0] = {
+		.name			= "led:battery_charging",
+		.default_trigger	= "battery-charging",
+	},
+	[1] = {
+		.name			= "led:battery_full",
+		.default_trigger	= "battery-full",
+	},
+};
+
+static struct led_platform_data pm8921_led_core_pdata = {
+	.num_leds = ARRAY_SIZE(pm8921_led_info),
+	.leds = pm8921_led_info,
+};
+
+static int pm8921_led0_pwm_duty_pcts[56] = {
+		1, 4, 8, 12, 16, 20, 24, 28, 32, 36,
+		40, 44, 46, 52, 56, 60, 64, 68, 72, 76,
+		80, 84, 88, 92, 96, 100, 100, 100, 98, 95,
+		92, 88, 84, 82, 78, 74, 70, 66, 62, 58,
+		58, 54, 50, 48, 42, 38, 34, 30, 26, 22,
+		14, 10, 6, 4, 1
+};
+
+static struct pm8xxx_pwm_duty_cycles pm8921_led0_pwm_duty_cycles = {
+	.duty_pcts = (int *)&pm8921_led0_pwm_duty_pcts,
+	.num_duty_pcts = ARRAY_SIZE(pm8921_led0_pwm_duty_pcts),
+	.duty_ms = PM8XXX_LED_PWM_DUTY_MS,
+	.start_idx = 0,
+};
+
+static struct pm8xxx_led_config pm8921_led_configs[] = {
+	[0] = {
+		.id = PM8XXX_ID_LED_0,
+		.mode = PM8XXX_LED_MODE_PWM2,
+		.max_current = PM8921_LC_LED_MAX_CURRENT,
+		.pwm_channel = 5,
+		.pwm_period_us = PM8XXX_LED_PWM_PERIOD,
+		.pwm_duty_cycles = &pm8921_led0_pwm_duty_cycles,
+	},
+	[1] = {
+		.id = PM8XXX_ID_LED_1,
+		.mode = PM8XXX_LED_MODE_PWM1,
+		.max_current = PM8921_LC_LED_MAX_CURRENT,
+		.pwm_channel = 4,
+		.pwm_period_us = PM8XXX_LED_PWM_PERIOD,
+	},
+};
+
+static struct pm8xxx_led_platform_data pm8xxx_leds_pdata = {
+		.led_core = &pm8921_led_core_pdata,
+		.configs = pm8921_led_configs,
+		.num_configs = ARRAY_SIZE(pm8921_led_configs),
+};
+
 static struct pm8xxx_ccadc_platform_data pm8xxx_ccadc_pdata = {
 	.r_sense		= 10,
 	.calib_delay_ms		= 600000,
@@ -465,6 +502,11 @@ static struct pm8xxx_ccadc_platform_data pm8xxx_ccadc_pdata = {
 
 static struct pm8xxx_pwm_platform_data pm8xxx_pwm_pdata = {
 	.dtest_channel	= PM8XXX_PWM_DTEST_CHANNEL_NONE,
+};
+
+struct pm8xxx_vibrator_platform_data pm8xxx_vibrator_pdata = {
+	.initial_vibrate_ms = 0,
+	.level_mV = 3100,
 };
 
 #define PM8921_HSED_MIC_BIAS 0xA1
@@ -484,8 +526,11 @@ static struct pm8921_platform_data pm8921_platform_data __devinitdata = {
 	.charger_pdata		= &pm8921_chg_pdata,
 	.bms_pdata		= &pm8921_bms_pdata,
 	.adc_pdata		= &pm8xxx_adc_pdata,
+	.leds_pdata		= &pm8xxx_leds_pdata,
 	.ccadc_pdata		= &pm8xxx_ccadc_pdata,
 	.pwm_pdata		= &pm8xxx_pwm_pdata,
+	.vibrator_pdata		= &pm8xxx_vibrator_pdata,
+	.simple_remote_pdata	= &simple_remote_pf_data,
 	.mic_bias_pdata		= &pm8921_mic_bias_pdata,
 };
 
