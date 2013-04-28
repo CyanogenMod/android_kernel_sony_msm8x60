@@ -57,7 +57,7 @@
 #ifdef CONFIG_INPUT_AKM8972
 #include <linux/akm8972.h>
 #endif
-#if defined CONFIG_SENSORS_MPU3050
+#if defined CONFIG_SENSORS_MPU3050 || defined CONFIG_SENSORS_MPU6050
 #include <linux/mpu.h>
 #include "gyro-sony_common.h"
 #endif
@@ -3007,6 +3007,48 @@ out:
 extern struct mpu3050_platform_data mpu_data;
 #endif /* CONFIG_SENSORS_MPU3050 */
 
+#ifdef CONFIG_SENSORS_MPU6050
+#define MPU6050_GPIO 69
+#define AKM897X_GPIO 70
+int mpu6050_gpio_setup(struct device *dev, int enable)
+{
+	int rc = 0;
+
+	if (enable) {
+		rc = gpio_request(MPU6050_GPIO, "MPUIRQ");
+		if (rc)
+			pr_err("%s: gpio_request failed. rc=%d\n",
+					__func__, rc);
+	} else
+		gpio_free(MPU6050_GPIO);
+
+	return rc;
+}
+void mpu6050_hw_config(int enable)
+{
+	return;
+}
+
+void mpu6050_power_mode(struct device *dev, int enable)
+{
+	static int powered;
+	static struct regulator *reg_gyro;
+	int rc = 0;
+
+	if ((enable && !powered) || (!enable && powered))  {
+		rc = sensor_power(dev, enable, &reg_gyro, "gyro_vdd");
+		if (rc) {
+			dev_err(dev, "%s: power setup failed\n", __func__);
+			return;
+		}
+		powered = enable;
+	}
+}
+
+extern struct mpu_platform_data mpu6050_data;
+extern struct ext_slave_platform_data mpu_compass_data;
+#endif /* CONFIG_SENSORS_MPU6050 */
+
 #ifdef CONFIG_INPUT_APDS9702
 #define APDS9702_DOUT_GPIO   49
 
@@ -3827,6 +3869,22 @@ static struct i2c_board_info gsbi12_peripherals_info[] __initdata = {
 		I2C_BOARD_INFO(MPU_NAME, 0xD0 >> 1),
 		.irq = MSM_GPIO_TO_INT(MPU3050_GPIO),
 		.platform_data = &mpu_data,
+	},
+#endif
+#ifdef CONFIG_SENSORS_MPU6050
+	{
+		/* Config-spec is 8-bit = 0xD0, src-code need 7-bit => 0x68 */
+		I2C_BOARD_INFO("mpu6050", 0xD0 >> 1),
+		.irq = MSM_GPIO_TO_INT(MPU6050_GPIO),
+		.platform_data = &mpu6050_data,
+	},
+#endif
+#ifdef CONFIG_MPU_SENSORS_AK8972
+	{
+		/* Config-spec is 8-bit = 0x18, src-code need 7-bit => 0x0c */
+		I2C_BOARD_INFO("ak8972", 0x18 >> 1),
+		.irq = MSM_GPIO_TO_INT(AKM897X_GPIO),
+		.platform_data = &mpu_compass_data,
 	},
 #endif
 #ifdef CONFIG_INPUT_APDS9702
