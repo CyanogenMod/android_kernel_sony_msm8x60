@@ -87,17 +87,17 @@ struct as3676_platform_data as3676_platform_data = {
 };
 
 #define VBUS_BIT 0x04
+#define WALL_BIT (1 << (14))
 static int __init startup_rgb(char *str)
 {
 	int vbus;
 	if (get_option(&str, &vbus)) {
-		if (vbus & VBUS_BIT)
+		if (vbus & (VBUS_BIT|WALL_BIT))
 			as3676_platform_data.leds[6].startup_current_uA = 2000;
 		return 0;
 	}
 	return -EINVAL;
 }
-
 
 early_param("startup", startup_rgb);
 
