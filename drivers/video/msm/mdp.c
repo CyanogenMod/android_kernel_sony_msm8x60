@@ -2378,7 +2378,7 @@ int mdp_bus_scale_update_request(u64 ab, u64 ib)
 	ib = max(ib, ab);
 	mdp_bus_usecases[bus_index].vectors->ib = min(ib, mdp_max_bw);
 
-	pr_debug("%s: handle=%d index=%d ab=%llu ib=%llu\n", __func__,
+	pr_debug("%s: handle=%d index=%d ab=%u ib=%u\n", __func__,
 		 (u32)mdp_bus_scale_handle, bus_index,
 		 mdp_bus_usecases[bus_index].vectors->ab,
 		 mdp_bus_usecases[bus_index].vectors->ib);
