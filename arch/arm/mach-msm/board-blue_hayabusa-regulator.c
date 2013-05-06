@@ -101,14 +101,11 @@ VREG_CONSUMERS(L15) = {
 };
 VREG_CONSUMERS(L16) = {
 	REGULATOR_SUPPLY("8921_l16",            NULL),
-	REGULATOR_SUPPLY("cam_vaf",		"msm_camera_imx074.0"),
-	REGULATOR_SUPPLY("cam_vaf",		"msm_camera_ov2720.0"),
-#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
-	REGULATOR_SUPPLY("cam_vaf",		"4-001a"),
-#endif
+	REGULATOR_SUPPLY("lc898300_vdd",	"12-0049"),
 };
 VREG_CONSUMERS(L17) = {
 	REGULATOR_SUPPLY("8921_l17",		NULL),
+	REGULATOR_SUPPLY("touch_vdd",		"3-002c"),
 };
 VREG_CONSUMERS(L18) = {
 	REGULATOR_SUPPLY("8921_l18",		NULL),
@@ -183,6 +180,7 @@ VREG_CONSUMERS(S4) = {
 	REGULATOR_SUPPLY("CDC_VDDA_TX",		"tabla2x-slim"),
 	REGULATOR_SUPPLY("CDC_VDDA_RX",		"tabla2x-slim"),
 	REGULATOR_SUPPLY("EXT_HUB_VDDIO",	"msm_smsc_hub"),
+	REGULATOR_SUPPLY("touch_vio",		"3-002c"),
 };
 VREG_CONSUMERS(S5) = {
 	REGULATOR_SUPPLY("8921_s5",		NULL),
@@ -221,7 +219,6 @@ VREG_CONSUMERS(LVS5) = {
 	REGULATOR_SUPPLY("cam_vio",		"4-0048"),
 #endif
 	REGULATOR_SUPPLY("lm3560_ntc",		"10-0053"),
-
 };
 VREG_CONSUMERS(LVS6) = {
 	REGULATOR_SUPPLY("8921_lvs6",		NULL),
@@ -509,7 +506,7 @@ msm_rpm_regulator_init_data[] __devinitdata = {
 	RPM_LDO(L12,	 0, 1, 0, 1200000, 1200000, "8921_s4", 0, 0),
 	RPM_LDO(L14,	 0, 1, 0, 1800000, 1800000, NULL,      0, 0),
 	RPM_LDO(L15,	 0, 1, 0, 1800000, 2950000, NULL,      0, 0),
-	RPM_LDO(L16,	 0, 1, 0, 2600000, 3000000, NULL,      0, 0),
+	RPM_LDO(L16,     0, 1, 0, 2600000, 3000000, NULL,      0, 0),
 	RPM_LDO(L17,	 0, 1, 0, 1800000, 3000000, NULL,      0, 0),
 	RPM_LDO(L18,	 0, 1, 0, 1200000, 1200000, "8921_s4", 0, 0),
 	RPM_LDO(L21,	 0, 1, 0, 1900000, 1900000, "8921_s8", 0, 0),
