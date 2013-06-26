@@ -538,12 +538,8 @@ static irqreturn_t adreno_irq_handler(struct kgsl_device *device)
 	result = adreno_dev->gpudev->irq_handler(adreno_dev);
 
 	if (device->requested_state == KGSL_STATE_NONE) {
-		if (device->pwrctrl.nap_allowed == true) {
-			kgsl_pwrctrl_request_state(device, KGSL_STATE_NAP);
-			queue_work(device->work_queue, &device->idle_check_ws);
-		} else if (device->pwrscale.policy != NULL) {
-			queue_work(device->work_queue, &device->idle_check_ws);
-		}
+		kgsl_pwrctrl_request_state(device, KGSL_STATE_NAP);
+		queue_work(device->work_queue, &device->idle_check_ws);
 	}
 
 	/* Reset the time-out in our idle timer */
@@ -1401,10 +1397,6 @@ static int adreno_of_get_pdata(struct platform_device *pdev)
 	if (adreno_of_read_property(pdev->dev.of_node, "qcom,idle-timeout",
 		&pdata->idle_timeout))
 		pdata->idle_timeout = 83;
-
-	if (adreno_of_read_property(pdev->dev.of_node, "qcom,nap-allowed",
-		&pdata->nap_allowed))
-		pdata->nap_allowed = 1;
 
 	if (adreno_of_read_property(pdev->dev.of_node, "qcom,clk-map",
 		&pdata->clk_map))
@@ -2965,8 +2957,6 @@ static int adreno_setproperty(struct kgsl_device *device,
 	switch (type) {
 	case KGSL_PROP_PWRCTRL: {
 			unsigned int enable;
-			struct kgsl_device_platform_data *pdata =
-				kgsl_device_get_drvdata(device);
 
 			if (sizebytes != sizeof(enable))
 				break;
@@ -2978,12 +2968,11 @@ static int adreno_setproperty(struct kgsl_device *device,
 			}
 
 			if (enable) {
-				if (pdata->nap_allowed)
-					device->pwrctrl.nap_allowed = true;
+				device->pwrctrl.ctrl_flags = 0;
 				adreno_dev->fast_hang_detect = 1;
 				kgsl_pwrscale_enable(device);
 			} else {
-				device->pwrctrl.nap_allowed = false;
+				device->pwrctrl.ctrl_flags = KGSL_PWR_ON;
 				adreno_dev->fast_hang_detect = 0;
 				kgsl_pwrscale_disable(device);
 			}
