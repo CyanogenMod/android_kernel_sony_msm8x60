@@ -40,8 +40,8 @@ const unsigned int a3xx_registers[] = {
 	0x0578, 0x057f, 0x0600, 0x0602, 0x0605, 0x0607, 0x060a, 0x060e,
 	0x0612, 0x0614, 0x0c01, 0x0c02, 0x0c06, 0x0c1d, 0x0c3d, 0x0c3f,
 	0x0c48, 0x0c4b, 0x0c80, 0x0c80, 0x0c88, 0x0c8b, 0x0ca0, 0x0cb7,
-	0x0cc0, 0x0cc1, 0x0cc6, 0x0cc7, 0x0ce4, 0x0ce5, 0x0e00, 0x0e05,
-	0x0e0c, 0x0e0c, 0x0e22, 0x0e23, 0x0e41, 0x0e45, 0x0e64, 0x0e65,
+	0x0cc0, 0x0cc1, 0x0cc6, 0x0cc7, 0x0ce4, 0x0ce5,
+	0x0e41, 0x0e45, 0x0e64, 0x0e65,
 	0x0e80, 0x0e82, 0x0e84, 0x0e89, 0x0ea0, 0x0ea1, 0x0ea4, 0x0ea7,
 	0x0ec4, 0x0ecb, 0x0ee0, 0x0ee0, 0x0f00, 0x0f01, 0x0f03, 0x0f09,
 	0x2040, 0x2040, 0x2044, 0x2044, 0x2048, 0x204d, 0x2068, 0x2069,
@@ -49,7 +49,7 @@ const unsigned int a3xx_registers[] = {
 	0x2079, 0x207a, 0x20c0, 0x20d3, 0x20e4, 0x20ef, 0x2100, 0x2109,
 	0x210c, 0x210c, 0x210e, 0x210e, 0x2110, 0x2111, 0x2114, 0x2115,
 	0x21e4, 0x21e4, 0x21ea, 0x21ea, 0x21ec, 0x21ed, 0x21f0, 0x21f0,
-	0x2200, 0x2212, 0x2214, 0x2217, 0x221a, 0x221a, 0x2240, 0x227e,
+	0x2240, 0x227e,
 	0x2280, 0x228b, 0x22c0, 0x22c0, 0x22c4, 0x22ce, 0x22d0, 0x22d8,
 	0x22df, 0x22e6, 0x22e8, 0x22e9, 0x22ec, 0x22ec, 0x22f0, 0x22f7,
 	0x22ff, 0x22ff, 0x2340, 0x2343, 0x2348, 0x2349, 0x2350, 0x2356,
@@ -58,7 +58,7 @@ const unsigned int a3xx_registers[] = {
 	0x2474, 0x2475, 0x2479, 0x247a, 0x24c0, 0x24d3, 0x24e4, 0x24ef,
 	0x2500, 0x2509, 0x250c, 0x250c, 0x250e, 0x250e, 0x2510, 0x2511,
 	0x2514, 0x2515, 0x25e4, 0x25e4, 0x25ea, 0x25ea, 0x25ec, 0x25ed,
-	0x25f0, 0x25f0, 0x2600, 0x2612, 0x2614, 0x2617, 0x261a, 0x261a,
+	0x25f0, 0x25f0,
 	0x2640, 0x267e, 0x2680, 0x268b, 0x26c0, 0x26c0, 0x26c4, 0x26ce,
 	0x26d0, 0x26d8, 0x26df, 0x26e6, 0x26e8, 0x26e9, 0x26ec, 0x26ec,
 	0x26f0, 0x26f7, 0x26ff, 0x26ff, 0x2740, 0x2743, 0x2748, 0x2749,
@@ -68,6 +68,26 @@ const unsigned int a3xx_registers[] = {
 };
 
 const unsigned int a3xx_registers_count = ARRAY_SIZE(a3xx_registers) / 2;
+
+/* Removed the following HLSQ register ranges from being read during
+ * fault tolerance since reading the registers may cause the device to hang:
+ */
+const unsigned int a3xx_hlsq_registers[] = {
+	0x0e00, 0x0e05, 0x0e0c, 0x0e0c, 0x0e22, 0x0e23,
+	0x2200, 0x2212, 0x2214, 0x2217, 0x221a, 0x221a,
+	0x2600, 0x2612, 0x2614, 0x2617, 0x261a, 0x261a,
+};
+
+const unsigned int a3xx_hlsq_registers_count =
+			ARRAY_SIZE(a3xx_hlsq_registers) / 2;
+
+/* The set of additional registers to be dumped for A330 */
+
+const unsigned int a330_registers[] = {
+	0x1d0, 0x1d0, 0x1d4, 0x1d4, 0x453, 0x453,
+};
+
+const unsigned int a330_registers_count = ARRAY_SIZE(a330_registers) / 2;
 
 /* Simple macro to facilitate bit setting in the gmem2sys and sys2gmem
  * functions.
@@ -2347,7 +2367,7 @@ static void a3xx_drawctxt_save(struct adreno_device *adreno_dev,
 {
 	struct kgsl_device *device = &adreno_dev->dev;
 
-	if (context == NULL)
+	if (context == NULL || (context->flags & CTXT_FLAGS_BEING_DESTROYED))
 		return;
 
 	if (context->flags & CTXT_FLAGS_GPU_HANG)
@@ -2482,7 +2502,7 @@ static void set_gmem_copy_quad(struct adreno_device *adreno_dev)
 
 /*
  * Create a fixed IB to do a draw call on resume for the A305.
- * This is a modified GMEM restore IB, and does a 32x32 pixel draw
+ * This is a modified GMEM restore IB, and does a 1x1 pixel draw
  * into GMEM on resume from SLUMBER state.
  */
 static void a305_create_on_resume_ib(struct adreno_device *adreno_dev)
@@ -2492,71 +2512,12 @@ static void a305_create_on_resume_ib(struct adreno_device *adreno_dev)
 	unsigned int *dummy_src;
 	int pitch;
 
-	pitch = 32;
+	pitch = 1;
 
 	set_gmem_copy_quad(adreno_dev);
 	start_cmd = adreno_dev->on_resume_cmd.hostptr;
 	start_cmd += QUAD_RESTORE_LEN;
 	cmds = start_cmd;
-
-	*cmds++ = cp_type0_packet(A3XX_RBBM_CLOCK_CTL, 1);
-	*cmds++ = A3XX_RBBM_CLOCK_CTL_DEFAULT;
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 5);
-	*cmds++ = CP_REG(A3XX_HLSQ_CONTROL_0_REG);
-	/* HLSQ_CONTROL_0_REG */
-	*cmds++ = _SET(HLSQ_CTRL0REG_FSTHREADSIZE, HLSQ_FOUR_PIX_QUADS) |
-		_SET(HLSQ_CTRL0REG_FSSUPERTHREADENABLE, 1) |
-		_SET(HLSQ_CTRL0REG_SPSHADERRESTART, 1) |
-		_SET(HLSQ_CTRL0REG_CHUNKDISABLE, 1) |
-		_SET(HLSQ_CTRL0REG_SPCONSTFULLUPDATE, 1);
-	/* HLSQ_CONTROL_1_REG */
-	*cmds++ = _SET(HLSQ_CTRL1REG_VSTHREADSIZE, HLSQ_TWO_VTX_QUADS) |
-		_SET(HLSQ_CTRL1REG_VSSUPERTHREADENABLE, 1);
-	/* HLSQ_CONTROL_2_REG */
-	*cmds++ = _SET(HLSQ_CTRL2REG_PRIMALLOCTHRESHOLD, 31);
-	/* HLSQ_CONTROL3_REG */
-	*cmds++ = 0x00000000;
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 3);
-	*cmds++ = CP_REG(A3XX_RB_MRT_BUF_INFO0);
-	/* RB_MRT_BUF_INFO0 */
-	*cmds++ = _SET(RB_MRTBUFINFO_COLOR_FORMAT, RB_R8G8B8A8_UNORM) |
-		_SET(RB_MRTBUFINFO_COLOR_TILE_MODE, RB_TILINGMODE_32X32) |
-		_SET(RB_MRTBUFINFO_COLOR_BUF_PITCH,
-		(pitch * 4 * 8) / 256);
-	/* RB_MRT_BUF_BASE0 */
-	*cmds++ = _SET(RB_MRTBUFBASE_COLOR_BUF_BASE, tmp_ctx.gmem_base >> 5);
-
-	/* Texture samplers */
-	*cmds++ = cp_type3_packet(CP_LOAD_STATE, 4);
-	*cmds++ = (16 << CP_LOADSTATE_DSTOFFSET_SHIFT)
-		| (HLSQ_DIRECT << CP_LOADSTATE_STATESRC_SHIFT)
-		| (HLSQ_BLOCK_ID_TP_TEX << CP_LOADSTATE_STATEBLOCKID_SHIFT)
-		| (1 << CP_LOADSTATE_NUMOFUNITS_SHIFT);
-	*cmds++ = (HLSQ_TP_TEX_SAMPLERS << CP_LOADSTATE_STATETYPE_SHIFT)
-		| (0 << CP_LOADSTATE_EXTSRCADDR_SHIFT);
-	*cmds++ = 0x00000240;
-	*cmds++ = 0x00000000;
-
-	*cmds++ = cp_type0_packet(A3XX_VFD_PERFCOUNTER0_SELECT, 1);
-	*cmds++ = 0x00000000;
-
-	/* Texture memobjs */
-	*cmds++ = cp_type3_packet(CP_LOAD_STATE, 6);
-	*cmds++ = (16 << CP_LOADSTATE_DSTOFFSET_SHIFT)
-		| (HLSQ_DIRECT << CP_LOADSTATE_STATESRC_SHIFT)
-		| (HLSQ_BLOCK_ID_TP_TEX << CP_LOADSTATE_STATEBLOCKID_SHIFT)
-		| (1 << CP_LOADSTATE_NUMOFUNITS_SHIFT);
-	*cmds++ = (HLSQ_TP_TEX_MEMOBJ << CP_LOADSTATE_STATETYPE_SHIFT)
-		| (0 << CP_LOADSTATE_EXTSRCADDR_SHIFT);
-	*cmds++ = 0x4cc06880;
-	*cmds++ = pitch | (pitch << 14);
-	*cmds++ = (pitch*4*8) << 9;
-	*cmds++ = 0x00000000;
-
-	*cmds++ = cp_type0_packet(A3XX_VFD_PERFCOUNTER0_SELECT, 1);
-	*cmds++ = 0x00000000;
 
 	/* Mipmap bases */
 	*cmds++ = cp_type3_packet(CP_LOAD_STATE, 16);
@@ -2582,19 +2543,6 @@ static void a305_create_on_resume_ib(struct adreno_device *adreno_dev)
 	*cmds++ = 0x00000000;
 
 	*cmds++ = cp_type0_packet(A3XX_VFD_PERFCOUNTER0_SELECT, 1);
-	*cmds++ = 0x00000000;
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 5);
-	*cmds++ = CP_REG(A3XX_HLSQ_VS_CONTROL_REG);
-	/* HLSQ_VS_CONTROL_REG */
-	*cmds++ = _SET(HLSQ_VSCTRLREG_VSINSTRLENGTH, 1);
-	/* HLSQ_FS_CONTROL_REG */
-	*cmds++ = _SET(HLSQ_FSCTRLREG_FSCONSTLENGTH, 1) |
-		_SET(HLSQ_FSCTRLREG_FSCONSTSTARTOFFSET, 128) |
-		_SET(HLSQ_FSCTRLREG_FSINSTRLENGTH, 2);
-	/* HLSQ_CONST_VSPRESV_RANGE_REG */
-	*cmds++ = 0x00000000;
-	/* HLSQ_CONST_FSPRESV_RANGE_REG */
 	*cmds++ = 0x00000000;
 
 	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
@@ -2893,29 +2841,6 @@ static void a305_create_on_resume_ib(struct adreno_device *adreno_dev)
 		_SET(VFD_DECODEINSTRUCTIONS_LASTCOMPVALID, 1);
 
 	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_RB_DEPTH_CONTROL);
-	/* RB_DEPTH_CONTROL */
-	*cmds++ = _SET(RB_DEPTHCONTROL_Z_TEST_FUNC, RB_FRAG_LESS);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_RB_STENCIL_CONTROL);
-	/* RB_STENCIL_CONTROL */
-	*cmds++ = _SET(RB_STENCILCONTROL_STENCIL_FUNC, RB_REF_ALWAYS) |
-		_SET(RB_STENCILCONTROL_STENCIL_FAIL, RB_STENCIL_KEEP) |
-		_SET(RB_STENCILCONTROL_STENCIL_ZPASS, RB_STENCIL_KEEP) |
-		_SET(RB_STENCILCONTROL_STENCIL_ZFAIL, RB_STENCIL_KEEP) |
-		_SET(RB_STENCILCONTROL_STENCIL_FUNC_BF, RB_REF_ALWAYS) |
-		_SET(RB_STENCILCONTROL_STENCIL_FAIL_BF, RB_STENCIL_KEEP) |
-		_SET(RB_STENCILCONTROL_STENCIL_ZPASS_BF, RB_STENCIL_KEEP) |
-		_SET(RB_STENCILCONTROL_STENCIL_ZFAIL_BF, RB_STENCIL_KEEP);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_RB_MODE_CONTROL);
-	/* RB_MODE_CONTROL */
-	*cmds++ = _SET(RB_MODECONTROL_RENDER_MODE, RB_RENDERING_PASS) |
-		_SET(RB_MODECONTROL_MARB_CACHE_SPLIT_MODE, 1);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
 	*cmds++ = CP_REG(A3XX_RB_RENDER_CONTROL);
 	/* RB_RENDER_CONTROL */
 	*cmds++ = _SET(RB_RENDERCONTROL_BIN_WIDTH, pitch >> 5) |
@@ -2926,72 +2851,6 @@ static void a305_create_on_resume_ib(struct adreno_device *adreno_dev)
 	/* RB_MSAA_CONTROL */
 	*cmds++ = _SET(RB_MSAACONTROL_MSAA_DISABLE, 1) |
 		_SET(RB_MSAACONTROL_SAMPLE_MASK, 0xFFFF);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_RB_MRT_CONTROL0);
-	/* RB_MRT_CONTROL0 */
-	*cmds++ = _SET(RB_MRTCONTROL_ROP_CODE, 12) |
-		_SET(RB_MRTCONTROL_DITHER_MODE, RB_DITHER_DISABLE) |
-		_SET(RB_MRTCONTROL_COMPONENT_ENABLE, 0xF);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 3);
-	*cmds++ = CP_REG(A3XX_RB_MRT_BLEND_CONTROL0);
-	/* RB_MRT_BLENDCONTROL0 */
-	*cmds++ = _SET(RB_MRTBLENDCONTROL_RGB_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_RGB_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_RGB_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_CLAMP_ENABLE, 1);
-	/* RB_MRT_CONTROL1 */
-	*cmds++ = _SET(RB_MRTCONTROL_READ_DEST_ENABLE, 1) |
-		_SET(RB_MRTCONTROL_ROP_CODE, 12) |
-		_SET(RB_MRTCONTROL_DITHER_MODE, RB_DITHER_ALWAYS) |
-		_SET(RB_MRTCONTROL_COMPONENT_ENABLE, 0xF);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 3);
-	*cmds++ = CP_REG(A3XX_RB_MRT_BLEND_CONTROL1);
-	/* RB_MRT_BLENDCONTROL1 */
-	*cmds++ = _SET(RB_MRTBLENDCONTROL_RGB_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_RGB_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_RGB_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_CLAMP_ENABLE, 1);
-	/* RB_MRT_CONTROL2 */
-	*cmds++ = _SET(RB_MRTCONTROL_READ_DEST_ENABLE, 1) |
-		_SET(RB_MRTCONTROL_ROP_CODE, 12) |
-		_SET(RB_MRTCONTROL_DITHER_MODE, RB_DITHER_ALWAYS) |
-		_SET(RB_MRTCONTROL_COMPONENT_ENABLE, 0xF);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 3);
-	*cmds++ = CP_REG(A3XX_RB_MRT_BLEND_CONTROL2);
-	/* RB_MRT_BLENDCONTROL2 */
-	*cmds++ = _SET(RB_MRTBLENDCONTROL_RGB_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_RGB_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_RGB_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_CLAMP_ENABLE, 1);
-	/* RB_MRT_CONTROL3 */
-	*cmds++ = _SET(RB_MRTCONTROL_READ_DEST_ENABLE, 1) |
-		_SET(RB_MRTCONTROL_ROP_CODE, 12) |
-		_SET(RB_MRTCONTROL_DITHER_MODE, RB_DITHER_ALWAYS) |
-		_SET(RB_MRTCONTROL_COMPONENT_ENABLE, 0xF);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_RB_MRT_BLEND_CONTROL3);
-	/* RB_MRT_BLENDCONTROL3 */
-	*cmds++ = _SET(RB_MRTBLENDCONTROL_RGB_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_RGB_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_RGB_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_SRC_FACTOR, RB_FACTOR_ONE) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_BLEND_OPCODE, RB_BLEND_OP_ADD) |
-		_SET(RB_MRTBLENDCONTROL_ALPHA_DEST_FACTOR, RB_FACTOR_ZERO) |
-		_SET(RB_MRTBLENDCONTROL_CLAMP_ENABLE, 1);
 
 	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 5);
 	*cmds++ = CP_REG(A3XX_VFD_INDEX_MIN);
@@ -3004,52 +2863,6 @@ static void a305_create_on_resume_ib(struct adreno_device *adreno_dev)
 	/* TPL1_TP_VS_TEX_OFFSET */
 	*cmds++ = 0x00000000;
 
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_VFD_VS_THREADING_THRESHOLD);
-	/* VFD_VS_THREADING_THRESHOLD */
-	*cmds++ = _SET(VFD_THREADINGTHRESHOLD_REGID_THRESHOLD, 15) |
-		_SET(VFD_THREADINGTHRESHOLD_REGID_VTXCNT, 252);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_TPL1_TP_VS_TEX_OFFSET);
-	/* TPL1_TP_VS_TEX_OFFSET */
-	*cmds++ = 0x00000000;
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_TPL1_TP_FS_TEX_OFFSET);
-	/* TPL1_TP_FS_TEX_OFFSET */
-	*cmds++ = _SET(TPL1_TPTEXOFFSETREG_SAMPLEROFFSET, 16) |
-		_SET(TPL1_TPTEXOFFSETREG_MEMOBJOFFSET, 16) |
-		_SET(TPL1_TPTEXOFFSETREG_BASETABLEPTR, 224);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_GRAS_SC_CONTROL);
-	/* GRAS_SC_CONTROL */
-	/*cmds++ = _SET(GRAS_SC_CONTROL_RASTER_MODE, 1);
-		*cmds++ = _SET(GRAS_SC_CONTROL_RASTER_MODE, 1) |*/
-	*cmds++ = 0x04001000;
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_GRAS_SU_MODE_CONTROL);
-	/* GRAS_SU_MODE_CONTROL */
-	*cmds++ = _SET(GRAS_SU_CTRLMODE_LINEHALFWIDTH, 2);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 3);
-	*cmds++ = CP_REG(A3XX_GRAS_SC_WINDOW_SCISSOR_TL);
-	/* GRAS_SC_WINDOW_SCISSOR_TL */
-	*cmds++ = 0x00000000;
-	/* GRAS_SC_WINDOW_SCISSOR_BR */
-	*cmds++ = _SET(GRAS_SC_WINDOW_SCISSOR_BR_BR_X, pitch - 1) |
-		_SET(GRAS_SC_WINDOW_SCISSOR_BR_BR_Y, pitch - 1);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 3);
-	*cmds++ = CP_REG(A3XX_GRAS_SC_SCREEN_SCISSOR_TL);
-	/* GRAS_SC_SCREEN_SCISSOR_TL */
-	*cmds++ = 0x00000000;
-	/* GRAS_SC_SCREEN_SCISSOR_BR */
-	*cmds++ = _SET(GRAS_SC_SCREEN_SCISSOR_BR_BR_X, pitch - 1) |
-		_SET(GRAS_SC_SCREEN_SCISSOR_BR_BR_Y, pitch - 1);
-
 	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 5);
 	*cmds++ = CP_REG(A3XX_GRAS_CL_VPORT_XOFFSET);
 	/* GRAS_CL_VPORT_XOFFSET */
@@ -3060,33 +2873,6 @@ static void a305_create_on_resume_ib(struct adreno_device *adreno_dev)
 	*cmds++ = 0x00000000;
 	/* GRAS_CL_VPORT_YSCALE */
 	*cmds++ = _SET(GRAS_CL_VPORT_YSCALE_VPORT_YSCALE, 0x3F800000);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 3);
-	*cmds++ = CP_REG(A3XX_GRAS_CL_VPORT_ZOFFSET);
-	/* GRAS_CL_VPORT_ZOFFSET */
-	*cmds++ = 0x00000000;
-	/* GRAS_CL_VPORT_ZSCALE */
-	*cmds++ = _SET(GRAS_CL_VPORT_ZSCALE_VPORT_ZSCALE, 0x3F800000);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_GRAS_CL_CLIP_CNTL);
-	/* GRAS_CL_CLIP_CNTL */
-	*cmds++ = _SET(GRAS_CL_CLIP_CNTL_IJ_PERSP_CENTER, 1);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_SP_FS_IMAGE_OUTPUT_REG_0);
-	/* SP_FS_IMAGE_OUTPUT_REG_0 */
-	*cmds++ = _SET(SP_IMAGEOUTPUTREG_MRTFORMAT, SP_R8G8B8A8_UNORM);
-
-	*cmds++ = cp_type3_packet(CP_SET_CONSTANT, 2);
-	*cmds++ = CP_REG(A3XX_PC_PRIM_VTX_CNTL);
-	/* PC_PRIM_VTX_CONTROL */
-	*cmds++ = _SET(PC_PRIM_VTX_CONTROL_STRIDE_IN_VPC, 2) |
-		_SET(PC_PRIM_VTX_CONTROL_POLYMODE_FRONT_PTYPE,
-		PC_DRAW_TRIANGLES) |
-		_SET(PC_PRIM_VTX_CONTROL_POLYMODE_BACK_PTYPE,
-		PC_DRAW_TRIANGLES) |
-		_SET(PC_PRIM_VTX_CONTROL_PROVOKING_VTX_LAST, 1);
 
 	/* oxili_generate_context_roll_packets */
 	*cmds++ = cp_type0_packet(A3XX_SP_VS_CTRL_REG0, 1);
@@ -3148,7 +2934,7 @@ static void a3xx_rb_init(struct adreno_device *adreno_dev,
 			 struct adreno_ringbuffer *rb)
 {
 	unsigned int *cmds, cmds_gpu;
-	cmds = adreno_ringbuffer_allocspace(rb, 18);
+	cmds = adreno_ringbuffer_allocspace(rb, NULL, 18);
 	cmds_gpu = rb->buffer_desc.gpuaddr + sizeof(uint) * (rb->wptr - 18);
 
 	GSL_RB_WRITE(cmds, cmds_gpu, cp_type3_packet(CP_ME_INIT, 17));
@@ -3249,24 +3035,14 @@ static void a3xx_cp_callback(struct adreno_device *adreno_dev, int irq)
 {
 	struct kgsl_device *device = &adreno_dev->dev;
 
-	if (irq == A3XX_INT_CP_RB_INT) {
-		unsigned int context_id;
-		kgsl_sharedmem_readl(&device->memstore, &context_id,
-				KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
-					current_context));
-		if (context_id < KGSL_MEMSTORE_MAX) {
-			kgsl_sharedmem_writel(&device->memstore,
-					KGSL_MEMSTORE_OFFSET(context_id,
-						ts_cmp_enable), 0);
-			wmb();
-		}
-		KGSL_CMD_WARN(device, "ringbuffer rb interrupt\n");
-	}
-
+	/* Wake up everybody waiting for the interrupt */
 	wake_up_interruptible_all(&device->wait_queue);
 
 	/* Schedule work to free mem and issue ibs */
 	queue_work(device->work_queue, &device->ts_expired_ws);
+
+	atomic_notifier_call_chain(&device->ts_notifier_list,
+				   device->id, NULL);
 }
 
 #define A3XX_IRQ_CALLBACK(_c) { .func = _c }
@@ -3358,6 +3134,15 @@ static void a3xx_irq_control(struct adreno_device *adreno_dev, int state)
 		adreno_regwrite(device, A3XX_RBBM_INT_0_MASK, 0);
 }
 
+static unsigned int a3xx_irq_pending(struct adreno_device *adreno_dev)
+{
+	unsigned int status;
+
+	adreno_regread(&adreno_dev->dev, A3XX_RBBM_INT_0_STATUS, &status);
+
+	return (status & A3XX_INT_MASK) ? 1 : 0;
+}
+
 static unsigned int a3xx_busy_cycles(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = &adreno_dev->dev;
@@ -3383,57 +3168,100 @@ static unsigned int a3xx_busy_cycles(struct adreno_device *adreno_dev)
 	return val;
 }
 
+struct a3xx_vbif_data {
+	unsigned int reg;
+	unsigned int val;
+};
+
+/* VBIF registers start after 0x3000 so use 0x0 as end of list marker */
+static struct a3xx_vbif_data a305_vbif[] = {
+	/* Set up 16 deep read/write request queues */
+	{ A3XX_VBIF_IN_RD_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_IN_RD_LIM_CONF1, 0x10101010 },
+	{ A3XX_VBIF_OUT_RD_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_OUT_WR_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_DDR_OUT_MAX_BURST, 0x0000303 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF1, 0x10101010 },
+	/* Enable WR-REQ */
+	{ A3XX_VBIF_GATE_OFF_WRREQ_EN, 0x0000FF },
+	/* Set up round robin arbitration between both AXI ports */
+	{ A3XX_VBIF_ARB_CTL, 0x00000030 },
+	/* Set up AOOO */
+	{ A3XX_VBIF_OUT_AXI_AOOO_EN, 0x0000003C },
+	{ A3XX_VBIF_OUT_AXI_AOOO, 0x003C003C },
+	{0, 0},
+};
+
+static struct a3xx_vbif_data a320_vbif[] = {
+	/* Set up 16 deep read/write request queues */
+	{ A3XX_VBIF_IN_RD_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_IN_RD_LIM_CONF1, 0x10101010 },
+	{ A3XX_VBIF_OUT_RD_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_OUT_WR_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_DDR_OUT_MAX_BURST, 0x0000303 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF0, 0x10101010 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF1, 0x10101010 },
+	/* Enable WR-REQ */
+	{ A3XX_VBIF_GATE_OFF_WRREQ_EN, 0x0000FF },
+	/* Set up round robin arbitration between both AXI ports */
+	{ A3XX_VBIF_ARB_CTL, 0x00000030 },
+	/* Set up AOOO */
+	{ A3XX_VBIF_OUT_AXI_AOOO_EN, 0x0000003C },
+	{ A3XX_VBIF_OUT_AXI_AOOO, 0x003C003C },
+	/* Enable 1K sort */
+	{ A3XX_VBIF_ABIT_SORT, 0x000000FF },
+	{ A3XX_VBIF_ABIT_SORT_CONF, 0x000000A4 },
+	{0, 0},
+};
+
+static struct a3xx_vbif_data a330_vbif[] = {
+	/* Set up 16 deep read/write request queues */
+	{ A3XX_VBIF_IN_RD_LIM_CONF0, 0x18181818 },
+	{ A3XX_VBIF_IN_RD_LIM_CONF1, 0x00001818 },
+	{ A3XX_VBIF_OUT_RD_LIM_CONF0, 0x00001818 },
+	{ A3XX_VBIF_OUT_WR_LIM_CONF0, 0x00001818 },
+	{ A3XX_VBIF_DDR_OUT_MAX_BURST, 0x0000303 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF0, 0x18181818 },
+	{ A3XX_VBIF_IN_WR_LIM_CONF1, 0x00001818 },
+	/* Enable WR-REQ */
+	{ A3XX_VBIF_GATE_OFF_WRREQ_EN, 0x00003F },
+	/* Set up round robin arbitration between both AXI ports */
+	{ A3XX_VBIF_ARB_CTL, 0x00000030 },
+	/* Set up VBIF_ROUND_ROBIN_QOS_ARB */
+	{ A3XX_VBIF_ROUND_ROBIN_QOS_ARB, 0x0001 },
+	/* Set up AOOO */
+	{ A3XX_VBIF_OUT_AXI_AOOO_EN, 0x0000003F },
+	{ A3XX_VBIF_OUT_AXI_AOOO, 0x003F003F },
+	/* Enable 1K sort */
+	{ A3XX_VBIF_ABIT_SORT, 0x0001003F },
+	{ A3XX_VBIF_ABIT_SORT_CONF, 0x000000A4 },
+	/* Disable VBIF clock gating. This is to enable AXI running
+	 * higher frequency than GPU.
+	 */
+	{ A3XX_VBIF_CLKON, 1 },
+	{0, 0},
+};
+
 static void a3xx_start(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = &adreno_dev->dev;
+	struct a3xx_vbif_data *vbif = NULL;
 
-	/* Set up 16 deep read/write request queues */
-	if (adreno_dev->gpurev == ADRENO_REV_A330) {
-		adreno_regwrite(device, A3XX_VBIF_IN_RD_LIM_CONF0, 0x18181818);
-		adreno_regwrite(device, A3XX_VBIF_IN_RD_LIM_CONF1, 0x00001818);
-		adreno_regwrite(device, A3XX_VBIF_OUT_RD_LIM_CONF0, 0x00001818);
-		adreno_regwrite(device, A3XX_VBIF_OUT_WR_LIM_CONF0, 0x00001818);
-		adreno_regwrite(device, A3XX_VBIF_DDR_OUT_MAX_BURST, 0x0000303);
-		adreno_regwrite(device, A3XX_VBIF_IN_WR_LIM_CONF0, 0x18181818);
-		adreno_regwrite(device, A3XX_VBIF_IN_WR_LIM_CONF1, 0x00001818);
-		/* Enable WR-REQ */
-		adreno_regwrite(device, A3XX_VBIF_GATE_OFF_WRREQ_EN, 0x0000FF);
+	if (adreno_is_a305(adreno_dev))
+		vbif = a305_vbif;
+	else if (adreno_is_a320(adreno_dev))
+		vbif = a320_vbif;
+	else if (adreno_is_a330(adreno_dev))
+		vbif = a330_vbif;
 
-		/* Set up round robin arbitration between both AXI ports */
-		adreno_regwrite(device, A3XX_VBIF_ARB_CTL, 0x00000030);
-		/* Set up VBIF_ROUND_ROBIN_QOS_ARB */
-		adreno_regwrite(device, A3XX_VBIF_ROUND_ROBIN_QOS_ARB, 0x0001);
+	BUG_ON(vbif == NULL);
 
-		/* Set up AOOO */
-		adreno_regwrite(device, A3XX_VBIF_OUT_AXI_AOOO_EN, 0x00000FFF);
-		adreno_regwrite(device, A3XX_VBIF_OUT_AXI_AOOO, 0x0FFF0FFF);
-
-		/* VBIF AXI AMEMTYPE CONFIG */
-		adreno_regwrite(device, A3XX_VBIF_OUT_AXI_AMEMTYPE_CONF0,
-			0x22222222);
-	} else {
-		adreno_regwrite(device, A3XX_VBIF_IN_RD_LIM_CONF0, 0x10101010);
-		adreno_regwrite(device, A3XX_VBIF_IN_RD_LIM_CONF1, 0x10101010);
-		adreno_regwrite(device, A3XX_VBIF_OUT_RD_LIM_CONF0, 0x10101010);
-		adreno_regwrite(device, A3XX_VBIF_OUT_WR_LIM_CONF0, 0x10101010);
-		adreno_regwrite(device, A3XX_VBIF_DDR_OUT_MAX_BURST, 0x0000303);
-		adreno_regwrite(device, A3XX_VBIF_IN_WR_LIM_CONF0, 0x10101010);
-		adreno_regwrite(device, A3XX_VBIF_IN_WR_LIM_CONF1, 0x10101010);
-		/* Enable WR-REQ */
-		adreno_regwrite(device, A3XX_VBIF_GATE_OFF_WRREQ_EN, 0x0000FF);
-
-		/* Set up round robin arbitration between both AXI ports */
-		adreno_regwrite(device, A3XX_VBIF_ARB_CTL, 0x00000030);
-		/* Set up AOOO */
-		adreno_regwrite(device, A3XX_VBIF_OUT_AXI_AOOO_EN, 0x0000003C);
-		adreno_regwrite(device, A3XX_VBIF_OUT_AXI_AOOO, 0x003C003C);
+	while (vbif->reg != 0) {
+		adreno_regwrite(device, vbif->reg, vbif->val);
+		vbif++;
 	}
 
-	if (cpu_is_apq8064()) {
-		/* Enable 1K sort */
-		adreno_regwrite(device, A3XX_VBIF_ABIT_SORT, 0x000000FF);
-		adreno_regwrite(device, A3XX_VBIF_ABIT_SORT_CONF, 0x000000A4);
-	}
 	/* Make all blocks contribute to the GPU BUSY perf counter */
 	adreno_regwrite(device, A3XX_RBBM_GPU_BUSY_MASKED, 0xFFFFFFFF);
 
@@ -3458,12 +3286,15 @@ static void a3xx_start(struct adreno_device *adreno_dev)
 	adreno_regwrite(device, A3XX_RBBM_INTERFACE_HANG_INT_CTL,
 			(1 << 16) | 0xFFF);
 
+	/* Enable 64-byte cacheline size. HW Default is 32-byte (0x000000E0). */
+	adreno_regwrite(device, A3XX_UCHE_CACHE_MODE_CONTROL_REG, 0x00000001);
+
 	/* Enable Clock gating */
 	adreno_regwrite(device, A3XX_RBBM_CLOCK_CTL,
 			A3XX_RBBM_CLOCK_CTL_DEFAULT);
 
 	/* Set the OCMEM base address for A330 */
-	if (adreno_dev->gpurev == ADRENO_REV_A330) {
+	if (adreno_is_a330(adreno_dev)) {
 		adreno_regwrite(device, A3XX_RB_GMEM_BASE_ADDR,
 			(unsigned int)(adreno_dev->ocmem_base >> 14));
 	}
@@ -3509,6 +3340,7 @@ struct adreno_gpudev adreno_a3xx_gpudev = {
 	.rb_init = a3xx_rb_init,
 	.irq_control = a3xx_irq_control,
 	.irq_handler = a3xx_irq_handler,
+	.irq_pending = a3xx_irq_pending,
 	.busy_cycles = a3xx_busy_cycles,
 	.start = a3xx_start,
 	.snapshot = a3xx_snapshot,
