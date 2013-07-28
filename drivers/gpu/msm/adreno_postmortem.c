@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -268,7 +268,7 @@ static bool adreno_rb_use_hex(void)
 #endif
 }
 
-static void adreno_dump_rb(struct kgsl_device *device, const void *buf,
+void adreno_dump_rb(struct kgsl_device *device, const void *buf,
 			 size_t len, int start, int size)
 {
 	const uint32_t *ptr = buf;
@@ -692,21 +692,24 @@ int adreno_dump(struct kgsl_device *device, int manual)
 	unsigned int ts_processed = 0xdeaddead;
 	struct kgsl_context *context;
 	unsigned int context_id;
+	unsigned int rbbm_status;
 
 	static struct ib_list ib_list;
 
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
-	struct kgsl_memdesc **reg_map;
-	void *reg_map_array;
 	int num_iommu_units = 0;
 
 	mb();
 
-	if (adreno_is_a2xx(adreno_dev))
-		adreno_dump_a2xx(device);
-	else if (adreno_is_a3xx(adreno_dev))
-		adreno_dump_a3xx(device);
+	if (device->pm_dump_enable) {
+		if (adreno_is_a2xx(adreno_dev))
+			adreno_dump_a2xx(device);
+		else if (adreno_is_a3xx(adreno_dev))
+			adreno_dump_a3xx(device);
+	}
+
+	kgsl_regread(device, adreno_dev->gpudev->reg_rbbm_status, &rbbm_status);
 
 	pt_base = kgsl_mmu_get_current_ptbase(&device->mmu);
 	cur_pt_base = pt_base;
@@ -721,6 +724,18 @@ int adreno_dump(struct kgsl_device *device, int manual)
 	kgsl_regread(device, REG_CP_IB2_BASE, &cp_ib2_base);
 	kgsl_regread(device, REG_CP_IB2_BUFSZ, &cp_ib2_bufsz);
 
+	/* If postmortem dump is not enabled, dump minimal set and return */
+	if (!device->pm_dump_enable) {
+
+		KGSL_LOG_DUMP(device,
+			"STATUS %08X | IB1:%08X/%08X | IB2: %08X/%08X"
+			" | RPTR: %04X | WPTR: %04X\n",
+			rbbm_status,  cp_ib1_base, cp_ib1_bufsz, cp_ib2_base,
+			cp_ib2_bufsz, cp_rb_rptr, cp_rb_wptr);
+
+		return 0;
+	}
+
 	kgsl_sharedmem_readl(&device->memstore,
 			(unsigned int *) &context_id,
 			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
@@ -729,7 +744,7 @@ int adreno_dump(struct kgsl_device *device, int manual)
 	if (context) {
 		ts_processed = kgsl_readtimestamp(device, context,
 						  KGSL_TIMESTAMP_RETIRED);
-		KGSL_LOG_DUMP(device, "CTXT: %d  TIMESTM RTRD: %08X\n",
+		KGSL_LOG_DUMP(device, "FT CTXT: %d  TIMESTM RTRD: %08X\n",
 				context->id, ts_processed);
 	} else
 		KGSL_LOG_DUMP(device, "BAD CTXT: %d\n", context_id);
@@ -783,9 +798,7 @@ int adreno_dump(struct kgsl_device *device, int manual)
 	ib_list.count = 0;
 	i = 0;
 	/* get the register mapped array in case we are using IOMMU */
-	num_iommu_units = kgsl_mmu_get_reg_map_desc(&device->mmu,
-							&reg_map_array);
-	reg_map = reg_map_array;
+	num_iommu_units = kgsl_mmu_get_num_iommu_units(&device->mmu);
 	for (read_idx = 0; read_idx < num_item; ) {
 		uint32_t this_cmd = rb_copy[read_idx++];
 		if (adreno_cmd_is_ib(this_cmd)) {
@@ -799,13 +812,14 @@ int adreno_dump(struct kgsl_device *device, int manual)
 					ib_list.bases[i],
 					ib_list.sizes[i], 0);
 		} else if (this_cmd == cp_type0_packet(MH_MMU_PT_BASE, 1) ||
-			(num_iommu_units && this_cmd == (reg_map[0]->gpuaddr +
-			(KGSL_IOMMU_CONTEXT_USER << KGSL_IOMMU_CTX_SHIFT) +
-			KGSL_IOMMU_TTBR0))) {
-
+			(num_iommu_units && this_cmd ==
+			kgsl_mmu_get_reg_gpuaddr(&device->mmu, 0,
+						KGSL_IOMMU_CONTEXT_USER,
+						KGSL_IOMMU_CTX_TTBR0))) {
 			KGSL_LOG_DUMP(device, "Current pagetable: %x\t"
 				"pagetable base: %x\n",
-				kgsl_mmu_get_ptname_from_ptbase(cur_pt_base),
+				kgsl_mmu_get_ptname_from_ptbase(&device->mmu,
+								cur_pt_base),
 				cur_pt_base);
 
 			/* Set cur_pt_base to the new pagetable base */
@@ -813,12 +827,11 @@ int adreno_dump(struct kgsl_device *device, int manual)
 
 			KGSL_LOG_DUMP(device, "New pagetable: %x\t"
 				"pagetable base: %x\n",
-				kgsl_mmu_get_ptname_from_ptbase(cur_pt_base),
+				kgsl_mmu_get_ptname_from_ptbase(&device->mmu,
+								cur_pt_base),
 				cur_pt_base);
 		}
 	}
-	if (num_iommu_units)
-		kfree(reg_map_array);
 
 	/* Restore cur_pt_base back to the pt_base of
 	   the process in whose context the GPU hung */
@@ -873,9 +886,14 @@ int adreno_dump(struct kgsl_device *device, int manual)
 		else if (adreno_is_a225(adreno_dev))
 			adreno_dump_regs(device, a225_registers,
 				a225_registers_count);
-		else if (adreno_is_a3xx(adreno_dev))
+		else if (adreno_is_a3xx(adreno_dev)) {
 			adreno_dump_regs(device, a3xx_registers,
 					a3xx_registers_count);
+
+			if (adreno_is_a330(adreno_dev))
+				adreno_dump_regs(device, a330_registers,
+					a330_registers_count);
+		}
 	}
 
 error_vfree:
