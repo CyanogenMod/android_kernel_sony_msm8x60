@@ -1,0 +1,52 @@
+config MACH_LGE
+	bool
+
+menu "LGE Board Selection"
+source "arch/arm/mach-msm/lge/Kconfig.board"
+endmenu
+
+
+menu "LGE Specific Patches"
+
+config LGE_QFPROM_INTERFACE
+	bool "Support qfprom interface"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE QFPROM DRIVER.
+
+config LGE_QC_LCDC_LUT
+	bool "Set initial Qualcomm LCDC lut"
+	default n
+	depends on MACH_LGE
+	help
+	  Set initial Qualcomm LCDC Look Up Table.
+
+config LGE_KCAL
+	bool "Interface to calibrate LCD color temperature"
+	default n
+	depends on MACH_LGE
+	help
+	  Interface to calibrate LCD color temperature
+
+config LGE_KCAL_QLUT
+	bool "Interface to calibrate LCD color temperature by QLUT"
+	default n
+	depends on MACH_LGE && LGE_QC_LCDC_LUT && LGE_KCAL
+	help
+	  Interface to calibrate LCD color temperature by QLUT
+
+config EARJACK_DEBUGGER
+	bool "Earjack UART debugger support"
+	depends on MACH_APQ8064_MAKO
+	default n
+	help
+	  Saying Y here will support earjack type UART debugger cable
+
+config LGE_CRASH_HANDLER
+	tristate "Support LGE Crash Handler"
+	default n
+	help
+	  LGE Crash Handler
+
+endmenu

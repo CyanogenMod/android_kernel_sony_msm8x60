@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -52,6 +52,8 @@
 #include <mach/msm_dcvs.h>
 #include <mach/iommu_domains.h>
 #include <mach/msm_xo.h>
+#include <mach/socinfo.h>
+#include "pm.h"
 
 #ifdef CONFIG_MSM_MPM
 #include <mach/mpm.h>
@@ -104,6 +106,25 @@
 
 #define MSM8960_HSUSB_PHYS		0x12500000
 #define MSM8960_HSUSB_SIZE		SZ_4K
+#define MSM8960_RPM_MASTER_STATS_BASE	0x10BB00
+
+#define MSM8960_PC_CNTR_PHYS	(MSM8960_IMEM_PHYS + 0x664)
+#define MSM8960_PC_CNTR_SIZE		0x40
+
+static struct resource msm8960_resources_pccntr[] = {
+	{
+		.start	= MSM8960_PC_CNTR_PHYS,
+		.end	= MSM8960_PC_CNTR_PHYS + MSM8960_PC_CNTR_SIZE,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+struct platform_device msm8960_pc_cntr = {
+	.name		= "pc-cntr",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(msm8960_resources_pccntr),
+	.resource	= msm8960_resources_pccntr,
+};
 
 static struct resource resources_otg[] = {
 	{
@@ -208,6 +229,11 @@ struct platform_device msm_device_hsic_host = {
 
 struct platform_device msm8960_device_acpuclk = {
 	.name		= "acpuclk-8960",
+	.id		= -1,
+};
+
+struct platform_device msm8960ab_device_acpuclk = {
+	.name		= "acpuclk-8960ab",
 	.id		= -1,
 };
 
@@ -787,6 +813,7 @@ struct msm_vidc_platform_data vidc_platform_data = {
 	.disable_fullhd = 0,
 	.cont_mode_dpb_count = 18,
 	.fw_addr = 0x9fe00000,
+	.enable_sec_metadata = 0,
 };
 
 struct platform_device msm_device_vidc = {
@@ -1338,6 +1365,19 @@ struct platform_device msm_device_smd = {
 struct platform_device msm_device_bam_dmux = {
 	.name		= "BAM_RMNT",
 	.id		= -1,
+};
+
+static struct msm_pm_sleep_status_data msm_pm_slp_sts_data = {
+	.base_addr = MSM_ACC0_BASE + 0x08,
+	.cpu_offset = MSM_ACC1_BASE - MSM_ACC0_BASE,
+	.mask = 1UL << 13,
+};
+struct platform_device msm8960_cpu_slp_status = {
+	.name		= "cpu_slp_status",
+	.id		= -1,
+	.dev = {
+		.platform_data = &msm_pm_slp_sts_data,
+	},
 };
 
 static struct msm_watchdog_pdata msm_watchdog_pdata = {
@@ -3102,6 +3142,54 @@ struct platform_device msm_kgsl_2d1 = {
 };
 
 #ifdef CONFIG_MSM_GEMINI
+
+static struct msm_bus_vectors gemini_init_vector[] = {
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 0,
+		.ib  = 0,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 0,
+		.ib  = 0,
+	},
+};
+
+static struct msm_bus_vectors gemini_encode_vector[] = {
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab  = 540000000,
+		.ib  = 1350000000,
+	},
+	{
+		.src = MSM_BUS_MASTER_JPEG_ENC,
+		.dst = MSM_BUS_SLAVE_MM_IMEM,
+		.ab  = 43200000,
+		.ib  = 69120000,
+	},
+};
+
+static struct msm_bus_paths gemini_bus_path[] = {
+	{
+		ARRAY_SIZE(gemini_init_vector),
+		gemini_init_vector,
+	},
+	{
+		ARRAY_SIZE(gemini_encode_vector),
+		gemini_encode_vector,
+	},
+};
+
+static struct msm_bus_scale_pdata gemini_bus_scale_pdata = {
+	gemini_bus_path,
+	ARRAY_SIZE(gemini_bus_path),
+	.name = "msm_gemini",
+};
+
 static struct resource msm_gemini_resources[] = {
 	{
 		.start  = 0x04600000,
@@ -3119,6 +3207,9 @@ struct platform_device msm8960_gemini_device = {
 	.name           = "msm_gemini",
 	.resource       = msm_gemini_resources,
 	.num_resources  = ARRAY_SIZE(msm_gemini_resources),
+	.dev = {
+		.platform_data = &gemini_bus_scale_pdata,
+	},
 };
 #endif
 
@@ -3401,8 +3492,8 @@ static struct msm_rpm_log_platform_data msm_rpm_log_pdata = {
 		[MSM_RPM_LOG_PAGE_BUFFER]  = 0x000000A0,
 	},
 	.phys_size = SZ_8K,
-	.log_len = 4096,		  /* log's buffer length in bytes */
-	.log_len_mask = (4096 >> 2) - 1,  /* length mask in units of u32 */
+	.log_len = 6144,		  /* log's buffer length in bytes */
+	.log_len_mask = (6144 >> 2) - 1,  /* length mask in units of u32 */
 };
 
 struct platform_device msm8960_rpm_log_device = {
@@ -3423,6 +3514,37 @@ struct platform_device msm8960_rpm_stat_device = {
 	.id = -1,
 	.dev = {
 		.platform_data = &msm_rpm_stat_pdata,
+	},
+};
+
+static struct resource resources_rpm_master_stats[] = {
+	{
+		.start	= MSM8960_RPM_MASTER_STATS_BASE,
+		.end	= MSM8960_RPM_MASTER_STATS_BASE + SZ_256,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+static char *master_names[] = {
+	"KPSS",
+	"GPSS",
+	"LPASS",
+	"RIVA",
+	"DSPS",
+};
+
+static struct msm_rpm_master_stats_platform_data msm_rpm_master_stat_pdata = {
+	.masters = master_names,
+	.nomasters = ARRAY_SIZE(master_names),
+};
+
+struct platform_device msm8960_rpm_master_stat_device = {
+	.name = "msm_rpm_master_stat",
+	.id = -1,
+	.num_resources	= ARRAY_SIZE(resources_rpm_master_stats),
+	.resource	= resources_rpm_master_stats,
+	.dev = {
+		.platform_data = &msm_rpm_master_stat_pdata,
 	},
 };
 
@@ -3516,95 +3638,199 @@ struct platform_device msm_dsps_device = {
 
 #endif /* CONFIG_MSM_DSPS */
 
-#ifdef CONFIG_MSM_QDSS
+#define CORESIGHT_PHYS_BASE		0x01A00000
+#define CORESIGHT_TPIU_PHYS_BASE	(CORESIGHT_PHYS_BASE + 0x3000)
+#define CORESIGHT_ETB_PHYS_BASE		(CORESIGHT_PHYS_BASE + 0x1000)
+#define CORESIGHT_FUNNEL_PHYS_BASE	(CORESIGHT_PHYS_BASE + 0x4000)
+#define CORESIGHT_STM_PHYS_BASE		(CORESIGHT_PHYS_BASE + 0x6000)
+#define CORESIGHT_ETM0_PHYS_BASE	(CORESIGHT_PHYS_BASE + 0x1C000)
+#define CORESIGHT_ETM1_PHYS_BASE	(CORESIGHT_PHYS_BASE + 0x1D000)
 
-#define MSM_QDSS_PHYS_BASE		0x01A00000
-#define MSM_ETB_PHYS_BASE		(MSM_QDSS_PHYS_BASE + 0x1000)
-#define MSM_TPIU_PHYS_BASE		(MSM_QDSS_PHYS_BASE + 0x3000)
-#define MSM_FUNNEL_PHYS_BASE		(MSM_QDSS_PHYS_BASE + 0x4000)
-#define MSM_ETM_PHYS_BASE		(MSM_QDSS_PHYS_BASE + 0x1C000)
+#define CORESIGHT_STM_CHANNEL_PHYS_BASE	(0x14000000 + 0x280000)
 
-#define QDSS_SOURCE(src_name, fpm) { .name = src_name, .fport_mask = fpm, }
-
-static struct qdss_source msm_qdss_sources[] = {
-	QDSS_SOURCE("msm_etm", 0x3),
-};
-
-static struct msm_qdss_platform_data qdss_pdata = {
-	.src_table = msm_qdss_sources,
-	.size = ARRAY_SIZE(msm_qdss_sources),
-	.afamily = 1,
-};
-
-struct platform_device msm_qdss_device = {
-	.name          = "msm_qdss",
-	.id            = -1,
-	.dev           = {
-		.platform_data = &qdss_pdata,
-	},
-};
-
-static struct resource msm_etb_resources[] = {
+static struct resource coresight_tpiu_resources[] = {
 	{
-		.start = MSM_ETB_PHYS_BASE,
-		.end   = MSM_ETB_PHYS_BASE + SZ_4K - 1,
+		.start = CORESIGHT_TPIU_PHYS_BASE,
+		.end   = CORESIGHT_TPIU_PHYS_BASE + SZ_4K - 1,
 		.flags = IORESOURCE_MEM,
 	},
 };
 
-struct platform_device msm_etb_device = {
-	.name          = "msm_etb",
-	.id            = 0,
-	.num_resources = ARRAY_SIZE(msm_etb_resources),
-	.resource      = msm_etb_resources,
+static struct coresight_platform_data coresight_tpiu_pdata = {
+	.id		= 0,
+	.name		= "coresight-tpiu",
+	.nr_inports	= 1,
+	.nr_outports	= 0,
 };
 
-static struct resource msm_tpiu_resources[] = {
+struct platform_device coresight_tpiu_device = {
+	.name          = "coresight-tpiu",
+	.id            = 0,
+	.num_resources = ARRAY_SIZE(coresight_tpiu_resources),
+	.resource      = coresight_tpiu_resources,
+	.dev = {
+		.platform_data = &coresight_tpiu_pdata,
+	},
+};
+
+static struct resource coresight_etb_resources[] = {
 	{
-		.start = MSM_TPIU_PHYS_BASE,
-		.end   = MSM_TPIU_PHYS_BASE + SZ_4K - 1,
+		.start = CORESIGHT_ETB_PHYS_BASE,
+		.end   = CORESIGHT_ETB_PHYS_BASE + SZ_4K - 1,
 		.flags = IORESOURCE_MEM,
 	},
 };
 
-struct platform_device msm_tpiu_device = {
-	.name          = "msm_tpiu",
-	.id            = 0,
-	.num_resources = ARRAY_SIZE(msm_tpiu_resources),
-	.resource      = msm_tpiu_resources,
+static struct coresight_platform_data coresight_etb_pdata = {
+	.id		= 1,
+	.name		= "coresight-etb",
+	.nr_inports	= 1,
+	.nr_outports	= 0,
+	.default_sink	= true,
 };
 
-static struct resource msm_funnel_resources[] = {
+struct platform_device coresight_etb_device = {
+	.name          = "coresight-etb",
+	.id            = 0,
+	.num_resources = ARRAY_SIZE(coresight_etb_resources),
+	.resource      = coresight_etb_resources,
+	.dev = {
+		.platform_data = &coresight_etb_pdata,
+	},
+};
+
+static struct resource coresight_funnel_resources[] = {
 	{
-		.start = MSM_FUNNEL_PHYS_BASE,
-		.end   = MSM_FUNNEL_PHYS_BASE + SZ_4K - 1,
+		.start = CORESIGHT_FUNNEL_PHYS_BASE,
+		.end   = CORESIGHT_FUNNEL_PHYS_BASE + SZ_4K - 1,
 		.flags = IORESOURCE_MEM,
 	},
 };
 
-struct platform_device msm_funnel_device = {
-	.name          = "msm_funnel",
-	.id            = 0,
-	.num_resources = ARRAY_SIZE(msm_funnel_resources),
-	.resource      = msm_funnel_resources,
+static const int coresight_funnel_outports[] = { 0, 1 };
+static const int coresight_funnel_child_ids[] = { 0, 1 };
+static const int coresight_funnel_child_ports[] = { 0, 0 };
+
+static struct coresight_platform_data coresight_funnel_pdata = {
+	.id		= 2,
+	.name		= "coresight-funnel",
+	.nr_inports	= 4,
+	.outports	= coresight_funnel_outports,
+	.child_ids	= coresight_funnel_child_ids,
+	.child_ports	= coresight_funnel_child_ports,
+	.nr_outports	= ARRAY_SIZE(coresight_funnel_outports),
 };
 
-static struct resource msm_etm_resources[] = {
+struct platform_device coresight_funnel_device = {
+	.name          = "coresight-funnel",
+	.id            = 0,
+	.num_resources = ARRAY_SIZE(coresight_funnel_resources),
+	.resource      = coresight_funnel_resources,
+	.dev = {
+		.platform_data = &coresight_funnel_pdata,
+	},
+};
+
+static struct resource coresight_stm_resources[] = {
 	{
-		.start = MSM_ETM_PHYS_BASE,
-		.end   = MSM_ETM_PHYS_BASE + (SZ_4K * 2) - 1,
+		.start = CORESIGHT_STM_PHYS_BASE,
+		.end   = CORESIGHT_STM_PHYS_BASE + SZ_4K - 1,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.start = CORESIGHT_STM_CHANNEL_PHYS_BASE,
+		.end   = CORESIGHT_STM_CHANNEL_PHYS_BASE + SZ_1M + SZ_512K - 1,
 		.flags = IORESOURCE_MEM,
 	},
 };
 
-struct platform_device msm_etm_device = {
-	.name          = "msm_etm",
-	.id            = 0,
-	.num_resources = ARRAY_SIZE(msm_etm_resources),
-	.resource      = msm_etm_resources,
+static const int coresight_stm_outports[] = { 0 };
+static const int coresight_stm_child_ids[] = { 2 };
+static const int coresight_stm_child_ports[] = { 2 };
+
+static struct coresight_platform_data coresight_stm_pdata = {
+	.id		= 3,
+	.name		= "coresight-stm",
+	.nr_inports	= 0,
+	.outports	= coresight_stm_outports,
+	.child_ids	= coresight_stm_child_ids,
+	.child_ports	= coresight_stm_child_ports,
+	.nr_outports	= ARRAY_SIZE(coresight_stm_outports),
 };
 
-#endif
+struct platform_device coresight_stm_device = {
+	.name          = "coresight-stm",
+	.id            = 0,
+	.num_resources = ARRAY_SIZE(coresight_stm_resources),
+	.resource      = coresight_stm_resources,
+	.dev = {
+		.platform_data = &coresight_stm_pdata,
+	},
+};
+
+static struct resource coresight_etm0_resources[] = {
+	{
+		.start = CORESIGHT_ETM0_PHYS_BASE,
+		.end   = CORESIGHT_ETM0_PHYS_BASE + SZ_4K - 1,
+		.flags = IORESOURCE_MEM,
+	},
+};
+
+static const int coresight_etm0_outports[] = { 0 };
+static const int coresight_etm0_child_ids[] = { 2 };
+static const int coresight_etm0_child_ports[] = { 0 };
+
+static struct coresight_platform_data coresight_etm0_pdata = {
+	.id		= 4,
+	.name		= "coresight-etm0",
+	.nr_inports	= 0,
+	.outports	= coresight_etm0_outports,
+	.child_ids	= coresight_etm0_child_ids,
+	.child_ports	= coresight_etm0_child_ports,
+	.nr_outports	= ARRAY_SIZE(coresight_etm0_outports),
+};
+
+struct platform_device coresight_etm0_device = {
+	.name          = "coresight-etm",
+	.id            = 0,
+	.num_resources = ARRAY_SIZE(coresight_etm0_resources),
+	.resource      = coresight_etm0_resources,
+	.dev = {
+		.platform_data = &coresight_etm0_pdata,
+	},
+};
+
+static struct resource coresight_etm1_resources[] = {
+	{
+		.start = CORESIGHT_ETM1_PHYS_BASE,
+		.end   = CORESIGHT_ETM1_PHYS_BASE + SZ_4K - 1,
+		.flags = IORESOURCE_MEM,
+	},
+};
+
+static const int coresight_etm1_outports[] = { 0 };
+static const int coresight_etm1_child_ids[] = { 2 };
+static const int coresight_etm1_child_ports[] = { 1 };
+
+static struct coresight_platform_data coresight_etm1_pdata = {
+	.id		= 5,
+	.name		= "coresight-etm1",
+	.nr_inports	= 0,
+	.outports	= coresight_etm1_outports,
+	.child_ids	= coresight_etm1_child_ids,
+	.child_ports	= coresight_etm1_child_ports,
+	.nr_outports	= ARRAY_SIZE(coresight_etm1_outports),
+};
+
+struct platform_device coresight_etm1_device = {
+	.name          = "coresight-etm",
+	.id            = 1,
+	.num_resources = ARRAY_SIZE(coresight_etm1_resources),
+	.resource      = coresight_etm1_resources,
+	.dev = {
+		.platform_data = &coresight_etm1_pdata,
+	},
+};
 
 static struct resource msm_ebi1_ch0_erp_resources[] = {
 	{

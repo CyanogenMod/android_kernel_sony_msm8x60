@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -188,6 +188,7 @@ struct ddl_dec_buffers{
 	struct ddl_buf_addr h264_nb_ip;
 	struct ddl_buf_addr context;
 	struct ddl_buf_addr extnuserdata;
+	struct ddl_buf_addr meta_hdr[DDL_MAX_BUFFER_COUNT];
 };
 struct ddl_enc_buffer_size{
 	u32  sz_cur_y;
@@ -230,7 +231,6 @@ struct ddl_batch_frame_data {
 			[DDL_MAX_NUM_BFRS_FOR_SLICE_BATCH];
 	u32 num_output_frames;
 	u32 out_frm_next_frmindex;
-	u32  first_output_frame_tag;
 };
 struct ddl_mp2_datadumpenabletype {
 	u32 userdatadump_enable;
@@ -290,8 +290,11 @@ struct ddl_encoder_data{
 	u32  ext_enc_control_val;
 	u32  num_references_for_p_frame;
 	u32  closed_gop;
+	u32  num_slices_comp;
 	struct vcd_property_slice_delivery_info slice_delivery_info;
 	struct ddl_batch_frame_data batch_frame;
+	u32 avc_delimiter_enable;
+	u32 vui_timinginfo_enable;
 };
 struct ddl_decoder_data {
 	struct ddl_codec_data_hdr  hdr;

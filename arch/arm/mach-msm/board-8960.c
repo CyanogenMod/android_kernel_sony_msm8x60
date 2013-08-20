@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -146,6 +146,7 @@ struct sx150x_platform_data msm8960_sx150x_data[] = {
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 #define HOLE_SIZE	0x20000
+#define MSM_ION_MFC_META_SIZE 0x40000 /* 256 Kbytes */
 #define MSM_CONTIG_MEM_SIZE  0x65000
 #ifdef CONFIG_MSM_IOMMU
 #define MSM_ION_MM_SIZE            0x3800000 /* Need to be multiple of 64K */
@@ -159,7 +160,7 @@ struct sx150x_platform_data msm8960_sx150x_data[] = {
 #define MSM_ION_HEAP_NUM	8
 #endif
 #define MSM_ION_MM_FW_SIZE	(0x200000 - HOLE_SIZE) /* 128kb */
-#define MSM_ION_MFC_SIZE	SZ_8K
+#define MSM_ION_MFC_SIZE	(SZ_8K + MSM_ION_MFC_META_SIZE)
 #define MSM_ION_AUDIO_SIZE	MSM_PMEM_AUDIO_SIZE
 
 #define MSM_LIQUID_ION_MM_SIZE (MSM_ION_MM_SIZE + 0x600000)
@@ -358,6 +359,7 @@ static struct ion_cp_heap_pdata cp_mm_msm8960_ion_pdata = {
 	.fixed_position = FIXED_MIDDLE,
 	.iommu_map_all = 1,
 	.iommu_2x_map_domain = VIDEO_DOMAIN,
+	.is_cma = 1,
 };
 
 static struct ion_cp_heap_pdata cp_mfc_msm8960_ion_pdata = {
@@ -734,65 +736,9 @@ static struct reserve_info msm8960_reserve_info __initdata = {
 	.paddr_to_memtype = msm8960_paddr_to_memtype,
 };
 
-static int msm8960_memory_bank_size(void)
-{
-	return 1<<29;
-}
-
-static void __init locate_unstable_memory(void)
-{
-	struct membank *mb = &meminfo.bank[meminfo.nr_banks - 1];
-	unsigned long bank_size;
-	unsigned long low, high;
-
-	bank_size = msm8960_memory_bank_size();
-	msm8960_reserve_info.bank_size = bank_size;
-
-	low = meminfo.bank[0].start;
-	high = mb->start + mb->size;
-
-	/* Check if 32 bit overflow occured */
-	if (high < mb->start)
-		high = ~0UL;
-
-	if (high < MAX_FIXED_AREA_SIZE + MSM8960_FIXED_AREA_START)
-		panic("fixed area extends beyond end of memory\n");
-
-	low &= ~(bank_size - 1);
-
-	if (high - low <= bank_size)
-		goto no_dmm;
-
-#ifdef CONFIG_ENABLE_DMM
-	msm8960_reserve_info.low_unstable_address = mb->start -
-					MIN_MEMORY_BLOCK_SIZE + mb->size;
-	msm8960_reserve_info.max_unstable_size = MIN_MEMORY_BLOCK_SIZE;
-	pr_info("low unstable address %lx max size %lx bank size %lx\n",
-		msm8960_reserve_info.low_unstable_address,
-		msm8960_reserve_info.max_unstable_size,
-		msm8960_reserve_info.bank_size);
-	return;
-#endif
-no_dmm:
-	msm8960_reserve_info.low_unstable_address = high;
-	msm8960_reserve_info.max_unstable_size = 0;
-}
-
-static void __init place_movable_zone(void)
-{
-#ifdef CONFIG_ENABLE_DMM
-	movable_reserved_start = msm8960_reserve_info.low_unstable_address;
-	movable_reserved_size = msm8960_reserve_info.max_unstable_size;
-	pr_info("movable zone start %lx size %lx\n",
-		movable_reserved_start, movable_reserved_size);
-#endif
-}
-
 static void __init msm8960_early_memory(void)
 {
 	reserve_info = &msm8960_reserve_info;
-	locate_unstable_memory();
-	place_movable_zone();
 }
 
 static char prim_panel_name[PANEL_NAME_MAX_LEN];
@@ -830,12 +776,6 @@ static void __init msm8960_reserve(void)
 		}
 #endif
 	}
-}
-
-static int msm8960_change_memory_power(u64 start, u64 size,
-	int change_type)
-{
-	return soc_change_memory_power(start, size, change_type);
 }
 
 static void __init msm8960_allocate_memory_regions(void)
@@ -1673,8 +1613,8 @@ static struct msm_spm_platform_data msm_spm_data[] __initdata = {
 		.reg_base_addr = MSM_SAW0_BASE,
 		.reg_init_values[MSM_SPM_REG_SAW2_CFG] = 0x1F,
 #if defined(CONFIG_MSM_AVS_HW)
-		.reg_init_values[MSM_SPM_REG_SAW2_AVS_CTL] = 0x00,
-		.reg_init_values[MSM_SPM_REG_SAW2_AVS_HYSTERESIS] = 0x00,
+		.reg_init_values[MSM_SPM_REG_SAW2_AVS_CTL] = 0x50589464,
+		.reg_init_values[MSM_SPM_REG_SAW2_AVS_HYSTERESIS] = 0x00020000,
 #endif
 		.reg_init_values[MSM_SPM_REG_SAW2_SPM_CTL] = 0x01,
 		.reg_init_values[MSM_SPM_REG_SAW2_PMIC_DLY] = 0x02020204,
@@ -1688,8 +1628,8 @@ static struct msm_spm_platform_data msm_spm_data[] __initdata = {
 		.reg_base_addr = MSM_SAW1_BASE,
 		.reg_init_values[MSM_SPM_REG_SAW2_CFG] = 0x1F,
 #if defined(CONFIG_MSM_AVS_HW)
-		.reg_init_values[MSM_SPM_REG_SAW2_AVS_CTL] = 0x00,
-		.reg_init_values[MSM_SPM_REG_SAW2_AVS_HYSTERESIS] = 0x00,
+		.reg_init_values[MSM_SPM_REG_SAW2_AVS_CTL] = 0x50589464,
+		.reg_init_values[MSM_SPM_REG_SAW2_AVS_HYSTERESIS] = 0x00020000,
 #endif
 		.reg_init_values[MSM_SPM_REG_SAW2_SPM_CTL] = 0x01,
 		.reg_init_values[MSM_SPM_REG_SAW2_PMIC_DLY] = 0x02020204,
@@ -2363,6 +2303,7 @@ static struct i2c_board_info sii_device_info[] __initdata = {
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi4_pdata = {
 	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
+	.keep_ahb_clk_on = 1,
 };
 
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi3_pdata = {
@@ -2378,12 +2319,6 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi10_pdata = {
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
 	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
-};
-
-static struct msm_pm_sleep_status_data msm_pm_slp_sts_data = {
-	.base_addr = MSM_ACC0_BASE + 0x08,
-	.cpu_offset = MSM_ACC1_BASE - MSM_ACC0_BASE,
-	.mask = 1UL << 13,
 };
 
 static struct ks8851_pdata spi_eth_pdata = {
@@ -2526,7 +2461,6 @@ static struct msm_serial_hs_platform_data msm_uart_dm9_pdata;
 #endif
 
 static struct platform_device *common_devices[] __initdata = {
-	&msm8960_device_acpuclk,
 	&msm8960_device_dmov,
 	&msm_device_smd,
 	&msm_device_uart_dm6,
@@ -2592,14 +2526,13 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_rpm_device,
 	&msm8960_rpm_log_device,
 	&msm8960_rpm_stat_device,
+	&msm8960_rpm_master_stat_device,
 	&msm_device_tz_log,
-#ifdef CONFIG_MSM_QDSS
-	&msm_qdss_device,
-	&msm_etb_device,
-	&msm_tpiu_device,
-	&msm_funnel_device,
-	&msm_etm_device,
-#endif
+	&coresight_tpiu_device,
+	&coresight_etb_device,
+	&coresight_funnel_device,
+	&coresight_etm0_device,
+	&coresight_etm1_device,
 	&msm_device_dspcrashd_8960,
 	&msm8960_device_watchdog,
 	&msm8960_rtb_device,
@@ -2609,6 +2542,8 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_cache_dump_device,
 	&msm8960_iommu_domain_device,
 	&msm_tsens_device,
+	&msm8960_pc_cntr,
+	&msm8960_cpu_slp_status,
 };
 
 static struct platform_device *sim_devices[] __initdata = {
@@ -3106,7 +3041,6 @@ static void __init msm8960_sim_init(void)
 	slim_register_board_info(msm_slim_devices,
 		ARRAY_SIZE(msm_slim_devices));
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
-	msm_pm_init_sleep_status_data(&msm_pm_slp_sts_data);
 }
 
 static void __init msm8960_rumi3_init(void)
@@ -3136,7 +3070,6 @@ static void __init msm8960_rumi3_init(void)
 	slim_register_board_info(msm_slim_devices,
 		ARRAY_SIZE(msm_slim_devices));
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
-	msm_pm_init_sleep_status_data(&msm_pm_slp_sts_data);
 }
 
 static void __init msm8960_cdp_init(void)
@@ -3201,7 +3134,17 @@ static void __init msm8960_cdp_init(void)
 		msm_device_uart_dm9.dev.platform_data = &msm_uart_dm9_pdata;
 	}
 
+	/* For 8960 Standalone External Bluetooth Interface */
+	if (socinfo_get_platform_subtype() != PLATFORM_SUBTYPE_SGLTE) {
+		msm_device_uart_dm8.dev.platform_data = &msm_uart_dm8_pdata;
+		platform_device_register(&msm_device_uart_dm8);
+	}
+	if (cpu_is_msm8960ab())
+		platform_device_register(&msm8960ab_device_acpuclk);
+	else
+		platform_device_register(&msm8960_device_acpuclk);
 	platform_add_devices(common_devices, ARRAY_SIZE(common_devices));
+
 	msm8960_pm8921_gpio_mpp_init();
 	platform_add_devices(cdp_devices, ARRAY_SIZE(cdp_devices));
 	msm8960_init_smsc_hub();
@@ -3217,9 +3160,7 @@ static void __init msm8960_cdp_init(void)
 	slim_register_board_info(msm_slim_devices,
 		ARRAY_SIZE(msm_slim_devices));
 	msm8960_init_dsps();
-	change_memory_power = &msm8960_change_memory_power;
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
-	msm_pm_init_sleep_status_data(&msm_pm_slp_sts_data);
 	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE) {
 		mdm_sglte_device.dev.platform_data = &sglte_platform_data;
 		platform_device_register(&mdm_sglte_device);

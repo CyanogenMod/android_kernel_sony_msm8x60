@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2013, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -218,15 +218,15 @@ static void vid_enc_output_frame_done(struct video_client_ctx *client_ctx,
 
 	switch (event) {
 	case VCD_EVT_RESP_OUTPUT_DONE:
-	   DBG("Send INPUT_DON message to client = %p\n",
+	   DBG("Send OUTPUT_DON message to client = %p\n",
 			client_ctx);
 	   break;
 	case VCD_EVT_RESP_OUTPUT_FLUSHED:
-	   DBG("Send INPUT_FLUSHED message to client = %p\n",
+	   DBG("Send OUTPUT_FLUSHED message to client = %p\n",
 		   client_ctx);
 	   break;
 	default:
-	   ERR("QVD: vid_enc_output_frame_done invalid cmd type: %d\n", event);
+	   ERR("vid_enc_output_frame_done invalid cmd type: %d\n", event);
 	   venc_msg->venc_msg_info.statuscode = VEN_S_EFATAL;
 	   break;
 	}
@@ -254,6 +254,12 @@ static void vid_enc_output_frame_done(struct video_client_ctx *client_ctx,
 			vcd_frame_data->time_stamp;
 		venc_msg->venc_msg_info.buf.sz =
 			vcd_frame_data->alloc_len;
+		/* Metadata length */
+		venc_msg->venc_msg_info.buf.metadata_len =
+			vcd_frame_data->metadata_len;
+		/* Metadata offset */
+		venc_msg->venc_msg_info.buf.metadata_offset =
+			vcd_frame_data->metadata_offset;
 
 		/* Decoded picture width and height */
 		venc_msg->venc_msg_info.msgdata_size =
@@ -267,10 +273,10 @@ static void vid_enc_output_frame_done(struct video_client_ctx *client_ctx,
 		ion_flag = vidc_get_fd_info(client_ctx, BUFFER_TYPE_OUTPUT,
 					pmem_fd, kernel_vaddr, buffer_index,
 					&buff_handle);
-		if (ion_flag == CACHED && buff_handle) {
+		if (ion_flag == ION_FLAG_CACHED && buff_handle) {
 			msm_ion_do_cache_op(client_ctx->user_ion_client,
 				buff_handle,
-				(unsigned long *) kernel_vaddr,
+				(unsigned long *) NULL,
 				(unsigned long)venc_msg->venc_msg_info.buf.sz,
 				ION_IOC_CLEAN_INV_CACHES);
 		}
@@ -550,7 +556,7 @@ static int vid_enc_open_client(struct video_client_ctx **vid_clnt_ctx,
 
 	client_index = vid_enc_get_empty_client_index();
 
-	if (client_index == -1) {
+	if (client_index < 0) {
 		ERR("%s() : No free clients client_index == -1\n",
 			__func__);
 		rc = -ENODEV;
@@ -1730,6 +1736,24 @@ static long vid_enc_ioctl(struct file *file,
 			pr_err("Setting sps/pps per IDR failed");
 			return -EIO;
 		}
+		break;
+	}
+	case VEN_IOCTL_GET_PERF_LEVEL:
+	{
+		u32 curr_perf_level;
+		if (copy_from_user(&venc_msg, arg, sizeof(venc_msg)))
+			return -EFAULT;
+		result = vid_enc_get_curr_perf_level(client_ctx,
+			&curr_perf_level);
+		if (!result) {
+			ERR("get_curr_perf_level failed!!");
+			return -EIO;
+		}
+		DBG("VEN_IOCTL_GET_PERF_LEVEL %u\n",
+			curr_perf_level);
+		if (copy_to_user(venc_msg.out,
+			&curr_perf_level, sizeof(u32)))
+			return -EFAULT;
 		break;
 	}
 	case VEN_IOCTL_SET_AC_PREDICTION:

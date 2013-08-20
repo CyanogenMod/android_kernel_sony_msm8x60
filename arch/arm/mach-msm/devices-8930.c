@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,10 +31,44 @@
 #include "rpm_stats.h"
 #include "rpm_rbcpr_stats.h"
 #include "footswitch.h"
+#include "acpuclock-krait.h"
+#include "pm.h"
 
 #ifdef CONFIG_MSM_MPM
 #include <mach/mpm.h>
 #endif
+#define MSM8930_RPM_MASTER_STATS_BASE	0x10B100
+#define MSM8930_PC_CNTR_PHYS	(MSM8930_IMEM_PHYS + 0x664)
+#define MSM8930_PC_CNTR_SIZE		0x40
+
+static struct msm_pm_sleep_status_data msm_pm_slp_sts_data = {
+	.base_addr = MSM_ACC0_BASE + 0x08,
+	.cpu_offset = MSM_ACC1_BASE - MSM_ACC0_BASE,
+	.mask = 1UL << 13,
+};
+
+struct platform_device msm8930_cpu_slp_status = {
+	.name		= "cpu_slp_status",
+	.id		= -1,
+	.dev = {
+		.platform_data = &msm_pm_slp_sts_data,
+	},
+};
+
+static struct resource msm8930_resources_pccntr[] = {
+	{
+		.start	= MSM8930_PC_CNTR_PHYS,
+		.end	= MSM8930_PC_CNTR_PHYS + MSM8930_PC_CNTR_SIZE,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+struct platform_device msm8930_pc_cntr = {
+	.name		= "pc-cntr",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(msm8930_resources_pccntr),
+	.resource	= msm8930_resources_pccntr,
+};
 
 struct msm_rpm_platform_data msm8930_rpm_data __initdata = {
 	.reg_base_addrs = {
@@ -256,14 +290,14 @@ struct platform_device msm8930_rpm_device = {
 };
 
 static struct msm_rpm_log_platform_data msm_rpm_log_pdata = {
-	.phys_addr_base = 0x0010C000,
+	.phys_addr_base = 0x10B6A0,
 	.reg_offsets = {
 		[MSM_RPM_LOG_PAGE_INDICES] = 0x00000080,
 		[MSM_RPM_LOG_PAGE_BUFFER]  = 0x000000A0,
 	},
 	.phys_size = SZ_8K,
-	.log_len = 4096,		  /* log's buffer length in bytes */
-	.log_len_mask = (4096 >> 2) - 1,  /* length mask in units of u32 */
+	.log_len = 8192,		  /* log's buffer length in bytes */
+	.log_len_mask = (8192 >> 2) - 1,  /* length mask in units of u32 */
 };
 
 struct platform_device msm8930_rpm_log_device = {
@@ -284,6 +318,36 @@ struct platform_device msm8930_rpm_stat_device = {
 	.id = -1,
 	.dev = {
 		.platform_data = &msm_rpm_stat_pdata,
+	},
+};
+
+static struct resource resources_rpm_master_stats[] = {
+	{
+		.start	= MSM8930_RPM_MASTER_STATS_BASE,
+		.end	= MSM8930_RPM_MASTER_STATS_BASE + SZ_256,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+static char *master_names[] = {
+	"KPSS",
+	"MPSS",
+	"LPASS",
+	"RIVA",
+};
+
+static struct msm_rpm_master_stats_platform_data msm_rpm_master_stat_pdata = {
+	.masters = master_names,
+	.nomasters = ARRAY_SIZE(master_names),
+};
+
+struct platform_device msm8930_rpm_master_stat_device = {
+	.name = "msm_rpm_master_stat",
+	.id = -1,
+	.num_resources	= ARRAY_SIZE(resources_rpm_master_stats),
+	.resource	= resources_rpm_master_stats,
+	.dev = {
+		.platform_data = &msm_rpm_master_stat_pdata,
 	},
 };
 
@@ -346,6 +410,18 @@ struct platform_device msm8930_device_acpuclk = {
 struct platform_device msm8930aa_device_acpuclk = {
 	.name		= "acpuclk-8930aa",
 	.id		= -1,
+};
+
+static struct acpuclk_platform_data acpuclk_8930ab_pdata = {
+	.uses_pm8917 = false,
+};
+
+struct platform_device msm8930ab_device_acpuclk = {
+	.name		= "acpuclk-8930ab",
+	.id		= -1,
+	.dev = {
+		.platform_data = &acpuclk_8930ab_pdata,
+	},
 };
 
 static struct fs_driver_data gfx3d_fs_data = {
@@ -690,6 +766,7 @@ struct msm_vidc_platform_data apq8930_vidc_platform_data = {
 	.disable_dmx = 1,
 	.disable_fullhd = 0,
 	.fw_addr = 0x9fe00000,
+	.enable_sec_metadata = 0,
 };
 
 struct platform_device apq8930_msm_device_vidc = {

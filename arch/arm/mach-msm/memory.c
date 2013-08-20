@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/memory.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -504,4 +504,15 @@ mem_remove:
 
 out:
 	return 0;
+}
+
+unsigned long get_ddr_size(void)
+{
+	unsigned int i;
+	unsigned long ret = 0;
+
+	for (i = 0; i < meminfo.nr_banks; i++)
+		ret += meminfo.bank[i].size;
+
+	return ret;
 }
