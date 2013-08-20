@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -230,6 +230,27 @@ static int msm_voip_dtx_mode_get(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
+static int msm_voip_fens_put(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	int fens_enable = ucontrol->value.integer.value[0];
+
+	pr_debug("%s: FENS_VOIP enable=%d\n", __func__, fens_enable);
+
+	voc_set_pp_enable(voc_get_session_id(VOIP_SESSION_NAME),
+				MODULE_ID_VOICE_MODULE_FENS, fens_enable);
+
+	return 0;
+}
+
+static int msm_voip_fens_get(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] =
+			voc_get_pp_enable(voc_get_session_id(VOIP_SESSION_NAME),
+				 MODULE_ID_VOICE_MODULE_FENS);
+	return 0;
+}
 
 static struct snd_kcontrol_new msm_voip_controls[] = {
 	SOC_SINGLE_EXT("Voip Tx Mute", SND_SOC_NOPM, 0, 1, 0,
@@ -241,6 +262,8 @@ static struct snd_kcontrol_new msm_voip_controls[] = {
 				msm_voip_mode_rate_config_put),
 	SOC_SINGLE_EXT("Voip Dtx Mode", SND_SOC_NOPM, 0, 1, 0,
 				msm_voip_dtx_mode_get, msm_voip_dtx_mode_put),
+	SOC_SINGLE_EXT("FENS_VOIP Enable", SND_SOC_NOPM, 0, 1, 0,
+			   msm_voip_fens_get, msm_voip_fens_put),
 };
 
 static int msm_pcm_voip_probe(struct snd_soc_platform *platform)
@@ -531,6 +554,7 @@ static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 				list_first_entry(&prtd->free_in_queue,
 						struct voip_buf_node, list);
 			list_del(&buf_node->list);
+			spin_unlock_irqrestore(&prtd->dsp_lock, dsp_flags);
 			if (prtd->mode == MODE_PCM) {
 				ret = copy_from_user(&buf_node->frame.voc_pkt,
 							buf, count);
@@ -538,6 +562,7 @@ static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 			} else
 				ret = copy_from_user(&buf_node->frame,
 							buf, count);
+			spin_lock_irqsave(&prtd->dsp_lock, dsp_flags);
 			list_add_tail(&buf_node->list, &prtd->in_queue);
 			spin_unlock_irqrestore(&prtd->dsp_lock, dsp_flags);
 		} else {
@@ -582,6 +607,7 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 			buf_node = list_first_entry(&prtd->out_queue,
 					struct voip_buf_node, list);
 			list_del(&buf_node->list);
+			spin_unlock_irqrestore(&prtd->dsp_ul_lock, dsp_flags);
 			if (prtd->mode == MODE_PCM)
 				ret = copy_to_user(buf,
 						   &buf_node->frame.voc_pkt,
@@ -595,6 +621,7 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 					__func__, ret);
 				ret = -EFAULT;
 			}
+			spin_lock_irqsave(&prtd->dsp_ul_lock, dsp_flags);
 			list_add_tail(&buf_node->list,
 						&prtd->free_out_queue);
 			spin_unlock_irqrestore(&prtd->dsp_ul_lock, dsp_flags);

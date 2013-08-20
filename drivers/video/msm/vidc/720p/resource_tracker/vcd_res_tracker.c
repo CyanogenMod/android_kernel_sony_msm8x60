@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -756,6 +756,11 @@ void res_trk_set_mem_type(enum ddl_mem_area mem_type)
 }
 
 u32 res_trk_get_disable_fullhd(void)
+{
+	return 0;
+}
+
+u32 res_trk_get_ion_flags(void)
 {
 	return 0;
 }

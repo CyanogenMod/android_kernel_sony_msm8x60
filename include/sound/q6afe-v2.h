@@ -77,6 +77,7 @@ int afe_loopback(u16 enable, u16 rx_port, u16 tx_port);
 int afe_sidetone(u16 tx_port_id, u16 rx_port_id, u16 enable, uint16_t gain);
 int afe_loopback_gain(u16 port_id, u16 volume);
 int afe_validate_port(u16 port_id);
+int afe_get_port_index(u16 port_id);
 int afe_start_pseudo_port(u16 port_id);
 int afe_stop_pseudo_port(u16 port_id);
 int afe_cmd_memory_map(u32 dma_addr_p, u32 dma_buf_sz);
@@ -91,7 +92,7 @@ int afe_register_get_events(u16 port_id,
 int afe_unregister_get_events(u16 port_id);
 int afe_rt_proxy_port_write(u32 buf_addr_p, u32 mem_map_handle, int bytes);
 int afe_rt_proxy_port_read(u32 buf_addr_p, u32 mem_map_handle, int bytes);
-int afe_port_start_nowait(u16 port_id, union afe_port_config *afe_config,
+int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	u32 rate);
 int afe_port_stop_nowait(int port_id);
 int afe_apply_gain(u16 port_id, u16 gain);

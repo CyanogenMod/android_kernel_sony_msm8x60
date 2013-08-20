@@ -336,6 +336,7 @@ static struct ion_cp_heap_pdata cp_mm_msm8930_ion_pdata = {
 	.reusable = FMEM_ENABLED,
 	.mem_is_fmem = FMEM_ENABLED,
 	.fixed_position = FIXED_MIDDLE,
+	.is_cma	= 1,
 };
 
 static struct ion_cp_heap_pdata cp_mfc_msm8930_ion_pdata = {
@@ -665,64 +666,9 @@ static struct reserve_info msm8930_reserve_info __initdata = {
 	.paddr_to_memtype = msm8930_paddr_to_memtype,
 };
 
-static int msm8930_memory_bank_size(void)
-{
-	return 1<<29;
-}
-
-static void __init locate_unstable_memory(void)
-{
-	struct membank *mb = &meminfo.bank[meminfo.nr_banks - 1];
-	unsigned long bank_size;
-	unsigned long low, high;
-
-	bank_size = msm8930_memory_bank_size();
-	low = meminfo.bank[0].start;
-	high = mb->start + mb->size;
-
-	/* Check if 32 bit overflow occured */
-	if (high < mb->start)
-		high -= PAGE_SIZE;
-
-	if (high < MAX_FIXED_AREA_SIZE + MSM8930_FIXED_AREA_START)
-		panic("fixed area extends beyond end of memory\n");
-
-	low &= ~(bank_size - 1);
-
-	if (high - low <= bank_size)
-		goto no_dmm;
-
-	msm8930_reserve_info.bank_size = bank_size;
-#ifdef CONFIG_ENABLE_DMM
-	msm8930_reserve_info.low_unstable_address = mb->start -
-					MIN_MEMORY_BLOCK_SIZE + mb->size;
-	msm8930_reserve_info.max_unstable_size = MIN_MEMORY_BLOCK_SIZE;
-	pr_info("low unstable address %lx max size %lx bank size %lx\n",
-		msm8930_reserve_info.low_unstable_address,
-		msm8930_reserve_info.max_unstable_size,
-		msm8930_reserve_info.bank_size);
-	return;
-#endif
-no_dmm:
-	msm8930_reserve_info.low_unstable_address = high;
-	msm8930_reserve_info.max_unstable_size = 0;
-}
-
-static void __init place_movable_zone(void)
-{
-#ifdef CONFIG_ENABLE_DMM
-	movable_reserved_start = msm8930_reserve_info.low_unstable_address;
-	movable_reserved_size = msm8930_reserve_info.max_unstable_size;
-	pr_info("movable zone start %lx size %lx\n",
-		movable_reserved_start, movable_reserved_size);
-#endif
-}
-
 static void __init msm8930_early_memory(void)
 {
 	reserve_info = &msm8930_reserve_info;
-	locate_unstable_memory();
-	place_movable_zone();
 }
 
 static void __init msm8930_reserve(void)
@@ -740,12 +686,6 @@ static void __init msm8930_reserve(void)
 		}
 #endif
 	}
-}
-
-static int msm8930_change_memory_power(u64 start, u64 size,
-	int change_type)
-{
-	return soc_change_memory_power(start, size, change_type);
 }
 
 static void __init msm8930_allocate_memory_regions(void)
@@ -2271,18 +2211,16 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8930_rpm_log_device,
 	&msm8930_rpm_rbcpr_device,
 	&msm8930_rpm_stat_device,
+	&msm8930_rpm_master_stat_device,
 #ifdef CONFIG_ION_MSM
 	&msm8930_ion_dev,
 #endif
 	&msm_device_tz_log,
-
-#ifdef CONFIG_MSM_QDSS
-	&msm_qdss_device,
-	&msm_etb_device,
-	&msm_tpiu_device,
-	&msm_funnel_device,
-	&msm_etm_device,
-#endif
+	&coresight_tpiu_device,
+	&coresight_etb_device,
+	&coresight_funnel_device,
+	&coresight_etm0_device,
+	&coresight_etm1_device,
 	&msm_device_dspcrashd_8960,
 	&msm8960_device_watchdog,
 #ifdef MSM8930_PHASE_2
@@ -2298,6 +2236,8 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8930_iommu_domain_device,
 	&msm_tsens_device,
 	&msm8930_cache_dump_device,
+	&msm8930_pc_cntr,
+	&msm8930_cpu_slp_status,
 };
 
 static struct platform_device *cdp_devices[] __initdata = {
@@ -2443,12 +2383,6 @@ static struct msm_rpmrs_platform_data msm_rpmrs_data __initdata = {
 
 static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
 	.mode = MSM_PM_BOOT_CONFIG_TZ,
-};
-
-static struct msm_pm_sleep_status_data msm_pm_slp_sts_data = {
-	.base_addr = MSM_ACC0_BASE + 0x08,
-	.cpu_offset = MSM_ACC1_BASE - MSM_ACC0_BASE,
-	.mask = 1UL << 13,
 };
 
 #ifdef CONFIG_I2C
@@ -2647,9 +2581,7 @@ static void __init msm8930_cdp_init(void)
 	msm8930_init_fb();
 	slim_register_board_info(msm_slim_devices,
 		ARRAY_SIZE(msm_slim_devices));
-	change_memory_power = &msm8930_change_memory_power;
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
-	msm_pm_init_sleep_status_data(&msm_pm_slp_sts_data);
 
 	if (PLATFORM_IS_CHARM25())
 		platform_add_devices(mdm_devices, ARRAY_SIZE(mdm_devices));

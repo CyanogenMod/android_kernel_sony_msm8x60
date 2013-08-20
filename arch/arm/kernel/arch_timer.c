@@ -22,6 +22,7 @@
 #include <linux/of_address.h>
 #include <linux/io.h>
 #include <linux/irq.h>
+#include <linux/export.h>
 
 #include <asm/cputype.h>
 #include <asm/localtimer.h>
@@ -191,11 +192,17 @@ static void arch_timer_disable(void)
 static void arch_timer_set_mode(enum clock_event_mode mode,
 				struct clock_event_device *clk)
 {
+	unsigned long ctrl;
+
 	switch (mode) {
 	case CLOCK_EVT_MODE_UNUSED:
 	case CLOCK_EVT_MODE_SHUTDOWN:
 		arch_timer_disable();
 		break;
+	case CLOCK_EVT_MODE_ONESHOT:
+		ctrl = arch_specific_timer->reg_read(ARCH_TIMER_REG_CTRL);
+		ctrl |= ARCH_TIMER_CTRL_ENABLE;
+		arch_specific_timer->reg_write(ARCH_TIMER_REG_CTRL, ctrl);
 	default:
 		break;
 	}
@@ -207,9 +214,7 @@ static int arch_timer_set_next_event(unsigned long evt,
 	unsigned long ctrl;
 
 	ctrl = arch_specific_timer->reg_read(ARCH_TIMER_REG_CTRL);
-	ctrl |= ARCH_TIMER_CTRL_ENABLE;
 	ctrl &= ~ARCH_TIMER_CTRL_IT_MASK;
-
 	arch_specific_timer->reg_write(ARCH_TIMER_REG_CTRL, ctrl);
 	arch_specific_timer->reg_write(ARCH_TIMER_REG_TVAL, evt);
 
@@ -315,9 +320,15 @@ static inline cycle_t counter_get_cntvct_cp15(void)
 	return ((cycle_t) cvalh << 32) | cvall;
 }
 
-static cycle_t arch_counter_read(struct clocksource *cs)
+cycle_t arch_counter_get_cntpct(void)
 {
 	return arch_specific_timer->get_cntpct();
+}
+EXPORT_SYMBOL(arch_counter_get_cntpct);
+
+static cycle_t arch_counter_read(struct clocksource *cs)
+{
+	return arch_counter_get_cntpct();
 }
 
 #ifdef ARCH_HAS_READ_CURRENT_TIMER

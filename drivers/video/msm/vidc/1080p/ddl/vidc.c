@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -192,6 +192,95 @@ void vidc_1080p_get_risc2host_cmd_status(u32 err_status,
 		VIDC_RISC2HOST_ARG2_VIDC_DISP_ERROR_STATUS_BMSK,
 		VIDC_RISC2HOST_ARG2_VIDC_DISP_ERROR_STATUS_SHFT);
 
+}
+
+void vidc_1080p_get_mgenaxi_error_info(u32 *axi_error_info_a,
+	u32 *axi_error_info_b)
+{
+	VIDC_HWIO_IN(REG_736158, axi_error_info_a);
+	VIDC_HWIO_IN(REG_598415, axi_error_info_b);
+}
+
+void vidc_1080p_get_mgen2axi_status(struct vidc_1080P_axi_status *axi_a_status,
+	struct vidc_1080P_axi_status *axi_b_status)
+{
+	u32 status;
+	VIDC_HWIO_IN(REG_437878, &status);
+	axi_a_status->axi_error_interrupt = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_A_ERR_INTR_BMSK,
+		HWIO_REG_437878_AXI_A_ERR_INTR_SHFT);
+	axi_a_status->axi_halt_ack = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_A_HALT_ACK_BMSK,
+		HWIO_REG_437878_AXI_A_HALT_ACK_SHFT);
+	axi_a_status->axi_idle = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_A_IDLE_BMSK,
+		HWIO_REG_437878_AXI_A_IDLE_SHFT);
+	axi_a_status->axi_watchdog_error_interrupt = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_A_WDTIMEOUT_INTR_BMSK,
+		HWIO_REG_437878_AXI_A_WDTIMEOUT_INTR_SHFT);
+	axi_b_status->axi_error_interrupt = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_B_ERR_INTR_BMSK,
+		HWIO_REG_437878_AXI_B_ERR_INTR_SHFT);
+	axi_b_status->axi_halt_ack = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_B_HALT_ACK_BMSK,
+		HWIO_REG_437878_AXI_B_HALT_ACK_SHFT);
+	axi_b_status->axi_idle = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_B_IDLE_BMSK,
+		HWIO_REG_437878_AXI_B_IDLE_SHFT);
+	axi_b_status->axi_watchdog_error_interrupt = VIDC_GETFIELD(status,
+		HWIO_REG_437878_AXI_B_WDTIMEOUT_INTR_BMSK,
+		HWIO_REG_437878_AXI_B_WDTIMEOUT_INTR_SHFT);
+}
+
+void vidc_1080p_get_mgen2maxi_ctrl(struct vidc_1080P_axi_ctrl *ctrl)
+{
+	u32 ctrl_value;
+	VIDC_HWIO_IN(REG_471159, &ctrl_value);
+	ctrl->axi_halt_req = VIDC_GETFIELD(ctrl_value,
+		HWIO_REG_471159_AXI_HALT_REQ_BMSK,
+		HWIO_REG_471159_AXI_HALT_REQ_SHFT);
+	ctrl->axi_reset = VIDC_GETFIELD(ctrl_value,
+		HWIO_REG_471159_AXI_RESET_BMSK,
+		HWIO_REG_471159_AXI_RESET_SHFT);
+	ctrl->axi_halt_on_readerror = VIDC_GETFIELD(ctrl_value,
+		HWIO_REG_471159_AXI_HALT_ON_RD_ERR_BMSK,
+		HWIO_REG_471159_AXI_HALT_ON_RD_ERR_SHFT);
+	ctrl->axi_halt_on_writeerror = VIDC_GETFIELD(ctrl_value,
+		HWIO_REG_471159_AXI_HALT_ON_WR_ERR_BMSK,
+		HWIO_REG_471159_AXI_HALT_ON_WR_ERR_SHFT);
+	ctrl->axi_halt_on_watchdog_timeout = VIDC_GETFIELD(ctrl_value,
+		HWIO_REG_471159_AXI_HALT_ON_WDTIMEOUT_BMSK,
+		HWIO_REG_471159_AXI_HALT_ON_WDTIMEOUT_SHFT);
+	ctrl->axi_watchdog_timeout_value = VIDC_GETFIELD(ctrl_value,
+		HWIO_REG_471159_AXI_WDTIMEOUT_LOG2_BMSK,
+		HWIO_REG_471159_AXI_WDTIMEOUT_LOG2_SHFT);
+	ctrl->axi_interrupt_clr = VIDC_GETFIELD(ctrl_value,
+		HWIO_REG_471159_AXI_INTR_CLR_BMSK,
+		HWIO_REG_471159_AXI_INTR_CLR_SHFT);
+}
+
+void vidc_1080p_set_mgen2maxi_ctrl(struct vidc_1080P_axi_ctrl *ctrl)
+{
+	u32 ctrl_value;
+	ctrl_value = VIDC_SETFIELD(ctrl->axi_halt_req,
+		HWIO_REG_471159_AXI_HALT_REQ_SHFT,
+		HWIO_REG_471159_AXI_HALT_REQ_BMSK);
+	ctrl_value |= VIDC_SETFIELD(ctrl->axi_reset,
+		HWIO_REG_471159_AXI_RESET_SHFT,
+		HWIO_REG_471159_AXI_RESET_BMSK);
+	ctrl_value |= VIDC_SETFIELD(ctrl->axi_halt_on_readerror,
+		HWIO_REG_471159_AXI_HALT_ON_RD_ERR_SHFT,
+		HWIO_REG_471159_AXI_HALT_ON_RD_ERR_BMSK);
+	ctrl_value |= VIDC_SETFIELD(ctrl->axi_halt_on_writeerror,
+		HWIO_REG_471159_AXI_HALT_ON_WR_ERR_SHFT,
+		HWIO_REG_471159_AXI_HALT_ON_WR_ERR_BMSK);
+	ctrl_value |= VIDC_SETFIELD(ctrl->axi_halt_on_watchdog_timeout,
+		HWIO_REG_471159_AXI_HALT_ON_WDTIMEOUT_SHFT,
+		HWIO_REG_471159_AXI_HALT_ON_WDTIMEOUT_BMSK);
+	ctrl_value |= VIDC_SETFIELD(ctrl->axi_interrupt_clr,
+		HWIO_REG_471159_AXI_INTR_CLR_SHFT,
+		HWIO_REG_471159_AXI_INTR_CLR_BMSK);
+	VIDC_HWIO_OUT(REG_471159, ctrl_value);
 }
 
 void vidc_1080p_clear_risc2host_cmd(void)
@@ -520,8 +609,12 @@ void vidc_1080p_get_decode_frame(
 	u32 frame = 0;
 
 	VIDC_HWIO_IN(REG_760102, &frame);
-	*pe_frame = (enum vidc_1080p_decode_frame)
-		(frame & VIDC_1080P_SI_RG8_DECODE_FRAMETYPE_MASK);
+	if (frame & 0x10)
+		*pe_frame = (enum vidc_1080p_decode_frame)
+			VIDC_1080P_DECODE_FRAMETYPE_IDR;
+	else
+		*pe_frame = (enum vidc_1080p_decode_frame)
+			(frame & VIDC_1080P_SI_RG8_DECODE_FRAMETYPE_MASK);
 }
 
 void vidc_1080p_get_decode_frame_result(
@@ -1105,4 +1198,9 @@ void vidc_1080p_frame_start_realloc(u32 instance_id)
 	VIDC_HWIO_OUT(REG_666957, VIDC_1080P_INIT_CH_INST_ID);
 	VIDC_HWIO_OUT(REG_666957,
 		VIDC_1080P_DEC_TYPE_FRAME_START_REALLOC | instance_id);
+}
+
+void vidc_1080p_set_enc_NV21(u32 enc_nv21)
+{
+	VIDC_HWIO_OUT(REG_515664, enc_nv21);
 }

@@ -12,6 +12,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of_gpio.h>
 #include <linux/slab.h>
 #include <linux/mfd/core.h>
 #include <linux/mfd/wcd9xxx/wcd9xxx-slimslave.h>
@@ -26,9 +27,9 @@
 #include <linux/i2c.h>
 #include <sound/soc.h>
 
-#define WCD9XXX_SLIM_GLA_MAX_RETRIES 5
 #define WCD9XXX_REGISTER_START_OFFSET 0x800
 #define WCD9XXX_SLIM_RW_MAX_TRIES 3
+#define SLIMBUS_PRESENT_TIMEOUT 100
 
 #define MAX_WCD9XXX_DEVICE	4
 #define TABLA_I2C_MODE	0x03
@@ -246,6 +247,25 @@ static struct mfd_cell sitar_devs[] = {
 	},
 };
 
+static struct mfd_cell taiko_devs[] = {
+	{
+		.name = "taiko_codec",
+	},
+};
+
+static struct wcd9xx_codec_type {
+	u8 byte[4];
+	struct mfd_cell *dev;
+	int size;
+} wcd9xxx_codecs[] = {
+	{{0x2, 0x0, 0x0, 0x1}, tabla_devs, ARRAY_SIZE(tabla_devs)},
+	{{0x1, 0x0, 0x0, 0x1}, tabla1x_devs, ARRAY_SIZE(tabla1x_devs)},
+	{{0x0, 0x0, 0x2, 0x1}, taiko_devs, ARRAY_SIZE(taiko_devs)},
+	{{0x0, 0x0, 0x0, 0x1}, sitar_devs, ARRAY_SIZE(sitar_devs)},
+	{{0x1, 0x0, 0x1, 0x1}, sitar_devs, ARRAY_SIZE(sitar_devs)},
+	{{0x2, 0x0, 0x1, 0x1}, sitar_devs, ARRAY_SIZE(sitar_devs)},
+};
+
 static void wcd9xxx_bring_up(struct wcd9xxx *wcd9xxx)
 {
 	wcd9xxx_reg_write(wcd9xxx, WCD9XXX_A_LEAKAGE_CTL, 0x4);
@@ -276,8 +296,6 @@ static int wcd9xxx_reset(struct wcd9xxx *wcd9xxx)
 			return ret;
 		}
 
-		gpio_direction_output(wcd9xxx->reset_gpio, 1);
-		msleep(20);
 		gpio_direction_output(wcd9xxx->reset_gpio, 0);
 		msleep(20);
 		gpio_direction_output(wcd9xxx->reset_gpio, 1);
@@ -293,11 +311,57 @@ static void wcd9xxx_free_reset(struct wcd9xxx *wcd9xxx)
 		wcd9xxx->reset_gpio = 0;
 	}
 }
+static int wcd9xxx_check_codec_type(struct wcd9xxx *wcd9xxx,
+					struct mfd_cell **wcd9xxx_dev,
+					int *wcd9xxx_dev_size)
+{
+	int i;
+	int ret;
+	i = WCD9XXX_A_CHIP_ID_BYTE_0;
+	while (i <= WCD9XXX_A_CHIP_ID_BYTE_3) {
+		ret = wcd9xxx_reg_read(wcd9xxx, i);
+		if (ret < 0)
+			goto exit;
+		wcd9xxx->idbyte[i-WCD9XXX_A_CHIP_ID_BYTE_0] = (u8)ret;
+		pr_debug("%s: wcd9xx read = %x, byte = %x\n", __func__, ret,
+			i);
+		i++;
+	}
+
+	/* Read codec version */
+	ret = wcd9xxx_reg_read(wcd9xxx, WCD9XXX_A_CHIP_VERSION);
+	if (ret < 0)
+		goto exit;
+	wcd9xxx->version = (u8)ret & 0x1F;
+	i = 0;
+	while (i < ARRAY_SIZE(wcd9xxx_codecs)) {
+		if ((wcd9xxx_codecs[i].byte[0] == wcd9xxx->idbyte[0]) &&
+		    (wcd9xxx_codecs[i].byte[1] == wcd9xxx->idbyte[1]) &&
+		    (wcd9xxx_codecs[i].byte[2] == wcd9xxx->idbyte[2]) &&
+		    (wcd9xxx_codecs[i].byte[3] == wcd9xxx->idbyte[3])) {
+			pr_info("%s: codec is %s", __func__,
+				wcd9xxx_codecs[i].dev->name);
+			*wcd9xxx_dev = wcd9xxx_codecs[i].dev;
+			*wcd9xxx_dev_size = wcd9xxx_codecs[i].size;
+			break;
+		}
+		i++;
+	}
+	if (*wcd9xxx_dev == NULL || *wcd9xxx_dev_size == 0)
+		ret = -ENODEV;
+	pr_info("%s: Read codec idbytes & version\n"
+		"byte_0[%08x] byte_1[%08x] byte_2[%08x]\n"
+		" byte_3[%08x] version = %x\n", __func__,
+		wcd9xxx->idbyte[0], wcd9xxx->idbyte[1],
+		wcd9xxx->idbyte[2], wcd9xxx->idbyte[3],
+		wcd9xxx->version);
+exit:
+	return ret;
+}
 
 static int wcd9xxx_device_init(struct wcd9xxx *wcd9xxx, int irq)
 {
 	int ret;
-	u8 idbyte_0, idbyte_1, idbyte_2, idbyte_3;
 	struct mfd_cell *wcd9xxx_dev = NULL;
 	int wcd9xxx_dev_size = 0;
 
@@ -315,58 +379,20 @@ static int wcd9xxx_device_init(struct wcd9xxx *wcd9xxx, int irq)
 
 	wcd9xxx_bring_up(wcd9xxx);
 
-	ret = wcd9xxx_irq_init(wcd9xxx);
-	if (ret) {
-		pr_err("IRQ initialization failed\n");
-		goto err;
-	}
-
-	idbyte_0 = wcd9xxx_reg_read(wcd9xxx, WCD9XXX_A_CHIP_ID_BYTE_0);
-	idbyte_1 = wcd9xxx_reg_read(wcd9xxx, WCD9XXX_A_CHIP_ID_BYTE_1);
-	idbyte_2 = wcd9xxx_reg_read(wcd9xxx, WCD9XXX_A_CHIP_ID_BYTE_2);
-	idbyte_3 = wcd9xxx_reg_read(wcd9xxx, WCD9XXX_A_CHIP_ID_BYTE_3);
-
-	wcd9xxx->version = wcd9xxx_reg_read(wcd9xxx,
-			WCD9XXX_A_CHIP_VERSION) & 0x1F;
-	pr_info("%s : Codec version %u initialized\n",
-		__func__, wcd9xxx->version);
-	pr_info("idbyte_0[%08x] idbyte_1[%08x] idbyte_2[%08x] idbyte_3[%08x]\n",
-			idbyte_0, idbyte_1, idbyte_2, idbyte_3);
-
-	if (wcd9xxx->slim != NULL) {
-		if (!strncmp(wcd9xxx->slim->name, "tabla", 5)) {
-			if (TABLA_IS_1_X(wcd9xxx->version)) {
-				wcd9xxx_dev = tabla1x_devs;
-				wcd9xxx_dev_size = ARRAY_SIZE(tabla1x_devs);
-			} else {
-				wcd9xxx_dev = tabla_devs;
-				wcd9xxx_dev_size = ARRAY_SIZE(tabla_devs);
-			}
-		} else {
-			wcd9xxx_dev = sitar_devs;
-			wcd9xxx_dev_size = ARRAY_SIZE(sitar_devs);
-		}
-	} else {
-		/* Need to add here check for Tabla.
-		 * For now the read of version takes
-		 * care of now only tabla.
-		 */
-		pr_debug("%s : Read codec version using I2C\n",	__func__);
-		if (!strncmp(wcd9xxx_modules[0].client->name, "sitar", 5)) {
-			wcd9xxx_dev = sitar_devs;
-			wcd9xxx_dev_size = ARRAY_SIZE(sitar_devs);
-		} else if (TABLA_IS_1_X(wcd9xxx->version)) {
-			wcd9xxx_dev = tabla1x_devs;
-			wcd9xxx_dev_size = ARRAY_SIZE(tabla1x_devs);
-		} else if (TABLA_IS_2_0(wcd9xxx->version)) {
-			wcd9xxx_dev = tabla_devs;
-			wcd9xxx_dev_size = ARRAY_SIZE(tabla_devs);
+	if (wcd9xxx->irq != -1) {
+		ret = wcd9xxx_irq_init(wcd9xxx);
+		if (ret) {
+			pr_err("IRQ initialization failed\n");
+			goto err;
 		}
 	}
+	ret = wcd9xxx_check_codec_type(wcd9xxx, &wcd9xxx_dev,
+					&wcd9xxx_dev_size);
 
-	ret = mfd_add_devices(wcd9xxx->dev, -1,
-		      wcd9xxx_dev, wcd9xxx_dev_size,
-		      NULL, 0);
+	if (ret < 0)
+		goto err_irq;
+	ret = mfd_add_devices(wcd9xxx->dev, -1, wcd9xxx_dev, wcd9xxx_dev_size,
+			      NULL, 0);
 	if (ret != 0) {
 		dev_err(wcd9xxx->dev, "Failed to add children: %d\n", ret);
 		goto err_irq;
@@ -512,10 +538,15 @@ static int wcd9xxx_enable_supplies(struct wcd9xxx *wcd9xxx,
 		goto err;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(pdata->regulator); i++)
-		wcd9xxx->supplies[i].supply = pdata->regulator[i].name;
+	wcd9xxx->num_of_supplies = 0;
+	for (i = 0; i < ARRAY_SIZE(pdata->regulator); i++) {
+		if (pdata->regulator[i].name) {
+			wcd9xxx->supplies[i].supply = pdata->regulator[i].name;
+			wcd9xxx->num_of_supplies++;
+		}
+	}
 
-	ret = regulator_bulk_get(wcd9xxx->dev, ARRAY_SIZE(pdata->regulator),
+	ret = regulator_bulk_get(wcd9xxx->dev, wcd9xxx->num_of_supplies,
 				 wcd9xxx->supplies);
 	if (ret != 0) {
 		dev_err(wcd9xxx->dev, "Failed to get supplies: err = %d\n",
@@ -523,7 +554,7 @@ static int wcd9xxx_enable_supplies(struct wcd9xxx *wcd9xxx,
 		goto err_supplies;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(pdata->regulator); i++) {
+	for (i = 0; i < wcd9xxx->num_of_supplies; i++) {
 		ret = regulator_set_voltage(wcd9xxx->supplies[i].consumer,
 			pdata->regulator[i].min_uV, pdata->regulator[i].max_uV);
 		if (ret) {
@@ -543,7 +574,7 @@ static int wcd9xxx_enable_supplies(struct wcd9xxx *wcd9xxx,
 		}
 	}
 
-	ret = regulator_bulk_enable(ARRAY_SIZE(pdata->regulator),
+	ret = regulator_bulk_enable(wcd9xxx->num_of_supplies,
 				    wcd9xxx->supplies);
 	if (ret != 0) {
 		dev_err(wcd9xxx->dev, "Failed to enable supplies: err = %d\n",
@@ -553,13 +584,13 @@ static int wcd9xxx_enable_supplies(struct wcd9xxx *wcd9xxx,
 	return ret;
 
 err_configure:
-	for (i = 0; i < ARRAY_SIZE(pdata->regulator); i++) {
+	for (i = 0; i < wcd9xxx->num_of_supplies; i++) {
 		regulator_set_voltage(wcd9xxx->supplies[i].consumer, 0,
 			pdata->regulator[i].max_uV);
 		regulator_set_optimum_mode(wcd9xxx->supplies[i].consumer, 0);
 	}
 err_get:
-	regulator_bulk_free(ARRAY_SIZE(pdata->regulator), wcd9xxx->supplies);
+	regulator_bulk_free(wcd9xxx->num_of_supplies, wcd9xxx->supplies);
 err_supplies:
 	kfree(wcd9xxx->supplies);
 err:
@@ -571,14 +602,14 @@ static void wcd9xxx_disable_supplies(struct wcd9xxx *wcd9xxx,
 {
 	int i;
 
-	regulator_bulk_disable(ARRAY_SIZE(pdata->regulator),
+	regulator_bulk_disable(wcd9xxx->num_of_supplies,
 				    wcd9xxx->supplies);
-	for (i = 0; i < ARRAY_SIZE(pdata->regulator); i++) {
+	for (i = 0; i < wcd9xxx->num_of_supplies; i++) {
 		regulator_set_voltage(wcd9xxx->supplies[i].consumer, 0,
 			pdata->regulator[i].max_uV);
 		regulator_set_optimum_mode(wcd9xxx->supplies[i].consumer, 0);
 	}
-	regulator_bulk_free(ARRAY_SIZE(pdata->regulator), wcd9xxx->supplies);
+	regulator_bulk_free(wcd9xxx->num_of_supplies, wcd9xxx->supplies);
 	kfree(wcd9xxx->supplies);
 }
 
@@ -710,7 +741,7 @@ static int __devinit wcd9xxx_i2c_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
 	struct wcd9xxx *wcd9xxx;
-	struct wcd9xxx_pdata *pdata = client->dev.platform_data;
+	struct wcd9xxx_pdata *pdata;
 	int val = 0;
 	int ret = 0;
 	int i2c_mode = 0;
@@ -721,6 +752,7 @@ static int __devinit wcd9xxx_i2c_probe(struct i2c_client *client,
 		pr_info("tabla card is already detected in slimbus mode\n");
 		return -ENODEV;
 	}
+	pdata = client->dev.platform_data;
 	if (device_id > 0) {
 		wcd9xxx_modules[device_id++].client = client;
 		pr_info("probe for other slaves devices of tabla\n");
@@ -766,21 +798,22 @@ static int __devinit wcd9xxx_i2c_probe(struct i2c_client *client,
 	wcd9xxx->irq = pdata->irq;
 	wcd9xxx->irq_base = pdata->irq_base;
 
-	/*read the tabla status before initializing the device type*/
-	ret = wcd9xxx_read(wcd9xxx, WCD9XXX_A_CHIP_STATUS, 1, &val, 0);
-	if (!strncmp(wcd9xxx_modules[0].client->name, "sitar", 5))
-		i2c_mode = SITAR_I2C_MODE;
-	else if (!strncmp(wcd9xxx_modules[0].client->name, "tabla", 5))
-		i2c_mode = TABLA_I2C_MODE;
-
-	if ((ret < 0) || (val != i2c_mode))
-		pr_err("failed to read the wcd9xxx status ret = %d\n", ret);
-
 	ret = wcd9xxx_device_init(wcd9xxx, wcd9xxx->irq);
 	if (ret) {
 		pr_err("%s: error, initializing device failed\n", __func__);
 		goto err_device_init;
 	}
+
+	if ((wcd9xxx->idbyte[0] == 0x2) || (wcd9xxx->idbyte[0] == 0x1))
+		i2c_mode = TABLA_I2C_MODE;
+	else if (wcd9xxx->idbyte[0] == 0x0)
+		i2c_mode = SITAR_I2C_MODE;
+
+	ret = wcd9xxx_read(wcd9xxx, WCD9XXX_A_CHIP_STATUS, 1, &val, 0);
+
+	if ((ret < 0) || (val != i2c_mode))
+		pr_err("failed to read the wcd9xxx status ret = %d\n", ret);
+
 	wcd9xxx_intf = WCD9XXX_INTERFACE_TYPE_I2C;
 
 	return ret;
@@ -805,15 +838,287 @@ static int __devexit wcd9xxx_i2c_remove(struct i2c_client *client)
 	return 0;
 }
 
+#define CODEC_DT_MAX_PROP_SIZE   40
+static int wcd9xxx_dt_parse_vreg_info(struct device *dev,
+	struct wcd9xxx_regulator *vreg, const char *vreg_name)
+{
+	int len, ret = 0;
+	const __be32 *prop;
+	char prop_name[CODEC_DT_MAX_PROP_SIZE];
+	struct device_node *regnode = NULL;
+	u32 prop_val;
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE, "%s-supply",
+		vreg_name);
+	regnode = of_parse_phandle(dev->of_node, prop_name, 0);
+
+	if (!regnode) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+				prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+	vreg->name = vreg_name;
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+		"qcom,%s-voltage", vreg_name);
+	prop = of_get_property(dev->of_node, prop_name, &len);
+
+	if (!prop || (len != (2 * sizeof(__be32)))) {
+		dev_err(dev, "%s %s property\n",
+				prop ? "invalid format" : "no", prop_name);
+		return -ENODEV;
+	} else {
+		vreg->min_uV = be32_to_cpup(&prop[0]);
+		vreg->max_uV = be32_to_cpup(&prop[1]);
+	}
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,%s-current", vreg_name);
+
+	ret = of_property_read_u32(dev->of_node, prop_name, &prop_val);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+				prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+	vreg->optimum_uA = prop_val;
+
+	dev_info(dev, "%s: vol=[%d %d]uV, curr=[%d]uA\n", vreg->name,
+		vreg->min_uV, vreg->max_uV, vreg->optimum_uA);
+	return 0;
+}
+
+static int wcd9xxx_dt_parse_micbias_info(struct device *dev,
+	struct wcd9xxx_micbias_setting *micbias)
+{
+	int ret = 0;
+	char prop_name[CODEC_DT_MAX_PROP_SIZE];
+	u32 prop_val;
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias-ldoh-v");
+	ret = of_property_read_u32(dev->of_node, prop_name, &prop_val);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+	micbias->ldoh_v  =  (u8)prop_val;
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias-cfilt1-mv");
+	ret = of_property_read_u32(dev->of_node, prop_name,
+				   &micbias->cfilt1_mv);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias-cfilt2-mv");
+	ret = of_property_read_u32(dev->of_node, prop_name,
+				   &micbias->cfilt2_mv);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias-cfilt3-mv");
+	ret = of_property_read_u32(dev->of_node, prop_name,
+				   &micbias->cfilt3_mv);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias1-cfilt-sel");
+	ret = of_property_read_u32(dev->of_node, prop_name, &prop_val);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+	micbias->bias1_cfilt_sel = (u8)prop_val;
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias2-cfilt-sel");
+	ret = of_property_read_u32(dev->of_node, prop_name, &prop_val);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+	micbias->bias2_cfilt_sel = (u8)prop_val;
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias3-cfilt-sel");
+	ret = of_property_read_u32(dev->of_node, prop_name, &prop_val);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+	micbias->bias3_cfilt_sel = (u8)prop_val;
+
+	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
+			"qcom,cdc-micbias4-cfilt-sel");
+	ret = of_property_read_u32(dev->of_node, prop_name, &prop_val);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			prop_name, dev->of_node->full_name);
+		return -ENODEV;
+	}
+	micbias->bias4_cfilt_sel = (u8)prop_val;
+
+	dev_dbg(dev, "ldoh_v  %u cfilt1_mv %u cfilt2_mv %u cfilt3_mv %u",
+		(u32)micbias->ldoh_v, (u32)micbias->cfilt1_mv,
+		(u32)micbias->cfilt2_mv, (u32)micbias->cfilt3_mv);
+
+	dev_dbg(dev, "bias1_cfilt_sel %u bias2_cfilt_sel %u\n",
+		(u32)micbias->bias1_cfilt_sel, (u32)micbias->bias2_cfilt_sel);
+
+	dev_dbg(dev, "bias3_cfilt_sel %u bias4_cfilt_sel %u\n",
+		(u32)micbias->bias3_cfilt_sel, (u32)micbias->bias4_cfilt_sel);
+
+	return 0;
+}
+
+static int wcd9xxx_dt_parse_slim_interface_dev_info(struct device *dev,
+						struct slim_device *slim_ifd)
+{
+	int ret = 0;
+	struct property *prop;
+
+	ret = of_property_read_string(dev->of_node, "qcom,cdc-slim-ifd",
+				      &slim_ifd->name);
+	if (ret) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			"qcom,cdc-slim-ifd-dev", dev->of_node->full_name);
+		return -ENODEV;
+	}
+	prop = of_find_property(dev->of_node,
+			"qcom,cdc-slim-ifd-elemental-addr", NULL);
+	if (!prop) {
+		dev_err(dev, "Looking up %s property in node %s failed",
+			"qcom,cdc-slim-ifd-elemental-addr",
+			dev->of_node->full_name);
+		return -ENODEV;
+	} else if (prop->length != 6) {
+		dev_err(dev, "invalid codec slim ifd addr. addr length = %d\n",
+			      prop->length);
+		return -ENODEV;
+	}
+	memcpy(slim_ifd->e_addr, prop->value, 6);
+
+	return 0;
+}
+
+static char *taiko_supplies[] = {
+	"cdc-vdd-buck", "cdc-vdd-tx-h", "cdc-vdd-rx-h", "cdc-vddpx-1",
+	"cdc-vdd-a-1p2v", "cdc-vddcx-1", "cdc-vddcx-2",
+};
+
+static struct wcd9xxx_pdata *wcd9xxx_populate_dt_pdata(struct device *dev)
+{
+	struct wcd9xxx_pdata *pdata;
+	int ret, i;
+	char **codec_supplies;
+	u32 num_of_supplies = 0;
+
+	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata) {
+		dev_err(dev,
+			"could not allocate memory for platform data\n");
+		return NULL;
+	}
+
+	if (!strcmp(dev_name(dev), "taiko-slim-pgd")) {
+		codec_supplies = taiko_supplies;
+		num_of_supplies = ARRAY_SIZE(taiko_supplies);
+	} else {
+		dev_err(dev, "%s unsupported device %s\n",
+				__func__, dev_name(dev));
+		goto err;
+	}
+
+	if (num_of_supplies > ARRAY_SIZE(pdata->regulator)) {
+		dev_err(dev, "%s: Num of supplies %u > max supported %u\n",
+		      __func__, num_of_supplies, ARRAY_SIZE(pdata->regulator));
+
+		goto err;
+	}
+
+	for (i = 0; i < num_of_supplies; i++) {
+		ret = wcd9xxx_dt_parse_vreg_info(dev, &pdata->regulator[i],
+			codec_supplies[i]);
+		if (ret)
+			goto err;
+	}
+
+	ret = wcd9xxx_dt_parse_micbias_info(dev, &pdata->micbias);
+	if (ret)
+		goto err;
+
+	pdata->reset_gpio = of_get_named_gpio(dev->of_node,
+				"qcom,cdc-reset-gpio", 0);
+	if (pdata->reset_gpio < 0) {
+		dev_err(dev, "Looking up %s property in node %s failed %d\n",
+			"qcom, cdc-reset-gpio", dev->of_node->full_name,
+			pdata->reset_gpio);
+		goto err;
+	}
+	pdata->irq = -1;
+
+	ret = wcd9xxx_dt_parse_slim_interface_dev_info(dev,
+			&pdata->slimbus_slave_device);
+	if (ret)
+		goto err;
+	return pdata;
+err:
+	devm_kfree(dev, pdata);
+	return NULL;
+}
+
+static int wcd9xxx_slim_get_laddr(struct slim_device *sb,
+				  const u8 *e_addr, u8 e_len, u8 *laddr)
+{
+	int ret;
+	const unsigned long timeout = jiffies +
+				      msecs_to_jiffies(SLIMBUS_PRESENT_TIMEOUT);
+
+	do {
+		ret = slim_get_logical_addr(sb, e_addr, e_len, laddr);
+		if (!ret)
+			break;
+		/* Give SLIMBUS time to report present and be ready. */
+		usleep_range(1000, 1000);
+		pr_debug_ratelimited("%s: retyring get logical addr\n",
+				     __func__);
+	} while time_before(jiffies, timeout);
+
+	return ret;
+}
+
 static int wcd9xxx_slim_probe(struct slim_device *slim)
 {
 	struct wcd9xxx *wcd9xxx;
 	struct wcd9xxx_pdata *pdata;
 	int ret = 0;
-	int sgla_retry_cnt;
 
-	dev_info(&slim->dev, "Initialized slim device %s\n", slim->name);
-	pdata = slim->dev.platform_data;
+	if (slim->dev.of_node) {
+		dev_info(&slim->dev, "Platform data from device tree\n");
+		pdata = wcd9xxx_populate_dt_pdata(&slim->dev);
+		slim->dev.platform_data = pdata;
+
+	} else {
+		dev_info(&slim->dev, "Platform data from board file\n");
+		pdata = slim->dev.platform_data;
+	}
 
 	if (!pdata) {
 		dev_err(&slim->dev, "Error, no platform data\n");
@@ -848,10 +1153,12 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 		goto err_supplies;
 	}
 
-	ret = slim_get_logical_addr(wcd9xxx->slim, wcd9xxx->slim->e_addr,
-		ARRAY_SIZE(wcd9xxx->slim->e_addr), &wcd9xxx->slim->laddr);
+	ret = wcd9xxx_slim_get_laddr(wcd9xxx->slim, wcd9xxx->slim->e_addr,
+				     ARRAY_SIZE(wcd9xxx->slim->e_addr),
+				     &wcd9xxx->slim->laddr);
 	if (ret) {
-		pr_err("fail to get slimbus logical address %d\n", ret);
+		pr_err("%s: failed to get slimbus %s logical address: %d\n",
+		       __func__, wcd9xxx->slim->name, ret);
 		goto err_reset;
 	}
 	wcd9xxx->read_dev = wcd9xxx_slim_read_device;
@@ -860,11 +1167,8 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 	wcd9xxx->irq_base = pdata->irq_base;
 	wcd9xxx_pgd_la = wcd9xxx->slim->laddr;
 
-	if (pdata->num_irqs < TABLA_NUM_IRQS) {
-		pr_err("%s: Error, not enough interrupt lines allocated\n",
-			__func__);
-		goto err_reset;
-	}
+	if (pdata->num_irqs < TABLA_NUM_IRQS)
+		pr_warn("%s: Not enough interrupt lines allocated\n", __func__);
 
 	wcd9xxx->slim_slave = &pdata->slimbus_slave_device;
 
@@ -874,28 +1178,14 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 		goto err_reset;
 	}
 
-	sgla_retry_cnt = 0;
-
-	while (1) {
-		ret = slim_get_logical_addr(wcd9xxx->slim_slave,
-			wcd9xxx->slim_slave->e_addr,
-			ARRAY_SIZE(wcd9xxx->slim_slave->e_addr),
-			&wcd9xxx->slim_slave->laddr);
-		if (ret) {
-			if (sgla_retry_cnt++ < WCD9XXX_SLIM_GLA_MAX_RETRIES) {
-				/* Give SLIMBUS slave time to report present
-				   and be ready.
-				 */
-				usleep_range(1000, 1000);
-				pr_debug("%s: retry slim_get_logical_addr()\n",
-					__func__);
-				continue;
-			}
-			pr_err("fail to get slimbus slave logical address"
-				" %d\n", ret);
-			goto err_slim_add;
-		}
-		break;
+	ret = wcd9xxx_slim_get_laddr(wcd9xxx->slim_slave,
+				     wcd9xxx->slim_slave->e_addr,
+				     ARRAY_SIZE(wcd9xxx->slim_slave->e_addr),
+				     &wcd9xxx->slim_slave->laddr);
+	if (ret) {
+		pr_err("%s: failed to get slimbus %s logical address: %d\n",
+		       __func__, wcd9xxx->slim->name, ret);
+		goto err_slim_add;
 	}
 	wcd9xxx_inf_la = wcd9xxx->slim_slave->laddr;
 	wcd9xxx_intf = WCD9XXX_INTERFACE_TYPE_SLIMBUS;
@@ -905,7 +1195,9 @@ static int wcd9xxx_slim_probe(struct slim_device *slim)
 		pr_err("%s: error, initializing device failed\n", __func__);
 		goto err_slim_add;
 	}
+
 	wcd9xxx_init_slimslave(wcd9xxx, wcd9xxx_pgd_la);
+
 #ifdef CONFIG_DEBUG_FS
 	debugCodec = wcd9xxx;
 
@@ -1113,6 +1405,23 @@ static struct slim_driver tabla2x_slim_driver = {
 	.suspend = wcd9xxx_slim_suspend,
 };
 
+static const struct slim_device_id taiko_slimtest_id[] = {
+	{"taiko-slim-pgd", 0},
+	{}
+};
+
+static struct slim_driver taiko_slim_driver = {
+	.driver = {
+		.name = "taiko-slim",
+		.owner = THIS_MODULE,
+	},
+	.probe = wcd9xxx_slim_probe,
+	.remove = wcd9xxx_slim_remove,
+	.id_table = taiko_slimtest_id,
+	.resume = wcd9xxx_slim_resume,
+	.suspend = wcd9xxx_slim_suspend,
+};
+
 #define WCD9XXX_I2C_TOP_LEVEL	0
 #define WCD9XXX_I2C_ANALOG	1
 #define WCD9XXX_I2C_DIGITAL_1	2
@@ -1127,33 +1436,12 @@ static struct i2c_device_id tabla_id_table[] = {
 };
 MODULE_DEVICE_TABLE(i2c, tabla_id_table);
 
-static struct i2c_device_id sitar_id_table[] = {
-	{"sitar top level", WCD9XXX_I2C_TOP_LEVEL},
-	{"sitar analog", WCD9XXX_I2C_ANALOG},
-	{"sitar digital1", WCD9XXX_I2C_DIGITAL_1},
-	{"sitar digital2", WCD9XXX_I2C_DIGITAL_2},
-	{}
-};
-MODULE_DEVICE_TABLE(i2c, tabla_id_table);
-
 static struct i2c_driver tabla_i2c_driver = {
 	.driver                 = {
 		.owner          =       THIS_MODULE,
 		.name           =       "tabla-i2c-core",
 	},
 	.id_table               =       tabla_id_table,
-	.probe                  =       wcd9xxx_i2c_probe,
-	.remove                 =       __devexit_p(wcd9xxx_i2c_remove),
-	.resume	= wcd9xxx_i2c_resume,
-	.suspend = wcd9xxx_i2c_suspend,
-};
-
-static struct i2c_driver sitar_i2c_driver = {
-	.driver                 = {
-		.owner          =       THIS_MODULE,
-		.name           =       "sitar-i2c-core",
-	},
-	.id_table               =       sitar_id_table,
 	.probe                  =       wcd9xxx_i2c_probe,
 	.remove                 =       __devexit_p(wcd9xxx_i2c_remove),
 	.resume	= wcd9xxx_i2c_resume,
@@ -1184,9 +1472,9 @@ static int __init wcd9xxx_init(void)
 	if (ret5 != 0)
 		pr_err("Failed to register sitar SB driver: %d\n", ret5);
 
-	ret6 = i2c_add_driver(&sitar_i2c_driver);
+	ret6 = slim_driver_register(&taiko_slim_driver);
 	if (ret6 != 0)
-		pr_err("failed to add the I2C driver\n");
+		pr_err("Failed to register taiko SB driver: %d\n", ret6);
 
 	return (ret1 && ret2 && ret3 && ret4 && ret5 && ret6) ? -1 : 0;
 }

@@ -4534,10 +4534,26 @@ static int hdmi_msm_power_off(struct platform_device *pdev)
 	return 0;
 }
 
+static void hdmi_msm_update_panel_info(struct msm_fb_data_type *mfd)
+{
+	if (!mfd)
+		return;
+
+	if (hdmi_common_get_video_format_from_drv_data(mfd))
+		hdmi_common_init_panel_info(&mfd->panel_info);
+}
+
+static bool hdmi_msm_cable_connected(void)
+{
+	return hdmi_msm_state->hpd_initialized &&
+			external_common_state->hpd_state;
+}
+
 static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 {
 	int rc;
 	struct platform_device *fb_dev;
+	struct msm_fb_data_type *mfd = NULL;
 
 	if (!hdmi_msm_state) {
 		pr_err("%s: hdmi_msm_state is NULL\n", __func__);
@@ -4674,6 +4690,10 @@ static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 		}
 	} else
 		DEV_ERR("Init FAILED: failed to add fb device\n");
+
+	mfd = platform_get_drvdata(fb_dev);
+	mfd->update_panel_info = hdmi_msm_update_panel_info;
+	mfd->is_panel_ready = hdmi_msm_cable_connected;
 
 	if (hdmi_prim_display) {
 		rc = hdmi_msm_hpd_on();

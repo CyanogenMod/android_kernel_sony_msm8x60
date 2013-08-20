@@ -49,6 +49,12 @@
 
 #define SCM_IO_DISABLE_PMIC_ARBITER	1
 
+#ifdef CONFIG_LGE_CRASH_HANDLER
+#define LGE_ERROR_HANDLER_MAGIC_NUM	0xA97F2C46
+#define LGE_ERROR_HANDLER_MAGIC_ADDR	0x18
+void *lge_error_handler_cookie_addr;
+#endif
+
 static int restart_mode;
 void *restart_reason;
 
@@ -106,6 +112,10 @@ static void set_dload_mode(int on)
 		__raw_writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		__raw_writel(on ? 0xCE14091A : 0,
 		       dload_mode_addr + sizeof(unsigned int));
+#ifdef CONFIG_LGE_CRASH_HANDLER
+		__raw_writel(on ? LGE_ERROR_HANDLER_MAGIC_NUM : 0,
+				lge_error_handler_cookie_addr);
+#endif
 		mb();
 	}
 }
@@ -203,6 +213,43 @@ static irqreturn_t resout_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+#ifdef CONFIG_LGE_CRASH_HANDLER
+static int ssr_magic_number = 0;
+#define SUBSYS_NAME_MAX_LENGTH	40
+
+int get_ssr_magic_number(void)
+{
+	return ssr_magic_number;
+}
+
+void set_ssr_magic_number(const char* subsys_name)
+{
+	int i;
+	const char *subsys_list[] = {
+		"modem", "riva", "dsps", "lpass",
+		"external_modem", "gss",
+	};
+
+	ssr_magic_number = (0x6d630000 | 0x0000f000);
+
+	for (i=0; i < ARRAY_SIZE(subsys_list); i++) {
+		if (!strncmp(subsys_list[i], subsys_name,
+					SUBSYS_NAME_MAX_LENGTH)) {
+			ssr_magic_number = (0x6d630000 | ((i+1)<<12));
+			break;
+		}
+	}
+}
+
+void set_kernel_crash_magic_number(void)
+{
+	if (ssr_magic_number == 0)
+		__raw_writel(0x6d630100, restart_reason);
+	else
+		__raw_writel(restart_mode, restart_reason);
+}
+#endif /* CONFIG_LGE_CRASH_HANDLER */
+
 void msm_restart(char mode, const char *cmd)
 {
 
@@ -215,8 +262,13 @@ void msm_restart(char mode, const char *cmd)
 	set_dload_mode(in_panic);
 
 	/* Write download mode flags if restart_mode says so */
-	if (restart_mode == RESTART_DLOAD)
+	if (restart_mode == RESTART_DLOAD) {
 		set_dload_mode(1);
+#ifdef CONFIG_LGE_CRASH_HANDLER
+		writel(0x6d63c421, restart_reason);
+		goto reset;
+#endif
+	}
 
 	/* Kill download mode if master-kill switch is set */
 	if (!download_mode)
@@ -227,6 +279,28 @@ void msm_restart(char mode, const char *cmd)
 
 	pm8xxx_reset_pwr_off(1);
 
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	if (in_panic == 1) {
+		set_kernel_crash_magic_number();
+	} else {
+		if (cmd != NULL) {
+			if (!strncmp(cmd, "bootloader", 10)) {
+				__raw_writel(0x77665500, restart_reason);
+			} else if (!strncmp(cmd, "recovery", 8)) {
+				__raw_writel(0x77665502, restart_reason);
+			} else if (!strncmp(cmd, "oem-", 4)) {
+				unsigned long code;
+				code = simple_strtoul(cmd+4, NULL, 16) & 0xff;
+				__raw_writel(0x6f656d00, restart_reason);
+			} else if (!strncmp(cmd, "recovery", 8)) {
+				__raw_writel(0x77665502, restart_reason);
+			} else {
+				__raw_writel(0x77665501, restart_reason);
+			}
+		}
+	}
+reset:
+#else
 	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			__raw_writel(0x77665500, restart_reason);
@@ -242,6 +316,7 @@ void msm_restart(char mode, const char *cmd)
 	} else {
 		__raw_writel(0x776655AA, restart_reason);
 	}
+#endif /* CONFIG_LGE_CRASH_HANDLER */
 
 	if (in_panic)
 		__raw_writel(0xC0DEDEAD, restart_reason);
@@ -277,6 +352,10 @@ static int __init msm_pmic_restart_init(void)
 		pr_warn("no pmic restart interrupt specified\n");
 	}
 
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	__raw_writel(0x6d63ad00, restart_reason);
+#endif
+
 	return 0;
 }
 
@@ -287,6 +366,10 @@ static int __init msm_restart_init(void)
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 #ifdef CONFIG_MSM_DLOAD_MODE
 	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	lge_error_handler_cookie_addr = MSM_IMEM_BASE +
+		LGE_ERROR_HANDLER_MAGIC_ADDR;
+#endif
 	set_dload_mode(download_mode);
 #endif
 	msm_tmr0_base = msm_timer_get_timer0_base();

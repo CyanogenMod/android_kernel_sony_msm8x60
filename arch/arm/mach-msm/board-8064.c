@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -95,6 +95,7 @@
 
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 #define HOLE_SIZE		0x20000
+#define MSM_ION_MFC_META_SIZE  0x40000 /* 256 Kbytes */
 #define MSM_CONTIG_MEM_SIZE  0x65000
 #ifdef CONFIG_MSM_IOMMU
 #define MSM_ION_MM_SIZE		0x3800000
@@ -108,7 +109,7 @@
 #define MSM_ION_HEAP_NUM	8
 #endif
 #define MSM_ION_MM_FW_SIZE	(0x200000 - HOLE_SIZE) /* (2MB - 128KB) */
-#define MSM_ION_MFC_SIZE	SZ_8K
+#define MSM_ION_MFC_SIZE	(SZ_8K + MSM_ION_MFC_META_SIZE)
 #define MSM_ION_AUDIO_SIZE	MSM_PMEM_AUDIO_SIZE
 #else
 #define MSM_CONTIG_MEM_SIZE  0x110C000
@@ -281,6 +282,7 @@ static struct ion_cp_heap_pdata cp_mm_apq8064_ion_pdata = {
 	.reusable = FMEM_ENABLED,
 	.mem_is_fmem = FMEM_ENABLED,
 	.fixed_position = FIXED_MIDDLE,
+	.is_cma = 1,
 };
 
 static struct ion_cp_heap_pdata cp_mfc_apq8064_ion_pdata = {
@@ -614,53 +616,6 @@ static struct reserve_info apq8064_reserve_info __initdata = {
 	.paddr_to_memtype = apq8064_paddr_to_memtype,
 };
 
-static int apq8064_memory_bank_size(void)
-{
-	return 1<<29;
-}
-
-static void __init locate_unstable_memory(void)
-{
-	struct membank *mb = &meminfo.bank[meminfo.nr_banks - 1];
-	unsigned long bank_size;
-	unsigned long low, high;
-
-	bank_size = apq8064_memory_bank_size();
-	low = meminfo.bank[0].start;
-	high = mb->start + mb->size;
-
-	/* Check if 32 bit overflow occured */
-	if (high < mb->start)
-		high = -PAGE_SIZE;
-
-	low &= ~(bank_size - 1);
-
-	if (high - low <= bank_size)
-		goto no_dmm;
-
-#ifdef CONFIG_ENABLE_DMM
-	apq8064_reserve_info.low_unstable_address = mb->start -
-					MIN_MEMORY_BLOCK_SIZE + mb->size;
-	apq8064_reserve_info.max_unstable_size = MIN_MEMORY_BLOCK_SIZE;
-
-	apq8064_reserve_info.bank_size = bank_size;
-	pr_info("low unstable address %lx max size %lx bank size %lx\n",
-		apq8064_reserve_info.low_unstable_address,
-		apq8064_reserve_info.max_unstable_size,
-		apq8064_reserve_info.bank_size);
-	return;
-#endif
-no_dmm:
-	apq8064_reserve_info.low_unstable_address = high;
-	apq8064_reserve_info.max_unstable_size = 0;
-}
-
-static int apq8064_change_memory_power(u64 start, u64 size,
-	int change_type)
-{
-	return soc_change_memory_power(start, size, change_type);
-}
-
 static char prim_panel_name[PANEL_NAME_MAX_LEN];
 static char ext_panel_name[PANEL_NAME_MAX_LEN];
 
@@ -710,22 +665,9 @@ static void __init apq8064_reserve(void)
 	}
 }
 
-static void __init place_movable_zone(void)
-{
-#ifdef CONFIG_ENABLE_DMM
-	movable_reserved_start = apq8064_reserve_info.low_unstable_address;
-	movable_reserved_size = apq8064_reserve_info.max_unstable_size;
-	pr_info("movable zone start %lx size %lx\n",
-		movable_reserved_start, movable_reserved_size);
-#endif
-}
-
 static void __init apq8064_early_reserve(void)
 {
 	reserve_info = &apq8064_reserve_info;
-	locate_unstable_memory();
-	place_movable_zone();
-
 }
 #ifdef CONFIG_USB_EHCI_MSM_HSIC
 /* Bandwidth requests (zero) if no vote placed */
@@ -2101,12 +2043,6 @@ static struct msm_spm_platform_data msm_spm_data[] __initdata = {
 	},
 };
 
-static struct msm_pm_sleep_status_data msm_pm_slp_sts_data = {
-	.base_addr = MSM_ACC0_BASE + 0x08,
-	.cpu_offset = MSM_ACC1_BASE - MSM_ACC0_BASE,
-	.mask = 1UL << 13,
-};
-
 static void __init apq8064_init_buses(void)
 {
 	msm_bus_rpm_set_mt_mask();
@@ -2298,6 +2234,7 @@ static struct platform_device *common_devices[] __initdata = {
 	&apq8064_rpm_device,
 	&apq8064_rpm_log_device,
 	&apq8064_rpm_stat_device,
+	&apq8064_rpm_master_stat_device,
 	&apq_device_tz_log,
 	&msm_bus_8064_apps_fabric,
 	&msm_bus_8064_sys_fabric,
@@ -2317,11 +2254,13 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_device_ebi1_ch0_erp,
 	&msm8960_device_ebi1_ch1_erp,
 	&epm_adc_device,
-	&apq8064_qdss_device,
-	&msm_etb_device,
-	&msm_tpiu_device,
-	&msm_funnel_device,
-	&apq8064_etm_device,
+	&coresight_tpiu_device,
+	&coresight_etb_device,
+	&apq8064_coresight_funnel_device,
+	&coresight_etm0_device,
+	&coresight_etm1_device,
+	&coresight_etm2_device,
+	&coresight_etm3_device,
 	&apq_cpudai_slim_4_rx,
 	&apq_cpudai_slim_4_tx,
 #ifdef CONFIG_MSM_GEMINI
@@ -2344,6 +2283,8 @@ static struct platform_device *cdp_devices[] __initdata = {
 #ifdef CONFIG_MSM_ROTATOR
 	&msm_rotator_device,
 #endif
+	&msm8064_pc_cntr,
+	&msm8064_cpu_slp_status,
 };
 
 static struct platform_device
@@ -3013,7 +2954,6 @@ static void __init apq8064_common_init(void)
 	msm_spm_init(msm_spm_data, ARRAY_SIZE(msm_spm_data));
 	msm_spm_l2_init(msm_spm_l2_data);
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
-	msm_pm_init_sleep_status_data(&msm_pm_slp_sts_data);
 	apq8064_epm_adc_init();
 }
 
@@ -3071,8 +3011,6 @@ static void __init apq8064_cdp_init(void)
 
 	if (machine_is_apq8064_mtp())
 		platform_device_register(&mtp_kp_pdev);
-
-	change_memory_power = &apq8064_change_memory_power;
 
 	if (machine_is_mpq8064_cdp()) {
 		platform_device_register(&mpq_gpio_keys_pdev);

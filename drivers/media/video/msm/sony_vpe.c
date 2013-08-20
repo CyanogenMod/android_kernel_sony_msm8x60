@@ -18,7 +18,7 @@
 #include <linux/pm_qos.h>
 #include <linux/regulator/consumer.h>
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-#include <linux/ion.h>
+#include <linux/msm_ion.h>
 #else
 #include <linux/android_pmem.h>
 #endif
@@ -778,7 +778,7 @@ static int msm_vpe_pmem_register(struct msm_vpe_register_cfg *registercmd,
 		return 0;
 #ifdef CONFIG_MSM_IOMMU
 	rc = ion_map_iommu(vpe_client, ionhandle, CAMERA_DOMAIN, GEN_POOL,
-				SZ_4K, 0, &paddr, &len, UNCACHED, 0);
+				SZ_4K, 0, &paddr, &len, 0, 0);
 #else
 	rc = ion_phys(vpe_client, ionhandle, &paddr, (size_t *)&len);
 #endif
