@@ -312,7 +312,7 @@ early_param("coherent_pool", early_coherent_pool);
 static int __init atomic_pool_init(void)
 {
 	struct dma_pool *pool = &atomic_pool;
-	pgprot_t prot = pgprot_dmacoherent(pgprot_kernel);
+	pgprot_t prot = pgprot_dmacoherent(PAGE_KERNEL);
 	unsigned long nr_pages = pool->size >> PAGE_SHIFT;
 	unsigned long *bitmap;
 	struct page *page;
