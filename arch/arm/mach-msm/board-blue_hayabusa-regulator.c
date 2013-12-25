@@ -101,7 +101,11 @@ VREG_CONSUMERS(L15) = {
 };
 VREG_CONSUMERS(L16) = {
 	REGULATOR_SUPPLY("8921_l16",            NULL),
-	REGULATOR_SUPPLY("lc898300_vdd",	"12-0049"),
+	REGULATOR_SUPPLY("cam_vaf",		"msm_camera_imx074.0"),
+	REGULATOR_SUPPLY("cam_vaf",		"msm_camera_ov2720.0"),
+#if defined(CONFIG_SONY_CAM_MAIN_V4L2) || defined(CONFIG_SONY_CAM_SUB_V4L2)
+	REGULATOR_SUPPLY("cam_vaf",		"4-001a"),
+#endif
 };
 VREG_CONSUMERS(L17) = {
 	REGULATOR_SUPPLY("8921_l17",		NULL),

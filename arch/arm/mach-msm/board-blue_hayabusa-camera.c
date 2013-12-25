@@ -219,13 +219,13 @@ static struct msm_gpiomux_config msm8960_cam_2d_configs[] = {
 			[GPIOMUX_SUSPENDED]	= &gpio_2ma_pull_down_in,
 		},
 	},
-	{
+	/* {
 		.gpio		= 89,
 		.settings	= {
 			[GPIOMUX_ACTIVE]	= &gpio_2ma_no_pull_low,
 			[GPIOMUX_SUSPENDED]	= &gpio_2ma_no_pull_low,
 		},
-	},
+	}, */
 #else
 	{
 		.gpio = 18,
@@ -1021,7 +1021,7 @@ static const struct sony_sensor_seq sensor_main_power_off[] = {
 	{ I2C_WRITE, 0x0100, 100 },
 	{ CAM_CLK, -1, 1 },
 	{ GPIO_RESET, 0, 1 },
-	{ GPIO_AF, -1, 0 },
+	{ CAM_VAF, -1, 0 },
 	{ CAM_VANA, -1, 1 },
 	{ CAM_VIO, -1, 1 },
 	{ CAM_VDIG, -1, 15 },
@@ -1032,7 +1032,7 @@ static const struct sony_sensor_seq sensor_main_power_on[] = {
 	{ CAM_VDIG, 1200, 1 },
 	{ CAM_VIO, 0, 1 },
 	{ CAM_VANA, 2800, 0 },
-	{ GPIO_AF, 1, 1 },
+	{ CAM_VAF, 2700, 1 },
 	{ GPIO_RESET, 1, 9 },
 	{ CAM_CLK, 0, 1 },
 	{ EXIT, 0, 0 },
@@ -1073,7 +1073,7 @@ const struct sony_sensor_info sensor_info[] = {
 		.i2c_addr	= 0x1A,
 		.eeprom_addr	= 0x50,
 		.eeprom_type	= 0,
-		.gpio_af	= 89,
+		.gpio_af	= 0,
 		.subdev_code	= V4L2_MBUS_FMT_SBGGR10_1X10,
 		.modules	= sensor_main_modules,
 		.modules_num	= ARRAY_SIZE(sensor_main_modules),
