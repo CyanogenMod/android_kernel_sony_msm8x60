@@ -202,7 +202,7 @@ static struct platform_device msm_fm_platform_init = {
 #define MSM_ION_MM_SIZE            0x3800000 /* Need to be multiple of 64K */
 #define MSM_ION_SF_SIZE            0x0
 #define MSM_ION_QSECOM_SIZE        0x780000 /* (7.5MB) */
-#define MSM_ION_HEAP_NUM	8
+#define MSM_ION_HEAP_NUM	7
 #else
 #define MSM_ION_MM_SIZE            MSM_PMEM_ADSP_SIZE
 #define MSM_ION_SF_SIZE            MSM_PMEM_SIZE
