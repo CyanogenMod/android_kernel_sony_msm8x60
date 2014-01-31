@@ -284,7 +284,7 @@ static struct gpio_keys_button gpio_keys_buttons[] = {
 		.active_low = 1,
 		.desc = "camera a.focus",
 		.type = EV_KEY,
-		.wakeup = 0,
+		.wakeup = 1,
 		.debounce_interval = 10,
 	},
 	{
