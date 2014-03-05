@@ -818,8 +818,8 @@ static int __init vid_enc_init(void)
 			goto error_vid_enc_cdev_add;
 		}
 	}
-	vid_enc_vcd_init();
-	return 0;
+	rc = vid_enc_vcd_init();
+	return rc;
 
 error_vid_enc_cdev_add:
 	for (j = i-1; j >= 0; j--)
@@ -1427,6 +1427,12 @@ static long vid_enc_ioctl(struct file *file,
 			return -EFAULT;
 
 		DBG("VEN_IOCTL_GET_SEQUENCE_HDR\n");
+		if (!access_ok(VERIFY_WRITE, seq_header.hdrbufptr,
+			seq_header.bufsize)) {
+			ERR("VEN_IOCTL_GET_SEQUENCE_HDR:"\
+				" Userspace address verification failed.\n");
+			return -EFAULT;
+		}
 		result = vid_enc_get_sequence_header(client_ctx,
 				&seq_header);
 		if (!result) {
