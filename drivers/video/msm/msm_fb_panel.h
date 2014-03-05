@@ -184,6 +184,10 @@ struct msm_panel_info {
 	struct lvds_panel_info lvds;
 	__u32 xres_aligned;
 	__u32 yres_aligned;
+
+	/* physical size in mm */
+	__u32 width;
+	__u32 height;
 };
 
 #define MSM_FB_SINGLE_MODE_PANEL(pinfo)		\
@@ -202,6 +206,7 @@ struct msm_fb_panel_data {
 
 	/* function entry chain */
 	int (*on) (struct platform_device *pdev);
+	int (*controller_on_panel_on) (struct platform_device *pdev);
 	int (*off) (struct platform_device *pdev);
 	int (*late_init) (struct platform_device *pdev);
 	int (*early_off) (struct platform_device *pdev);
@@ -210,6 +215,9 @@ struct msm_fb_panel_data {
 	int (*clk_func) (int enable);
 	int (*fps_level_change) (struct platform_device *pdev,
 					u32 fps_level);
+	struct msm_panel_info *(*panel_detect) (struct msm_fb_data_type *mfd);
+	int power_on_panel_at_pan;
+	int (*update_panel) (struct platform_device *pdev);
 };
 
 /*===========================================================================
