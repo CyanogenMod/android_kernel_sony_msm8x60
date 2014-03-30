@@ -37,6 +37,10 @@
 #include <linux/wait.h>
 #include <linux/sched.h>
 #include <asm/atomic.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#endif
 
 #define RMI4_END_OF_PDT(id) ((id) == 0x00 || (id) == 0xff)
 
@@ -194,6 +198,12 @@ struct rmi4_core_drv_data {
 
 	wait_queue_head_t wq;
 	atomic_t suspended;
+#ifdef CONFIG_FB
+	bool fb_powerdown;
+	struct notifier_block fb_notif;
+	struct work_struct notify_resume;
+	struct work_struct notify_suspend;
+#endif
 };
 
 static irqreturn_t rmi4_core_drv_irq_handler(int irq, void *data);
@@ -203,6 +213,8 @@ static int _rmi4_core_driver_request_notification(
 	void *data);
 static void _rmi4_core_driver_release_notification(
 	struct rmi4_core_device *cdev, void *data);
+static void _rmi4_core_driver_notify(struct rmi4_core_device *cdev,
+				     enum rmi4_notification_event event);
 
 static u8 rmi4_core_driver_get_irq_mask(struct rmi4_core_device *cdev,
 					struct rmi4_function_container *fc)
@@ -1191,6 +1203,64 @@ static int rmi4_core_update_pdt_properties(struct rmi4_core_device *cdev,
 	return 0;
 }
 
+#ifdef CONFIG_FB
+static void rmi4_core_notify_resume(struct work_struct *work)
+{
+	struct rmi4_core_drv_data *ddata = container_of(work,
+			struct rmi4_core_drv_data, notify_resume);
+	struct rmi4_core_device *cdev = ddata->cdev;
+
+	dev_dbg(&cdev->dev, "notify resume, fb_pd=%d.\n", ddata->fb_powerdown);
+
+	if (ddata->fb_powerdown) {
+		ddata->fb_powerdown = false;
+		_rmi4_core_driver_notify(cdev, RMI4_CHIP_WAKEUP);
+	}
+}
+
+static void rmi4_core_notify_suspend(struct work_struct *work)
+{
+	struct rmi4_core_drv_data *ddata = container_of(work,
+			struct rmi4_core_drv_data, notify_suspend);
+	struct rmi4_core_device *cdev = ddata->cdev;
+
+	dev_dbg(&cdev->dev, "notify suspend, fb_pd=%d.\n", ddata->fb_powerdown);
+
+	if (!ddata->fb_powerdown) {
+		ddata->fb_powerdown = true;
+		_rmi4_core_driver_notify(cdev, RMI4_CHIP_SUSPEND);
+	}
+}
+
+static int rmi4_core_fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	struct rmi4_core_drv_data *ddata = container_of(self,
+			struct rmi4_core_drv_data, fb_notif);
+	struct rmi4_core_device *cdev = ddata->cdev;
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK && ddata &&
+			ddata->cdev) {
+		blank = evdata->data;
+		if (*blank == FB_BLANK_UNBLANK) {
+			dev_dbg(&cdev->dev, "FB UNBLANK\n");
+			cancel_work_sync(&ddata->notify_suspend);
+			cancel_work_sync(&ddata->notify_resume);
+			schedule_work(&ddata->notify_resume);
+		} else if (*blank == FB_BLANK_POWERDOWN) {
+			dev_dbg(&cdev->dev, "FB POWERDOWN\n");
+			cancel_work_sync(&ddata->notify_resume);
+			cancel_work_sync(&ddata->notify_suspend);
+			schedule_work(&ddata->notify_suspend);
+		}
+	}
+
+	return 0;
+}
+#endif
+
 static ssize_t rmi4_core_bsr_show(struct device *dev,
 				     struct device_attribute *attr,
 				     char *buf)
@@ -1447,11 +1517,23 @@ static int rmi4_core_driver_probe(struct rmi4_core_device *cdev)
 	data->enabled = true;
 	enable_irq_wake(data->irq);
 
+#ifdef CONFIG_FB
+	data->fb_notif.notifier_call = rmi4_core_fb_notifier_callback;
+	err = fb_register_client(&data->fb_notif);
+	if (err) {
+		dev_err(&cdev->dev, "Unable to register fb_notifier\n");
+		goto fail_irq;
+	} else {
+		INIT_WORK(&data->notify_resume, rmi4_core_notify_resume);
+		INIT_WORK(&data->notify_suspend, rmi4_core_notify_suspend);
+	}
+#endif
+
 	err = rmi4_core_create_sysfs_files(cdev, true);
 	if (err) {
 		dev_err(&cdev->dev, "%s - Failed to create sysfs files\n",
 			__func__);
-		goto fail_irq;
+		goto fail_unregister_fb;
 	}
 
 	err = _rmi4_core_driver_request_notification(cdev, RMI4_DRIVER_RESET,
@@ -1483,6 +1565,10 @@ fail_notify:
 	_rmi4_core_driver_release_notification(cdev, cdev);
 fail_sysfs:
 	rmi4_core_create_sysfs_files(cdev, false);
+fail_unregister_fb:
+#ifdef CONFIG_FB
+	fb_unregister_client(&data->fb_notif);
+#endif
 fail_irq:
 	free_irq(data->irq, cdev);
 fail_gpio_req:
@@ -1521,6 +1607,11 @@ static int rmi4_core_driver_remove(struct rmi4_core_device *cdev)
 	rmi4_core_driver_unregister_functions(cdev);
 	_rmi4_core_driver_release_notification(cdev, cdev);
 	rmi4_core_create_sysfs_files(cdev, false);
+#ifdef CONFIG_FB
+	fb_unregister_client(&data->fb_notif);
+	cancel_work_sync(&data->notify_resume);
+	cancel_work_sync(&data->notify_suspend);
+#endif
 	free_irq(data->irq, cdev);
 
 	if (!pdata->irq_is_shared)

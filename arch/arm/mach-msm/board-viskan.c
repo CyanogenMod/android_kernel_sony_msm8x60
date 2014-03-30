@@ -1,5 +1,4 @@
 /* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
- * Copyright (C) 2012-2013 Sony Mobile Communications AB.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -16,6 +15,8 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/i2c.h>
+#include <linux/i2c/sx150x.h>
+#include <linux/i2c/isl9519.h>
 #include <linux/gpio.h>
 #include <linux/msm_ssbi.h>
 #include <linux/regulator/msm-gpio-regulator.h>
@@ -28,9 +29,7 @@
 #ifdef CONFIG_ANDROID_PMEM
 #include <linux/android_pmem.h>
 #endif
-#ifdef CONFIG_TOUCHSCREEN_CLEARPAD
 #include <linux/clearpad.h>
-#endif
 #include <linux/cyttsp-qc.h>
 #include <linux/dma-contiguous.h>
 #include <linux/dma-mapping.h>
@@ -40,22 +39,27 @@
 #include <linux/leds-pm8xxx.h>
 #include <linux/i2c/atmel_mxt_ts.h>
 #include <linux/msm_tsens.h>
+#include <linux/ks8851.h>
+#include <linux/i2c/isa1200.h>
 #include <linux/memory.h>
 #include <linux/memblock.h>
 #include <linux/msm_thermal.h>
-#ifdef CONFIG_VIBRATOR_LC898300
-#include <linux/vibrator-lc898300.h>
+#ifdef CONFIG_LEDS_AS3676
+#include <linux/leds-as3676.h>
 #endif
-#ifdef CONFIG_INPUT_BMA250_NG
-#include <linux/bma250_ng.h>
+
+#ifdef CONFIG_LEDS_AS3677
+#include <linux/leds-as3677.h>
 #endif
-#ifdef CONFIG_INPUT_AKM8972
-#include <linux/akm8972.h>
+
+#ifdef CONFIG_LM3561
+#include <linux/lm3561.h>
 #endif
-#if defined CONFIG_SENSORS_MPU3050 || defined CONFIG_SENSORS_MPU6050
-#include <linux/mpu.h>
-#include "gyro-sony_common.h"
+
+#if defined(CONFIG_LEDS_AS3665) || defined(CONFIG_LEDS_AS3665_MODULE)
+#include <linux/leds-as3665.h>
 #endif
+
 #ifdef CONFIG_INPUT_APDS9702
 #include <linux/apds9702.h>
 #endif
@@ -63,17 +67,21 @@
 #include <linux/persistent_ram.h>
 #include <linux/list.h>
 
-#ifdef CONFIG_LEDS_AS3676
-#include <linux/leds-as3676.h>
+#ifdef CONFIG_INPUT_LSM303DLHC_ACCELEROMETER_LT
+#include <linux/lsm303dlhc_acc_lt.h>
 #endif
-#ifdef CONFIG_RMI4_BUS
-#include <linux/rmi4/rmi4.h>
-#include <linux/rmi4/rmi4_i2c.h>
-#include <linux/rmi4/rmi4_function_54.h>
-#include <linux/rmi4/rmi4_watchdog.h>
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/rmi4/rmi4_early_suspend.h>
+#ifdef CONFIG_INPUT_L3GD20
+#include  <linux/l3gd20_gyr.h>
 #endif
+#ifdef CONFIG_INPUT_AKM8963
+#include <linux/akm8963.h>
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4
+#include <linux/cyttsp4_bus.h>
+#include <linux/cyttsp4_core.h>
+#include <linux/cyttsp4_btn.h>
+#include <linux/cyttsp4_mt.h>
 #endif
 
 #include <asm/mach-types.h>
@@ -87,9 +95,6 @@
 #include <mach/msm_iomap.h>
 #include <mach/msm_spi.h>
 #include <mach/msm_serial_hs.h>
-#include <linux/console.h>
-#include <mach/msm_serial_hs_lite.h>
-#include <linux/serial_core.h>
 #ifdef CONFIG_USB_MSM_OTG_72K
 #include <mach/msm_hsusb.h>
 #else
@@ -121,9 +126,7 @@
 #include <mach/msm_cache_dump.h>
 #include <mach/scm.h>
 #include <mach/iommu_domains.h>
-#ifdef CONFIG_INPUT_SIMPLE_REMOTE
-#include <mach/simple_remote_msm8960_pf.h>
-#endif
+
 #include <mach/kgsl.h>
 #include <linux/fmem.h>
 
@@ -139,21 +142,11 @@
 #include "clock.h"
 #include "smd_private.h"
 #include "pm-boot.h"
-#include "board-blue-usb.h"
 #include "msm_watchdog.h"
-
-#ifdef CONFIG_LM3560_FLASHLED
-#include <linux/lm3560.h>
-#endif
 
 #if defined(CONFIG_BT) && defined(CONFIG_BT_HCIUART_ATH3K)
 #include <linux/wlan_plat.h>
 #include <linux/mutex.h>
-#endif
-#ifdef CONFIG_FB_MSM_MHL_SII8334
-#include <linux/mhl_sii8334.h>
-#include <linux/mfd/pm8xxx/pm8921-charger.h>
-#include <linux/usb/msm_hsusb.h>
 #endif
 
 #ifdef CONFIG_USB_NCP373
@@ -164,20 +157,50 @@
 #include <linux/pn544.h>
 #endif
 
-#ifdef CONFIG_RAMDUMP_TAGS
-#include "board-rdtags.h"
+#ifdef CONFIG_FB_MSM_MHL_SII8334
+#include <linux/mhl_sii8334.h>
+#include <linux/mfd/pm8xxx/pm8921-charger.h>
+#include <linux/usb/msm_hsusb.h>
 #endif
 
-#ifdef CONFIG_NFC_PN544
-#define NXP_GPIO_NFC_EN		PM8921_GPIO_PM_TO_SYS(33)
-#define NXP_GPIO_NFC_FWDL_EN	19
-#define NXP_GPIO_NFC_IRQ	106
+#ifdef CONFIG_RAMDUMP_TAGS
+#include "board-rdtags.h"
 #endif
 
 static struct platform_device msm_fm_platform_init = {
 	.name = "iris_fm",
 	.id   = -1,
 };
+
+#define KS8851_RST_GPIO		89
+#define KS8851_IRQ_GPIO		90
+
+#define MHL_GPIO_INT            4
+#define MHL_GPIO_RESET          15
+
+#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
+
+struct sx150x_platform_data msm8960_sx150x_data[] = {
+	[SX150X_CAM] = {
+		.gpio_base         = GPIO_CAM_EXPANDER_BASE,
+		.oscio_is_gpo      = false,
+		.io_pullup_ena     = 0x0,
+		.io_pulldn_ena     = 0xc0,
+		.io_open_drain_ena = 0x0,
+		.irq_summary       = -1,
+	},
+	[SX150X_LIQUID] = {
+		.gpio_base         = GPIO_LIQUID_EXPANDER_BASE,
+		.oscio_is_gpo      = false,
+		.io_pullup_ena     = 0x0c08,
+		.io_pulldn_ena     = 0x4060,
+		.io_open_drain_ena = 0x000c,
+		.io_polarity       = 0,
+		.irq_summary       = -1,
+	},
+};
+
+#endif
 
 #define MSM_PMEM_ADSP_SIZE         0x7800000
 #define MSM_PMEM_AUDIO_SIZE        0x1000 /* (4KB) */
@@ -189,7 +212,7 @@ static struct platform_device msm_fm_platform_init = {
 #define HOLE_SIZE	0x20000
 #define MSM_CONTIG_MEM_SIZE  0x65000
 #ifdef CONFIG_MSM_IOMMU
-#define MSM_ION_MM_SIZE            0x4000000 /* Need to be multiple of 64K */
+#define MSM_ION_MM_SIZE            0x3800000 /* Need to be multiple of 64K */
 #define MSM_ION_SF_SIZE            0x0
 #define MSM_ION_QSECOM_SIZE        0x780000 /* (7.5MB) */
 #define MSM_ION_HEAP_NUM	8
@@ -213,18 +236,6 @@ static struct platform_device msm_fm_platform_init = {
 #define MAX_FIXED_AREA_SIZE	0x10000000
 #define MSM8960_FW_START	MSM8960_FIXED_AREA_START
 #define MSM_ION_ADSP_SIZE	SZ_8M
-
-/* Section: Vibrator */
-#if defined(CONFIG_VIBRATOR_LC898300)
-struct lc898300_vib_cmd lc898300_vib_cmd_data = {
-	.vib_cmd_intensity = VIB_CMD_PWM_10_15,
-	.vib_cmd_resonance = VIB_CMD_FREQ_150,
-	.vib_cmd_startup   = VIB_CMD_STTIME_5,
-	.vib_cmd_brake     = VIB_CMD_ATBR | VIB_CMD_BRTIME_2 |
-						VIB_CMD_BRPWR_15_15,
-	.vib_cmd_stops     = VIB_CMD_ATSNUM_8_10 | VIB_CMD_ATSOFF,
-};
-#endif
 
 static unsigned msm_ion_sf_size = MSM_ION_SF_SIZE;
 #else
@@ -270,6 +281,503 @@ static int __init pmem_audio_size_setup(char *p)
 	return 0;
 }
 early_param("pmem_audio_size", pmem_audio_size_setup);
+#endif
+
+
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4
+
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_I2C
+#define CYTTSP4_I2C_NAME "cyttsp4_i2c_adapter"
+#define CYTTSP4_I2C_TCH_ADR 0x24
+#define CYTTSP4_LDR_TCH_ADR 0x24
+
+#define CYTTSP4_I2C_IRQ_GPIO 11
+#ifdef CONFIG_MACH_VISKAN_HUASHAN_CT
+#define CYTTSP4_I2C_RST_GPIO 32
+#else
+#define CYTTSP4_I2C_RST_GPIO 6
+#endif
+#endif
+
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_SPI
+#define CYTTSP4_SPI_NAME "cyttsp4_spi_adapter"
+#define CYTTSP4_SPI_IRQ_GPIO 38
+#define CYTTSP4_SPI_RST_GPIO 37
+#endif
+
+/* Check GPIO numbers if both I2C and SPI are enabled */
+#if defined(CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_I2C) && \
+	defined(CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_SPI)
+#if CYTTSP4_I2C_IRQ_GPIO == CYTTSP4_SPI_IRQ_GPIO || \
+	CYTTSP4_I2C_RST_GPIO == CYTTSP4_SPI_RST_GPIO
+#error "GPIO numbers should be different when both I2C and SPI are on!"
+#endif
+#endif
+
+#define CY_MAXX 720
+#define CY_MAXY 1280
+#define CY_MINX 0
+#define CY_MINY 0
+
+#define CY_ABS_MIN_X CY_MINX
+#define CY_ABS_MIN_Y CY_MINY
+#define CY_ABS_MAX_X CY_MAXX
+#define CY_ABS_MAX_Y CY_MAXY
+#define CY_ABS_MIN_P 0
+#define CY_ABS_MAX_P 255
+#define CY_ABS_MIN_W 0
+#define CY_ABS_MAX_W 255
+#define CY_ABS_MIN_T 0
+#define CY_ABS_MAX_T 15
+
+#define CY_IGNORE_VALUE 0xFFFF
+
+#define CY_VREG_MIN_UV 2800000
+#define CY_VREG_MAX_UV 2800000
+
+static struct regulator *cyttsp4_touch_vdd;
+
+static int cyttsp4_vreg_configure(int enable, struct device *dev)
+{
+	int rc = 0;
+	if (IS_ERR_OR_NULL(cyttsp4_touch_vdd))
+		cyttsp4_touch_vdd = regulator_get(NULL, "cyttsp4_vdd");
+
+	if (IS_ERR(cyttsp4_touch_vdd)) {
+		pr_err("%s: get vdd failed\n", __func__);
+		return -ENODEV;
+	}
+
+	if (enable) {
+		rc = regulator_set_voltage(cyttsp4_touch_vdd, CY_VREG_MIN_UV,
+							CY_VREG_MAX_UV);
+		if (rc < 0) {
+			dev_err(dev, "%s: set voltage failed, rc=%d\n",
+					__func__, rc);
+			goto cyttsp4_vreg_configure_err;
+		}
+		rc = regulator_enable(cyttsp4_touch_vdd);
+		if (rc < 0) {
+			dev_err(dev, "%s: enable vdd failed, rc=%d\n",
+					__func__, rc);
+			goto cyttsp4_vreg_configure_err;
+		}
+	} else {
+		rc = regulator_set_voltage(cyttsp4_touch_vdd, 0,
+							CY_VREG_MAX_UV);
+		if (rc < 0) {
+			dev_err(dev, "%s: set voltage failed, rc=%d\n",
+					__func__, rc);
+			goto cyttsp4_vreg_configure_err;
+		}
+		rc = regulator_disable(cyttsp4_touch_vdd);
+		if (rc < 0)
+			dev_err(dev, "%s: disable vdd failed, rc=%d\n",
+					__func__, rc);
+	}
+	return rc;
+cyttsp4_vreg_configure_err:
+	regulator_put(cyttsp4_touch_vdd);
+	return rc;
+}
+
+static int cyttsp4_xres(struct cyttsp4_core_platform_data *pdata,
+		struct device *dev)
+{
+	int rst_gpio = pdata->rst_gpio;
+	int rc = 0;
+
+	gpio_set_value(rst_gpio, 1);
+	msleep(20);
+	gpio_set_value(rst_gpio, 0);
+	msleep(40);
+	gpio_set_value(rst_gpio, 1);
+	msleep(20);
+	dev_info(dev, "%s: RESET CYTTSP gpio=%d r=%d\n", __func__,
+			pdata->rst_gpio, rc);
+	return rc;
+}
+
+static int cyttsp4_init(struct cyttsp4_core_platform_data *pdata,
+		int on, struct device *dev)
+{
+	int rst_gpio = pdata->rst_gpio;
+	int irq_gpio = pdata->irq_gpio;
+	int rc = 0;
+
+	if (on) {
+		rc = cyttsp4_vreg_configure(1, dev);
+		if (rc < 0) {
+			dev_err(dev, "%s: enable touch vdd failed, rc=%d\n",
+					__func__, rc);
+			goto vreg_error;
+		}
+
+		rc = gpio_request(rst_gpio, "cyttsp4_reset");
+		if (rc < 0) {
+			dev_err(dev, "%s: Fail request gpio=%d\n",
+					__func__, rst_gpio);
+			goto gpio_error;
+		}
+
+		rc = gpio_direction_output(rst_gpio, 1);
+		if (rc < 0) {
+			dev_err(dev, "%s: Fail set output gpio=%d\n",
+					__func__, rst_gpio);
+			goto gpio_rst_error;
+		}
+
+		rc = gpio_request(irq_gpio, "cyttsp4_irq");
+		if (rc < 0) {
+			dev_err(dev, "%s: Fail request gpio=%d\n",
+					__func__, irq_gpio);
+			goto gpio_rst_error;
+		}
+
+		rc = gpio_direction_input(irq_gpio);
+		if (rc < 0) {
+			dev_err(dev, "%s: Fail set output gpio=%d\n",
+					__func__, rst_gpio);
+				goto gpio_irq_error;
+		}
+	} else {
+		gpio_free(rst_gpio);
+		gpio_free(irq_gpio);
+		cyttsp4_vreg_configure(0, dev);
+	}
+
+	dev_info(dev,
+		"%s: INIT CYTTSP RST gpio=%d and IRQ gpio=%d r=%d\n",
+		__func__, rst_gpio, irq_gpio, rc);
+	return 0;
+
+gpio_irq_error:
+	gpio_free(irq_gpio);
+gpio_rst_error:
+	gpio_free(rst_gpio);
+gpio_error:
+	cyttsp4_vreg_configure(0, dev);
+vreg_error:
+	return rc;
+}
+
+
+static int cyttsp4_wakeup(struct cyttsp4_core_platform_data *pdata,
+		struct device *dev, atomic_t *ignore_irq)
+{
+	int irq_gpio = pdata->irq_gpio;
+	int rc = 0;
+
+	if (IS_ERR_OR_NULL(cyttsp4_touch_vdd))
+		return -ENODEV;
+
+	rc = regulator_set_optimum_mode(cyttsp4_touch_vdd, 15000);
+	if (rc < 0) {
+		dev_err(dev, "%s: Failed set vdd current=%d\n",
+				__func__, irq_gpio);
+		goto set_vdd_error;
+	}
+
+	if (ignore_irq)
+		atomic_set(ignore_irq, 1);
+	rc = gpio_direction_output(irq_gpio, 0);
+	if (rc < 0) {
+		if (ignore_irq)
+			atomic_set(ignore_irq, 0);
+		dev_err(dev,
+			"%s: Fail set output gpio=%d\n",
+			__func__, irq_gpio);
+	} else {
+		udelay(2000);
+		rc = gpio_direction_input(irq_gpio);
+		if (ignore_irq)
+			atomic_set(ignore_irq, 0);
+		if (rc < 0) {
+			dev_err(dev,
+				"%s: Fail set input gpio=%d\n",
+				__func__, irq_gpio);
+		}
+	}
+
+	dev_info(dev,
+		"%s: WAKEUP CYTTSP gpio=%d r=%d\n", __func__,
+		irq_gpio, rc);
+set_vdd_error:
+	return rc;
+}
+
+static int cyttsp4_sleep(struct cyttsp4_core_platform_data *pdata,
+		struct device *dev, atomic_t *ignore_irq)
+{
+	int rc;
+	if (IS_ERR_OR_NULL(cyttsp4_touch_vdd))
+		return -ENODEV;
+
+	rc = regulator_set_optimum_mode(cyttsp4_touch_vdd, 1000);
+	return rc < 0 ? rc : 0;
+}
+
+static int cyttsp4_power(struct cyttsp4_core_platform_data *pdata,
+		int on, struct device *dev, atomic_t *ignore_irq)
+{
+	if (on)
+		return cyttsp4_wakeup(pdata, dev, ignore_irq);
+
+	return cyttsp4_sleep(pdata, dev, ignore_irq);
+}
+
+static int cyttsp4_irq_stat(struct cyttsp4_core_platform_data *pdata,
+		struct device *dev)
+{
+	return gpio_get_value(pdata->irq_gpio);
+}
+
+/* Button to keycode conversion */
+static u16 cyttsp4_btn_keys[] = {
+	/* use this table to map buttons to keycodes (see input.h) */
+	KEY_HOME,		/* 102 */
+	KEY_MENU,		/* 139 */
+	KEY_BACK,		/* 158 */
+	KEY_SEARCH,		/* 217 */
+	KEY_VOLUMEDOWN,		/* 114 */
+	KEY_VOLUMEUP,		/* 115 */
+	KEY_CAMERA,		/* 212 */
+	KEY_POWER		/* 116 */
+};
+
+static struct touch_settings cyttsp4_sett_btn_keys = {
+	.data = (uint8_t *)&cyttsp4_btn_keys[0],
+	.size = ARRAY_SIZE(cyttsp4_btn_keys),
+	.tag = 0,
+};
+
+static struct cyttsp4_core_platform_data _cyttsp4_core_platform_data = {
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_I2C
+	.irq_gpio = CYTTSP4_I2C_IRQ_GPIO,
+	.rst_gpio = CYTTSP4_I2C_RST_GPIO,
+#endif
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_SPI
+	.irq_gpio = CYTTSP4_SPI_IRQ_GPIO,
+	.rst_gpio = CYTTSP4_SPI_RST_GPIO,
+#endif
+	.use_configure_sensitivity = 1,
+	.use_auto_calibration = 0,
+	.xres = cyttsp4_xres,
+	.init = cyttsp4_init,
+	.power = cyttsp4_power,
+	.irq_stat = cyttsp4_irq_stat,
+	.sett = {
+		NULL,	/* Reserved */
+		NULL,	/* Command Registers */
+		NULL,	/* Touch Report */
+		NULL,	/* Cypress Data Record */
+		NULL,	/* Test Record */
+		NULL,	/* Panel Configuration Record */
+		NULL, /* &cyttsp4_sett_param_regs, */
+		NULL, /* &cyttsp4_sett_param_size, */
+		NULL,	/* Reserved */
+		NULL,	/* Reserved */
+		NULL,	/* Operational Configuration Record */
+		NULL, /* &cyttsp4_sett_ddata, *//* Design Data Record */
+		NULL, /* &cyttsp4_sett_mdata, *//* Manufacturing Data Record */
+		NULL,	/* Config and Test Registers */
+		&cyttsp4_sett_btn_keys,	/* button-to-keycode table */
+	},
+};
+
+static struct cyttsp4_core cyttsp4_core_device = {
+	.name = CYTTSP4_CORE_NAME,
+	.id = "main_ttsp_core",
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_I2C
+	.adap_id = CYTTSP4_I2C_NAME,
+#endif
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_SPI
+	.adap_id = CYTTSP4_SPI_NAME,
+#endif
+	.dev = {
+		.platform_data = &_cyttsp4_core_platform_data,
+	},
+};
+
+static const uint16_t cyttsp4_abs[] = {
+	ABS_MT_POSITION_X, CY_ABS_MIN_X, CY_ABS_MAX_X, 0, 0,
+	ABS_MT_POSITION_Y, CY_ABS_MIN_Y, CY_ABS_MAX_Y, 0, 0,
+	ABS_MT_PRESSURE, CY_ABS_MIN_P, CY_ABS_MAX_P, 0, 0,
+	CY_IGNORE_VALUE, CY_ABS_MIN_W, CY_ABS_MAX_W, 0, 0,
+	ABS_MT_TRACKING_ID, CY_ABS_MIN_T, CY_ABS_MAX_T, 0, 0,
+	ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0,
+	ABS_MT_TOUCH_MINOR, 0, 255, 0, 0,
+	ABS_MT_ORIENTATION, -128, 127, 0, 0,
+};
+
+struct touch_framework cyttsp4_framework = {
+	.abs = (uint16_t *)&cyttsp4_abs[0],
+	.size = ARRAY_SIZE(cyttsp4_abs),
+	.enable_vkeys = 0,
+};
+
+static struct cyttsp4_mt_platform_data _cyttsp4_mt_platform_data = {
+	.frmwrk = &cyttsp4_framework,
+	.flags = 0,
+	.inp_dev_name = CYTTSP4_MT_NAME,
+};
+
+struct cyttsp4_device cyttsp4_mt_device = {
+	.name = CYTTSP4_MT_NAME,
+	.core_id = "main_ttsp_core",
+	.dev = {
+		.platform_data = &_cyttsp4_mt_platform_data,
+	}
+};
+
+static struct cyttsp4_btn_platform_data _cyttsp4_btn_platform_data = {
+	.inp_dev_name = CYTTSP4_BTN_NAME,
+};
+
+struct cyttsp4_device cyttsp4_btn_device = {
+	.name = CYTTSP4_BTN_NAME,
+	.core_id = "main_ttsp_core",
+	.dev = {
+		.platform_data = &_cyttsp4_btn_platform_data,
+	}
+};
+
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_VIRTUAL_KEYS
+static ssize_t cyttps4_virtualkeys_show(struct kobject *kobj,
+		struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf,
+		__stringify(EV_KEY) ":"
+		__stringify(KEY_BACK) ":1360:90:160:180:"
+		__stringify(EV_KEY) ":"
+		__stringify(KEY_MENU) ":1360:270:160:180:"
+		__stringify(EV_KEY) ":"
+		__stringify(KEY_HOME) ":1360:450:160:180:"
+		__stringify(EV_KEY) ":"
+		__stringify(KEY_SEARCH) ":1360:630:160:180");
+}
+
+static struct kobj_attribute cyttsp4_virtualkeys_attr = {
+	.attr = {
+		.name = "virtualkeys.cyttsp4_mt",
+		.mode = S_IRUGO,
+	},
+	.show = &cyttps4_virtualkeys_show,
+};
+
+static struct attribute *cyttsp4_properties_attrs[] = {
+	&cyttsp4_virtualkeys_attr.attr,
+	NULL
+};
+
+static struct attribute_group cyttsp4_properties_attr_group = {
+	.attrs = cyttsp4_properties_attrs,
+};
+#endif
+
+static void __init sony_viskan_cyttsp4_init(void)
+{
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_VIRTUAL_KEYS
+	struct kobject *properties_kobj;
+	int ret;
+#endif
+
+	/* Register core and devices */
+	cyttsp4_register_core_device(&cyttsp4_core_device);
+	cyttsp4_register_device(&cyttsp4_mt_device);
+	cyttsp4_register_device(&cyttsp4_btn_device);
+
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_VIRTUAL_KEYS
+	properties_kobj = kobject_create_and_add("board_properties", NULL);
+	if (properties_kobj)
+		ret = sysfs_create_group(properties_kobj,
+				&cyttsp4_properties_attr_group);
+	if (!properties_kobj || ret)
+		pr_err("%s: failed to create board_properties\n", __func__);
+#endif
+}
+
+#endif
+
+/* The following GPIO pin are used as NFC GPIO
+*/
+#ifdef CONFIG_NFC_PN544
+#define PMIC_GPIO_NFC_EN	(33)
+#define MSM_GPIO_NFC_FWDL_EN	(19)
+#define MSM_GPIO_NFC_IRQ	(106)
+#endif
+
+#ifdef CONFIG_NFC_PN544
+/*set	pn544_pdate value.
+	All of GPIO match two chips ,PM chip and MSM chip.
+*/
+static int pn544_chip_config(enum pn544_state state, void *not_used)
+{
+	switch (state) {
+	case PN544_STATE_OFF:
+		gpio_set_value(MSM_GPIO_NFC_FWDL_EN, 0);
+		gpio_set_value_cansleep(
+			PM8921_GPIO_PM_TO_SYS(PMIC_GPIO_NFC_EN), 0);
+		usleep(50000);
+		break;
+	case PN544_STATE_ON:
+		gpio_set_value(MSM_GPIO_NFC_FWDL_EN, 0);
+		gpio_set_value_cansleep(
+			PM8921_GPIO_PM_TO_SYS(PMIC_GPIO_NFC_EN), 1);
+		usleep(10000);
+		break;
+	case PN544_STATE_FWDL:
+		gpio_set_value(MSM_GPIO_NFC_FWDL_EN, 1);
+		gpio_set_value_cansleep(
+			PM8921_GPIO_PM_TO_SYS(PMIC_GPIO_NFC_EN), 0);
+		usleep(10000);
+		gpio_set_value_cansleep(
+			PM8921_GPIO_PM_TO_SYS(PMIC_GPIO_NFC_EN), 1);
+		break;
+	default:
+		pr_err("%s: undefined state %d\n", __func__, state);
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static int pn544_gpio_request(void)
+{
+	int ret;
+
+	ret = gpio_request(MSM_GPIO_NFC_IRQ, "pn544_irq");
+	if (ret)
+		goto err_irq;
+	ret = gpio_request(PM8921_GPIO_PM_TO_SYS(PMIC_GPIO_NFC_EN),
+		"pn544_ven");
+	if (ret)
+		goto err_ven;
+	ret = gpio_request(MSM_GPIO_NFC_FWDL_EN, "pn544_fw");
+	if (ret)
+		goto err_fw;
+	return 0;
+err_fw:
+	gpio_free(PM8921_GPIO_PM_TO_SYS(PMIC_GPIO_NFC_EN));
+err_ven:
+	gpio_free(MSM_GPIO_NFC_IRQ);
+err_irq:
+	pr_err("%s: gpio request err %d\n", __func__, ret);
+	return ret;
+}
+
+static void pn544_gpio_release(void)
+{
+	gpio_free(PM8921_GPIO_PM_TO_SYS(PMIC_GPIO_NFC_EN));
+	gpio_free(MSM_GPIO_NFC_IRQ);
+	gpio_free(MSM_GPIO_NFC_FWDL_EN);
+}
+
+static struct pn544_i2c_platform_data pn544_pdata = {
+	.irq_type = IRQF_TRIGGER_RISING,
+	.chip_config = pn544_chip_config,
+	.driver_loaded = pn544_gpio_request,
+	.driver_unloaded = pn544_gpio_release,
+};
 #endif
 
 #ifdef CONFIG_ANDROID_PMEM
@@ -352,6 +860,8 @@ static void __init reserve_rtb_memory(void)
 {
 #if defined(CONFIG_MSM_RTB)
 	msm8960_reserve_table[MEMTYPE_EBI1].size += msm8960_rtb_pdata.size;
+	pr_info("mem_map: rtb reserved with size 0x%x in pool\n",
+			msm8960_rtb_pdata.size);
 #endif
 }
 
@@ -392,6 +902,8 @@ static void __init reserve_pmem_memory(void)
 	reserve_memory_for(&android_pmem_audio_pdata);
 #endif
 	msm8960_reserve_table[MEMTYPE_EBI1].size += msm_contig_mem_size;
+	pr_info("mem_map: contig_mem reserved with size 0x%x in pool\n",
+			msm_contig_mem_size);
 #endif
 }
 
@@ -563,67 +1075,6 @@ struct platform_device msm8960_fmem_device = {
 	.dev = { .platform_data = &msm8960_fmem_pdata },
 };
 
-#ifdef CONFIG_INPUT_SIMPLE_REMOTE
-#define PLUG_DET_ENA_PIN  -1
-#define PLUG_DET_READ_PIN PM8921_GPIO_PM_TO_SYS(38)
-#define BUTTON_DET_PIN    -1
-#define PM8921_HSED_CNTR_BASE 0x134
-
-int simple_remote_pf_initialize_gpio(struct simple_remote_platform_data *data)
-{
-	int err = 0;
-	if (!data ||
-	    -1 == data->headset_detect_read_pin) {
-		pr_err("%s: Invalid inparameter (GPIO Pins)."
-		       " Aborting!\n", __func__);
-		return -EIO;
-	}
-
-	err = gpio_request(data->headset_detect_read_pin,
-			   "Simple_remote_plug_detect_read");
-	if (err) {
-		pr_err("%s: %d Request hs-detect_read pin",
-		       __func__, err);
-		goto out;
-	}
-
-	err = gpio_direction_input(data->headset_detect_read_pin);
-	if (err) {
-		pr_err("%s: %d Set hs-detect pin as input\n",
-		       __func__, err);
-		goto out_hs_det_read;
-	}
-
-	return err;
-
-out_hs_det_read:
-	gpio_free(data->headset_detect_read_pin);
-out:
-	return err;
-}
-
-void simple_remote_pf_deinitialize_gpio(
-	struct simple_remote_platform_data *data)
-{
-	gpio_free(data->headset_detect_read_pin);
-}
-
-struct simple_remote_platform_data simple_remote_pf_data = {
-	.headset_detect_enable_pin = PLUG_DET_ENA_PIN,
-	.headset_detect_read_pin = PLUG_DET_READ_PIN,
-	.button_detect_irq = BUTTON_DET_PIN,
-	.adc_channel = CHANNEL_MPP_1,
-	.hsed_base = PM8921_HSED_CNTR_BASE,
-	.initialize = &simple_remote_pf_initialize_gpio,
-	.deinitialize = &simple_remote_pf_deinitialize_gpio,
-#ifdef CONFIG_SIMPLE_REMOTE_INVERT_PLUG_DETECTION_STATE
-	.invert_plug_det = 1,
-#else
-	.invert_plug_det = 0,
-#endif
-};
-#endif
-
 static void __init adjust_mem_for_liquid(void)
 {
 	unsigned int i;
@@ -671,6 +1122,9 @@ static void __init msm8960_reserve_fixed_area(unsigned long fixed_area_size)
 
 	ret = memblock_remove(reserve_info->fixed_area_start,
 		reserve_info->fixed_area_size);
+	pr_info("mem_map: fixed_area reserved at 0x%lx with size 0x%lx\n",
+			reserve_info->fixed_area_start,
+			reserve_info->fixed_area_size);
 	BUG_ON(ret);
 #endif
 }
@@ -757,7 +1211,7 @@ static void __init reserve_ion_memory(void)
 
 			if (fixed_position != NOT_FIXED)
 				fixed_size += heap->size;
-			else
+			else if (!use_cma)
 				reserve_mem_for_ion(MEMTYPE_EBI1, heap->size);
 
 			if (fixed_position == FIXED_LOW) {
@@ -800,6 +1254,9 @@ static void __init reserve_ion_memory(void)
 		BUG_ON(!IS_ALIGNED(fixed_low_size + HOLE_SIZE, SECTION_SIZE));
 		ret = memblock_remove(fixed_low_start,
 				      fixed_low_size + HOLE_SIZE);
+		pr_info("mem_map: fixed_low_area reserved at 0x%lx with size \
+				0x%x\n", fixed_low_start,
+				fixed_low_size + HOLE_SIZE);
 		BUG_ON(ret);
 	}
 
@@ -810,6 +1267,9 @@ static void __init reserve_ion_memory(void)
 	} else {
 		BUG_ON(!IS_ALIGNED(fixed_middle_size, SECTION_SIZE));
 		ret = memblock_remove(fixed_middle_start, fixed_middle_size);
+		pr_info("mem_map: fixed_middle_area reserved at 0x%lx with \
+				size 0x%x\n", fixed_middle_start,
+				fixed_middle_size);
 		BUG_ON(ret);
 	}
 
@@ -821,6 +1281,9 @@ static void __init reserve_ion_memory(void)
 		/* This is the end of the fixed area so it's okay to round up */
 		fixed_high_size = ALIGN(fixed_high_size, SECTION_SIZE);
 		ret = memblock_remove(fixed_high_start, fixed_high_size);
+		pr_info("mem_map: fixed_high_area reserved at 0x%lx with size \
+				0x%x\n", fixed_high_start,
+				fixed_high_size);
 		BUG_ON(ret);
 	}
 
@@ -890,6 +1353,8 @@ static void __init reserve_cache_dump_memory(void)
 	total = msm8960_cache_dump_pdata.l1_size +
 		msm8960_cache_dump_pdata.l2_size;
 	msm8960_reserve_table[MEMTYPE_EBI1].size += total;
+	pr_info("mem_map: cache_dump reserved with size 0x%x in pool\n",
+			total);
 #endif
 }
 
@@ -947,19 +1412,19 @@ static struct persistent_ram ram_console_pram = {
 
 static struct resource ramdumplog_resources[] = {
 	[0] = {
-		.name = "amsslog",
-		.flags = IORESOURCE_MEM,
+		.name   = "amsslog",
+		.flags  = IORESOURCE_MEM,
 	},
 };
 
 static struct platform_device ramdumplog_device = {
-	.name = "ramdumplog",
-	.id = -1,
+	.name           = "ramdumplog",
+	.id             = -1,
 };
 #endif
 
 #if defined(CONFIG_ANDROID_RAM_CONSOLE) || defined(CONFIG_RAMDUMP_TAGS) || \
-defined(CONFIG_RAMDUMP_CRASH_LOGS)
+	defined(CONFIG_RAMDUMP_CRASH_LOGS)
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE
 #define DEBUG_RAM_CONSOLE_SIZE (MSM_RAM_CONSOLE_SIZE)
@@ -968,7 +1433,7 @@ defined(CONFIG_RAMDUMP_CRASH_LOGS)
 #endif
 
 #ifdef CONFIG_RAMDUMP_TAGS
-#define DEBUG_RAMDUMP_TAGS_SIZE (CONFIG_RAMDUMP_TAGS_SIZE)
+#define DEBUG_RAMDUMP_TAGS_SIZE	(CONFIG_RAMDUMP_TAGS_SIZE)
 #else
 #define DEBUG_RAMDUMP_TAGS_SIZE 0
 #endif
@@ -980,7 +1445,7 @@ defined(CONFIG_RAMDUMP_CRASH_LOGS)
 #endif
 
 #define DEBUG_MEMORY_SIZE (DEBUG_RAM_CONSOLE_SIZE + DEBUG_RAMDUMP_TAGS_SIZE \
-	+ DEBUG_RAMDUMP_LOGS_SIZE)
+		+ DEBUG_RAMDUMP_LOGS_SIZE)
 
 static void reserve_debug_memory(void)
 {
@@ -1027,6 +1492,7 @@ static void reserve_debug_memory(void)
 		bank_end -= CONFIG_RAMDUMP_TAGS_SIZE;
 	}
 #endif
+
 #ifdef CONFIG_RAMDUMP_CRASH_LOGS
 	ramdumplog_resources[0].start = bank_end - MSM_RAMDUMP_LOG_SIZE;
 	ramdumplog_resources[0].end = bank_end - 1;
@@ -1035,19 +1501,19 @@ static void reserve_debug_memory(void)
 	ramdumplog_device.resource       = ramdumplog_resources;
 
 	ret = memblock_reserve(ramdumplog_resources[0].start,
-			MSM_RAMDUMP_LOG_SIZE);
+		MSM_RAMDUMP_LOG_SIZE);
 	if (ret) {
 		pr_err("Failed to reserve ramdump crash log memory %#x@%#08x\n",
-				(unsigned int)MSM_RAMDUMP_LOG_SIZE,
-				(unsigned int)ramdumplog_resources[0].start);
+			(unsigned int)MSM_RAMDUMP_LOG_SIZE,
+			(unsigned int)ramdumplog_resources[0].start);
 	} else {
 		memblock_free(ramdumplog_resources[0].start,
-				MSM_RAMDUMP_LOG_SIZE);
+			MSM_RAMDUMP_LOG_SIZE);
 		memblock_remove(ramdumplog_resources[0].start,
-				MSM_RAMDUMP_LOG_SIZE);
+			MSM_RAMDUMP_LOG_SIZE);
 		pr_info("ramdump crash log memory reserved: %#x@%#08x\n",
-				(unsigned int)MSM_RAMDUMP_LOG_SIZE,
-				(unsigned int)ramdumplog_resources[0].start);
+			(unsigned int)MSM_RAMDUMP_LOG_SIZE,
+			(unsigned int)ramdumplog_resources[0].start);
 		bank_end -= MSM_RAMDUMP_LOG_SIZE;
 	}
 #endif
@@ -1171,161 +1637,12 @@ static void __init msm8960_allocate_memory_regions(void)
 	msm8960_allocate_fb_region();
 }
 
-#ifdef CONFIG_NFC_PN544
-static int pn544_chip_config(enum pn544_state state, void *not_used)
-{
-	switch (state) {
-	case PN544_STATE_OFF:
-		gpio_set_value_cansleep(NXP_GPIO_NFC_FWDL_EN, 0);
-		gpio_set_value_cansleep(NXP_GPIO_NFC_EN, 0);
-		usleep(50000);
-		break;
-	case PN544_STATE_ON:
-		gpio_set_value_cansleep(NXP_GPIO_NFC_FWDL_EN, 0);
-		gpio_set_value_cansleep(NXP_GPIO_NFC_EN, 1);
-		usleep(10000);
-		break;
-	case PN544_STATE_FWDL:
-		gpio_set_value_cansleep(NXP_GPIO_NFC_FWDL_EN, 1);
-		gpio_set_value_cansleep(NXP_GPIO_NFC_EN, 0);
-		usleep(10000);
-		gpio_set_value_cansleep(NXP_GPIO_NFC_EN, 1);
-		break;
-	default:
-		pr_err("%s: undefined state %d\n", __func__, state);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int pn544_gpio_request(void)
-{
-	int ret;
-
-	ret = gpio_request(NXP_GPIO_NFC_IRQ, "pn544_irq");
-	if (ret)
-		goto err_irq;
-	ret = gpio_request(NXP_GPIO_NFC_EN, "pn544_ven");
-	if (ret)
-		goto err_ven;
-	ret = gpio_request(NXP_GPIO_NFC_FWDL_EN, "pn544_fw");
-	if (ret)
-		goto err_fw;
-	return 0;
-err_fw:
-	gpio_free(NXP_GPIO_NFC_EN);
-err_ven:
-	gpio_free(NXP_GPIO_NFC_IRQ);
-err_irq:
-	pr_err("%s: gpio request err %d\n", __func__, ret);
-	return ret;
-}
-
-static void pn544_gpio_release(void)
-{
-	gpio_free(NXP_GPIO_NFC_EN);
-	gpio_free(NXP_GPIO_NFC_IRQ);
-	gpio_free(NXP_GPIO_NFC_FWDL_EN);
-}
-
-static struct pn544_i2c_platform_data pn544_pdata = {
-	.irq_type = IRQF_TRIGGER_RISING,
-	.chip_config = pn544_chip_config,
-	.driver_loaded = pn544_gpio_request,
-	.driver_unloaded = pn544_gpio_release,
-};
-#endif
-
-#ifdef CONFIG_WCD9310_CODEC
-
-#define TABLA_INTERRUPT_BASE (NR_MSM_IRQS + NR_GPIO_IRQS + NR_PM8921_IRQS)
-
-/* Micbias setting is based on 8660 CDP/MTP/FLUID requirement
- * 4 micbiases are used to power various analog and digital
- * microphones operating at 1800 mV. Technically, all micbiases
- * can source from single cfilter since all microphones operate
- * at the same voltage level. The arrangement below is to make
- * sure all cfilters are exercised. LDO_H regulator ouput level
- * does not need to be as high as 2.85V. It is choosen for
- * microphone sensitivity purpose.
- */
-static struct wcd9xxx_pdata tabla_platform_data = {
-	.slimbus_slave_device = {
-		.name = "tabla-slave",
-		.e_addr = {0, 0, 0x10, 0, 0x17, 2},
-	},
-	.irq = MSM_GPIO_TO_INT(62),
-	.irq_base = TABLA_INTERRUPT_BASE,
-	.num_irqs = NR_WCD9XXX_IRQS,
-	.reset_gpio = PM8921_GPIO_PM_TO_SYS(34),
-	.micbias = {
-		.ldoh_v = TABLA_LDOH_2P85_V,
-		.cfilt1_mv = 2700,
-		.cfilt2_mv = 2700,
-		.cfilt3_mv = 2700,
-		.bias1_cfilt_sel = TABLA_CFILT1_SEL,
-		.bias2_cfilt_sel = TABLA_CFILT2_SEL,
-		.bias3_cfilt_sel = TABLA_CFILT3_SEL,
-		.bias4_cfilt_sel = TABLA_CFILT3_SEL,
-		.bias1_ext_cap = 0,
-		.bias2_ext_cap = 1,
-		.bias3_ext_cap = 0,
-		.bias4_ext_cap = 0,
-	},
-	.regulator = {
-	{
-		.name = "CDC_VDD_CP",
-		.min_uV = 1800000,
-		.max_uV = 1800000,
-		.optimum_uA = WCD9XXX_CDC_VDDA_CP_CUR_MAX,
-	},
-	{
-		.name = "CDC_VDDA_RX",
-		.min_uV = 1800000,
-		.max_uV = 1800000,
-		.optimum_uA = WCD9XXX_CDC_VDDA_RX_CUR_MAX,
-	},
-	{
-		.name = "CDC_VDDA_TX",
-		.min_uV = 1800000,
-		.max_uV = 1800000,
-		.optimum_uA = WCD9XXX_CDC_VDDA_TX_CUR_MAX,
-	},
-	{
-		.name = "VDDIO_CDC",
-		.min_uV = 1800000,
-		.max_uV = 1800000,
-		.optimum_uA = WCD9XXX_VDDIO_CDC_CUR_MAX,
-	},
-	{
-		.name = "VDDD_CDC_D",
-		.min_uV = 1225000,
-		.max_uV = 1250000,
-		.optimum_uA = WCD9XXX_VDDD_CDC_D_CUR_MAX,
-	},
-	{
-		.name = "CDC_VDDA_A_1P2V",
-		.min_uV = 1225000,
-		.max_uV = 1250000,
-		.optimum_uA = WCD9XXX_VDDD_CDC_A_CUR_MAX,
-	},
-	},
-};
-
-static struct slim_device msm_slim_tabla = {
-	.name = "tabla-slim",
-	.e_addr = {0, 1, 0x10, 0, 0x17, 2},
-	.dev = {
-		.platform_data = &tabla_platform_data,
-	},
-};
-
 #ifdef CONFIG_FB_MSM_MHL_SII8334
 
 #define MSM_GPIO_MHL_RESET_N	(64)
 #define MSM_GPIO_MHL_IRQ_N	(65)
 #define MHL_SEMC_ADOPTER_ID	(0x03A7)
-#define MHL_SEMC_DEVICE_ID	(0x0401)
+#define MHL_SEMC_DEVICE_ID	(0x0403)
 
 static int mhl_sii_setup_power(int enable)
 {
@@ -1405,7 +1722,7 @@ out_setup_gpio:
 static int mhl_sii_charging_enable(int enable, int max_curr)
 {
 	int ret;
-	/* max_curr not supported for blue platform */
+	/* max_curr not supported for viskan platform */
 
 	printk(KERN_INFO "mhl_sii_charging_enable (%s)\n",
 		enable ? "enable" : "disable");
@@ -1436,6 +1753,90 @@ static struct mhl_sii_platform_data mhl_sii_pdata = {
 };
 #endif /* CONFIG_FB_MSM_MHL_SII8334 */
 
+#ifdef CONFIG_WCD9310_CODEC
+
+#define TABLA_INTERRUPT_BASE (NR_MSM_IRQS + NR_GPIO_IRQS + NR_PM8921_IRQS)
+
+/* Micbias setting is based on 8660 CDP/MTP/FLUID requirement
+ * 4 micbiases are used to power various analog and digital
+ * microphones operating at 1800 mV. Technically, all micbiases
+ * can source from single cfilter since all microphones operate
+ * at the same voltage level. The arrangement below is to make
+ * sure all cfilters are exercised. LDO_H regulator ouput level
+ * does not need to be as high as 2.85V. It is choosen for
+ * microphone sensitivity purpose.
+ */
+static struct wcd9xxx_pdata tabla_platform_data = {
+	.slimbus_slave_device = {
+		.name = "tabla-slave",
+		.e_addr = {0, 0, 0x10, 0, 0x17, 2},
+	},
+	.irq = MSM_GPIO_TO_INT(62),
+	.irq_base = TABLA_INTERRUPT_BASE,
+	.num_irqs = NR_WCD9XXX_IRQS,
+	.reset_gpio = PM8921_GPIO_PM_TO_SYS(34),
+	.micbias = {
+		.ldoh_v = TABLA_LDOH_2P85_V,
+		.cfilt1_mv = 2700,
+		.cfilt2_mv = 2700,
+		.cfilt3_mv = 2700,
+		.bias1_cfilt_sel = TABLA_CFILT1_SEL,
+		.bias2_cfilt_sel = TABLA_CFILT2_SEL,
+		.bias3_cfilt_sel = TABLA_CFILT1_SEL,
+		.bias4_cfilt_sel = TABLA_CFILT1_SEL,
+		.bias1_cap_mode = 1,
+		.bias2_cap_mode = 1,
+		.bias3_cap_mode = 0,
+		.bias4_cap_mode = 1,
+	},
+	.regulator = {
+	{
+		.name = "CDC_VDD_CP",
+		.min_uV = 1800000,
+		.max_uV = 1800000,
+		.optimum_uA = WCD9XXX_CDC_VDDA_CP_CUR_MAX,
+	},
+	{
+		.name = "CDC_VDDA_RX",
+		.min_uV = 1800000,
+		.max_uV = 1800000,
+		.optimum_uA = WCD9XXX_CDC_VDDA_RX_CUR_MAX,
+	},
+	{
+		.name = "CDC_VDDA_TX",
+		.min_uV = 1800000,
+		.max_uV = 1800000,
+		.optimum_uA = WCD9XXX_CDC_VDDA_TX_CUR_MAX,
+	},
+	{
+		.name = "VDDIO_CDC",
+		.min_uV = 1800000,
+		.max_uV = 1800000,
+		.optimum_uA = WCD9XXX_VDDIO_CDC_CUR_MAX,
+	},
+	{
+		.name = "VDDD_CDC_D",
+		.min_uV = 1225000,
+		.max_uV = 1250000,
+		.optimum_uA = WCD9XXX_VDDD_CDC_D_CUR_MAX,
+	},
+	{
+		.name = "CDC_VDDA_A_1P2V",
+		.min_uV = 1225000,
+		.max_uV = 1250000,
+		.optimum_uA = WCD9XXX_VDDD_CDC_A_CUR_MAX,
+	},
+	},
+};
+
+static struct slim_device msm_slim_tabla = {
+	.name = "tabla-slim",
+	.e_addr = {0, 1, 0x10, 0, 0x17, 2},
+	.dev = {
+		.platform_data = &tabla_platform_data,
+	},
+};
+
 static struct wcd9xxx_pdata tabla20_platform_data = {
 	.slimbus_slave_device = {
 		.name = "tabla-slave",
@@ -1447,13 +1848,17 @@ static struct wcd9xxx_pdata tabla20_platform_data = {
 	.reset_gpio = PM8921_GPIO_PM_TO_SYS(34),
 	.micbias = {
 		.ldoh_v = TABLA_LDOH_2P85_V,
-		.cfilt1_mv = 1800,
+		.cfilt1_mv = 2700,
 		.cfilt2_mv = 2700,
-		.cfilt3_mv = 1800,
+		.cfilt3_mv = 2700,
 		.bias1_cfilt_sel = TABLA_CFILT1_SEL,
 		.bias2_cfilt_sel = TABLA_CFILT2_SEL,
-		.bias3_cfilt_sel = TABLA_CFILT3_SEL,
-		.bias4_cfilt_sel = TABLA_CFILT3_SEL,
+		.bias3_cfilt_sel = TABLA_CFILT1_SEL,
+		.bias4_cfilt_sel = TABLA_CFILT1_SEL,
+		.bias1_cap_mode = 1,
+		.bias2_cap_mode = 1,
+		.bias3_cap_mode = 0,
+		.bias4_cap_mode = 1,
 	},
 	.regulator = {
 	{
@@ -1842,6 +2247,7 @@ static struct platform_device qcedev_device = {
 };
 #endif
 
+#ifdef CONFIG_MACH_VISKAN_HUASHAN_CT
 static struct mdm_platform_data sglte_platform_data = {
 	.mdm_version = "4.0",
 	.ramdump_delay_ms = 1000,
@@ -1851,6 +2257,7 @@ static struct mdm_platform_data sglte_platform_data = {
 	.no_powerdown_after_ramdumps = 1,
 	.image_upgrade_supported = 1,
 };
+#endif
 
 #define MSM_TSIF0_PHYS			(0x18200000)
 #define MSM_TSIF1_PHYS			(0x18201000)
@@ -1980,6 +2387,11 @@ static void __init msm8960_init_buses(void)
 #endif
 }
 
+static struct msm_spi_platform_data msm8960_qup_spi_gsbi1_pdata = {
+	.max_clock_speed = 15060000,
+	.infinite_mode	 = 0xFFC0,
+};
+
 #ifdef CONFIG_USB_MSM_OTG_72K
 static struct msm_otg_platform_data msm_otg_pdata;
 #else
@@ -2008,6 +2420,30 @@ do_vbus_off:
 #endif
 	return ret;
 }
+
+static int wr_phy_init_seq[] = {
+	0x44, 0x80, /* set VBUS valid threshold
+			and disconnect valid threshold */
+	0x3C, 0x81, /* update DC voltage level */
+	0x31, 0x82, /* set preemphasis and rise/fall time */
+	0x33, 0x83, /* set source impedance adjusment */
+	-1};
+
+static int liquid_v1_phy_init_seq[] = {
+	0x44, 0x80,/* set VBUS valid threshold
+			and disconnect valid threshold */
+	0x3C, 0x81,/* update DC voltage level */
+	0x18, 0x82,/* set preemphasis and rise/fall time */
+	0x23, 0x83,/* set source impedance sdjusment */
+	-1};
+
+static int sglte_phy_init_seq[] = {
+	0x44, 0x80, /* set VBUS valid threshold
+			and disconnect valid threshold */
+	0x3A, 0x81, /* update DC voltage level */
+	0x24, 0x82, /* set preemphasis and rise/fall time */
+	0x13, 0x83, /* set source impedance adjusment */
+	-1};
 
 #ifdef CONFIG_MSM_BUS_SCALING
 /* Bandwidth requests (zero) if no vote placed */
@@ -2057,7 +2493,6 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.pmic_id_irq		= PM8921_USB_ID_IN_IRQ(PM8921_IRQ_BASE),
 	.vbus_power		= msm_hsusb_vbus_power,
 	.power_budget		= CONFIG_USB_MSM_OTG_POWER_BUDGET,
-	.phy_init_seq	= somc_usb_phy_init_seq,
 #ifdef CONFIG_MSM_BUS_SCALING
 	.bus_scale_table	= &usb_bus_scale_pdata,
 	.mpm_otgsessvld_int	= MSM_MPM_PIN_USB1_OTGSESSVLD,
@@ -2342,7 +2777,6 @@ out:
 
 static struct android_usb_platform_data android_usb_pdata = {
 	.update_pid_and_serial_num = usb_diag_update_pid_and_serial_num,
-	.can_stall = 1,
 };
 
 static struct platform_device android_usb_device = {
@@ -2531,25 +2965,654 @@ static struct msm_spm_platform_data msm_spm_l2_data[] __initdata = {
 	},
 };
 
+
 #ifdef CONFIG_LEDS_AS3676
-extern struct as3676_platform_data as3676_platform_data;
+struct as3676_platform_data as3676_platform_data = {
+	.step_up_vtuning = 20,	/* 0 .. 31 uA on DCDC_FB */
+	.audio_speed_down = 1,	/* 0..3 resp. 0, 200, 400, 800ms */
+	.audio_speed_up = 4,	/* 0..7 resp. 0, 50, 100, 150,
+					200,250,400, 800ms */
+	.audio_agc_ctrl = 1,	/* 0 .. 7: 0==no AGC, 7 very aggressive*/
+	.audio_gain = 7,	/* 0..7: -12, -6,  0, 6
+					12, 18, 24, 30 dB */
+	.audio_source = 2,	/* 0..3: 0=curr33, 1=DCDC_FB
+					2=GPIO1,  3=GPIO2 */
+	.step_up_lowcur = true,
+	.leds[0] = {
+		.name = "lcd-backlight_1",
+		.on_charge_pump = 0,
+		.max_current_uA = 19950,
+		.startup_current_uA = 19950,
+	},
+	.leds[1] = {
+		.name = "lcd-backlight_2",
+		.on_charge_pump = 0,
+		.max_current_uA = 19950,
+		.startup_current_uA = 19950,
+	},
+	.leds[2] = {
+		.name = "led3-not-connected",
+		.on_charge_pump = 0,
+		.max_current_uA = 0,
+	},
+	.leds[3] = {
+		.name = "logo-backlight_1",
+		.on_charge_pump = 1,
+		.max_current_uA = 3000,
+	},
+	.leds[4] = {
+		.name = "logo-backlight_2",
+		.on_charge_pump = 1,
+		.max_current_uA = 3000,
+	},
+	.leds[5] = {
+		.name = "led6-not-connected",
+		.on_charge_pump = 1,
+		.max_current_uA = 0,
+	},
+	.leds[6] = {
+		.name = "pwr-red",
+		.on_charge_pump = 1,
+		.max_current_uA = 2000,
+	},
+	.leds[7] = {
+		.name = "pwr-green",
+		.on_charge_pump = 1,
+		.max_current_uA = 2000,
+	},
+	.leds[8] = {
+		.name = "pwr-blue",
+		.on_charge_pump = 1,
+		.max_current_uA = 2000,
+	},
+	.leds[9] = {
+		.name = "led10-not-connected",
+		.on_charge_pump = 1,
+		.max_current_uA = 0,
+	},
+	.leds[10] = {
+		.name = "led11-not-connected",
+		.on_charge_pump = 1,
+		.max_current_uA = 0,
+	},
+	.leds[11] = {
+		.name = "led12-not-connected",
+		.on_charge_pump = 1,
+		.max_current_uA = 0,
+	},
+	.leds[12] = {
+		.name = "led13-not-connected",
+		.on_charge_pump = 1,
+		.max_current_uA = 0,
+	},
+};
 #endif
 
-#define SYNAPTICS_TOUCH_GPIO_IRQ 11
+#ifdef CONFIG_LEDS_AS3677
+struct as3677_platform_data as3677_pdata = {
+	.step_up_vmax = VMAX_25,
+	.dls_analog = true,
+	.leds[0] = {
+		.name = "lcd-backlight1",
+		.on_charge_pump = 0,
+		.max_current_uA = 20000,
+		.startup_current_uA = 5000,
+	},
+	.leds[1] = {
+		.name = "lcd-backlight2",
+		.on_charge_pump = 0,
+		.max_current_uA = 20000,
+		.startup_current_uA = 5000,
+	},
+};
+#endif
+
+#ifdef CONFIG_LM3561
+#define LM3561_HW_ENABLE_GPIO 2
+
+static int lm356x_pwr(struct device *dev, bool request)
+{
+	int rc = 0;
+
+	dev_dbg(dev, "%s: request %d\n", __func__, request);
+
+	if (request) {
+		gpio_set_value(LM3561_HW_ENABLE_GPIO, 1);
+		udelay(20);
+	} else {
+		gpio_set_value(LM3561_HW_ENABLE_GPIO, 0);
+	}
+	return rc;
+}
+
+static int lm356x_platform_init(struct device *dev, bool request)
+{
+	int rc = 0;
+
+	if (request)
+		rc = gpio_request(LM3561_HW_ENABLE_GPIO, "LM356x hw reset");
+	else
+		gpio_free(LM3561_HW_ENABLE_GPIO);
+
+	if (rc)
+		dev_err(dev, "%s: failed rc %d\n", __func__, rc);
+	return rc;
+}
+
+static struct lm3561_platform_data lm3561_platform_data = {
+	.power			= lm356x_pwr,
+	.platform_init		= lm356x_platform_init,
+	.led_nums		= 2,
+	.strobe_trigger		= LM3561_STROBE_TRIGGER_EDGE,
+	.current_limit		= 2100000, /* uA */
+	.flash_sync		= LM3561_SYNC_ON,
+	.strobe_polarity	= LM3561_STROBE_POLARITY_HIGH,
+	.ledintc_pin_setting	= LM3561_LEDINTC_NTC_THERMISTOR_INPUT,
+	.tx1_polarity		= LM3561_TX1_POLARITY_HIGH,
+	.tx2_polarity		= LM3561_TX2_POLARITY_HIGH,
+	.hw_torch_mode		= LM3561_HW_TORCH_MODE_DISABLE,
+};
+#endif
+
+#if defined(CONFIG_LEDS_AS3665) || defined(CONFIG_LEDS_AS3665_MODULE)
+#define AS3665_HW_EN	(54)
+
+static struct as3665_led_config as3665_leds_config[] = {
+	{
+		.name = "LED1_B",
+		.chan_nr = 0,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED2_B",
+		.chan_nr = 1,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED3_B",
+		.chan_nr = 2,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED1_G",
+		.chan_nr = 3,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED2_G",
+		.chan_nr = 4,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED3_G",
+		.chan_nr = 5,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED1_R",
+		.chan_nr = 6,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED2_R",
+		.chan_nr = 7,
+		.led_current = 0,
+		.max_current = 0,
+	}, {
+		.name = "LED3_R",
+		.chan_nr = 8,
+		.led_current = 0,
+		.max_current = 0,
+	}
+};
+
+static int as3665_setup(struct device *dev)
+{
+	/* add as3665 setup code here; */
+	int rc ;
+
+	rc = gpio_request(AS3665_HW_EN, "as3665_hw_en");
+	if (rc) {
+		dev_err(dev, "failed to request, %d\n", rc);
+		return -EIO;
+	}
+
+	rc = gpio_direction_output(AS3665_HW_EN, 0);
+	if (rc) {
+		dev_err(dev, "failed to set direction output, %d\n", rc);
+		gpio_free(AS3665_HW_EN);
+		return -EIO;
+	}
+	return rc;
+}
+
+static void as3665_release(struct device *dev)
+{
+	/*add as3665 release code here;*/
+	gpio_free(AS3665_HW_EN);
+}
+
+static int as3665_enable(struct device *dev, bool state)
+{
+	/*add as3665 enable code here;*/
+	gpio_set_value(AS3665_HW_EN, state);
+	return 0;
+}
+
+struct as3665_platform_data as3665_platform_data = {
+	.led_config		= as3665_leds_config,
+	.num_channels		= ARRAY_SIZE(as3665_leds_config),
+	.setup_resources	= as3665_setup,
+	.release_resources	= as3665_release,
+	.enable			= as3665_enable,
+};
+
+#define VBUS_BIT 0x04
+static int __init startup_rgb(char *str)
+{
+	int vbus;
+	if (get_option(&str, &vbus)) {
+		if (vbus & VBUS_BIT)
+			/* The max_current is 25.5 mA, so 10 mean 1 mA */
+			as3665_platform_data.led_config[6].startup_current = 10;
+		return 0;
+	}
+	return -EINVAL;
+
+}
+
+early_param("startup", startup_rgb);
+#endif
+
+#define HAP_SHIFT_LVL_OE_GPIO		47
+#define HAP_SHIFT_LVL_OE_GPIO_SGLTE	89
+#define PM_HAP_EN_GPIO		PM8921_GPIO_PM_TO_SYS(33)
+#define PM_HAP_LEN_GPIO		PM8921_GPIO_PM_TO_SYS(20)
+
+static struct msm_xo_voter *xo_handle_d1;
+
+static int isa1200_power(int on)
+{
+	int rc = 0;
+	int hap_oe_gpio = HAP_SHIFT_LVL_OE_GPIO;
+
+	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE)
+		hap_oe_gpio = HAP_SHIFT_LVL_OE_GPIO_SGLTE;
+
+
+	gpio_set_value(hap_oe_gpio, !!on);
+
+	rc = on ? msm_xo_mode_vote(xo_handle_d1, MSM_XO_MODE_ON) :
+			msm_xo_mode_vote(xo_handle_d1, MSM_XO_MODE_OFF);
+	if (rc < 0) {
+		pr_err("%s: failed to %svote for TCXO D1 buffer%d\n",
+				__func__, on ? "" : "de-", rc);
+		goto err_xo_vote;
+	}
+
+	return 0;
+
+err_xo_vote:
+	gpio_set_value(hap_oe_gpio, !on);
+	return rc;
+}
+
+static int isa1200_dev_setup(bool enable)
+{
+	int rc = 0;
+	int hap_oe_gpio = HAP_SHIFT_LVL_OE_GPIO;
+
+	struct pm_gpio hap_gpio_config = {
+		.direction      = PM_GPIO_DIR_OUT,
+		.pull           = PM_GPIO_PULL_NO,
+		.out_strength   = PM_GPIO_STRENGTH_HIGH,
+		.function       = PM_GPIO_FUNC_NORMAL,
+		.inv_int_pol    = 0,
+		.vin_sel        = 2,
+		.output_buffer  = PM_GPIO_OUT_BUF_CMOS,
+		.output_value   = 0,
+	};
+
+	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE)
+		hap_oe_gpio = HAP_SHIFT_LVL_OE_GPIO_SGLTE;
+
+	if (enable == true) {
+		rc = pm8xxx_gpio_config(PM_HAP_EN_GPIO, &hap_gpio_config);
+		if (rc) {
+			pr_err("%s: pm8921 gpio %d config failed(%d)\n",
+					__func__, PM_HAP_EN_GPIO, rc);
+			return rc;
+		}
+
+		rc = pm8xxx_gpio_config(PM_HAP_LEN_GPIO, &hap_gpio_config);
+		if (rc) {
+			pr_err("%s: pm8921 gpio %d config failed(%d)\n",
+					__func__, PM_HAP_LEN_GPIO, rc);
+			return rc;
+		}
+
+		rc = gpio_request(hap_oe_gpio, "hap_shft_lvl_oe");
+		if (rc) {
+			pr_err("%s: unable to request gpio %d (%d)\n",
+					__func__, hap_oe_gpio, rc);
+			return rc;
+		}
+
+		rc = gpio_direction_output(hap_oe_gpio, 0);
+		if (rc) {
+			pr_err("%s: Unable to set direction\n", __func__);
+			goto free_gpio;
+		}
+
+		xo_handle_d1 = msm_xo_get(MSM_XO_TCXO_D1, "isa1200");
+		if (IS_ERR(xo_handle_d1)) {
+			rc = PTR_ERR(xo_handle_d1);
+			pr_err("%s: failed to get the handle for D1(%d)\n",
+							__func__, rc);
+			goto gpio_set_dir;
+		}
+	} else {
+		gpio_free(hap_oe_gpio);
+
+		msm_xo_put(xo_handle_d1);
+	}
+
+	return 0;
+
+gpio_set_dir:
+	gpio_set_value(hap_oe_gpio, 0);
+free_gpio:
+	gpio_free(hap_oe_gpio);
+	return rc;
+}
+
+static struct isa1200_regulator isa1200_reg_data[] = {
+	{
+		.name = "vcc_i2c",
+		.min_uV = ISA_I2C_VTG_MIN_UV,
+		.max_uV = ISA_I2C_VTG_MAX_UV,
+		.load_uA = ISA_I2C_CURR_UA,
+	},
+};
+
+static struct isa1200_platform_data isa1200_1_pdata = {
+	.name = "vibrator",
+	.dev_setup = isa1200_dev_setup,
+	.power_on = isa1200_power,
+	.hap_en_gpio = PM_HAP_EN_GPIO,
+	.hap_len_gpio = PM_HAP_LEN_GPIO,
+	.max_timeout = 15000,
+	.mode_ctrl = PWM_GEN_MODE,
+	.pwm_fd = {
+		.pwm_div = 256,
+	},
+	.is_erm = false,
+	.smart_en = true,
+	.ext_clk_en = true,
+	.chip_en = 1,
+	.regulator_info = isa1200_reg_data,
+	.num_regulators = ARRAY_SIZE(isa1200_reg_data),
+};
+
+static struct i2c_board_info msm_isa1200_board_info[] __initdata = {
+	{
+		I2C_BOARD_INFO("isa1200_1", 0x90>>1),
+	},
+};
+
+
+
+
+
+/* configuration data for mxt1386 */
+static const u8 mxt1386_config_data[] = {
+	/* T6 Object */
+	0, 0, 0, 0, 0, 0,
+	/* T38 Object */
+	11, 2, 0, 11, 11, 11, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T7 Object */
+	100, 16, 50,
+	/* T8 Object */
+	8, 0, 0, 0, 0, 0, 8, 14, 50, 215,
+	/* T9 Object */
+	131, 0, 0, 26, 42, 0, 32, 63, 3, 5,
+	0, 2, 1, 113, 10, 10, 8, 10, 255, 2,
+	85, 5, 0, 0, 20, 20, 75, 25, 202, 29,
+	10, 10, 45, 46,
+	/* T15 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0,
+	/* T18 Object */
+	0, 0,
+	/* T22 Object */
+	5, 0, 0, 0, 0, 0, 0, 0, 30, 0,
+	0, 0, 5, 8, 10, 13, 0,
+	/* T24 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* T25 Object */
+	3, 0, 188, 52, 52, 33, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T27 Object */
+	0, 0, 0, 0, 0, 0, 0,
+	/* T28 Object */
+	0, 0, 0, 8, 12, 60,
+	/* T40 Object */
+	0, 0, 0, 0, 0,
+	/* T41 Object */
+	0, 0, 0, 0, 0, 0,
+	/* T43 Object */
+	0, 0, 0, 0, 0, 0,
+};
+
+/* configuration data for mxt1386e using V1.0 firmware */
+static const u8 mxt1386e_config_data_v1_0[] = {
+	/* T6 Object */
+	0, 0, 0, 0, 0, 0,
+	/* T38 Object */
+	12, 1, 0, 17, 1, 12, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T7 Object */
+	100, 16, 50,
+	/* T8 Object */
+	25, 0, 20, 20, 0, 0, 20, 50, 0, 0,
+	/* T9 Object */
+	131, 0, 0, 26, 42, 0, 32, 80, 2, 5,
+	0, 5, 5, 0, 10, 30, 10, 10, 255, 2,
+	85, 5, 10, 10, 10, 10, 135, 55, 70, 40,
+	10, 5, 0, 0, 0,
+	/* T18 Object */
+	0, 0,
+	/* T24 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* T25 Object */
+	3, 0, 60, 115, 156, 99,
+	/* T27 Object */
+	0, 0, 0, 0, 0, 0, 0,
+	/* T40 Object */
+	0, 0, 0, 0, 0,
+	/* T42 Object */
+	2, 0, 255, 0, 255, 0, 0, 0, 0, 0,
+	/* T43 Object */
+	0, 0, 0, 0, 0, 0, 0,
+	/* T46 Object */
+	64, 0, 20, 20, 0, 0, 0, 0, 0,
+	/* T47 Object */
+	0, 0, 0, 0, 0, 0, 3, 64, 66, 0,
+	/* T48 Object */
+	31, 64, 64, 0, 0, 0, 0, 0, 0, 0,
+	48, 40, 0, 10, 10, 0, 0, 100, 10, 80,
+	0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+	52, 0, 12, 0, 17, 0, 1, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T56 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	2, 99, 33,
+};
+
+/* configuration data for mxt1386e using V2.1 firmware */
+static const u8 mxt1386e_config_data_v2_1[] = {
+	/* T6 Object */
+	0, 0, 0, 0, 0, 0,
+	/* T38 Object */
+	12, 4, 0, 5, 7, 12, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T7 Object */
+	100, 16, 50,
+	/* T8 Object */
+	25, 0, 20, 20, 0, 0, 20, 50, 0, 0,
+	/* T9 Object */
+	139, 0, 0, 26, 42, 0, 32, 80, 2, 5,
+	0, 5, 5, 79, 10, 30, 10, 10, 255, 2,
+	85, 5, 10, 10, 10, 10, 135, 55, 70, 40,
+	10, 5, 0, 0, 0,
+	/* T18 Object */
+	0, 0,
+	/* T24 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* T25 Object */
+	1, 0, 60, 115, 156, 99,
+	/* T27 Object */
+	0, 0, 0, 0, 0, 0, 0,
+	/* T40 Object */
+	0, 0, 0, 0, 0,
+	/* T42 Object */
+	0, 0, 255, 0, 255, 0, 0, 0, 0, 0,
+	/* T43 Object */
+	0, 0, 0, 0, 0, 0, 0, 64, 0, 8,
+	16,
+	/* T46 Object */
+	64, 0, 16, 16, 0, 0, 0, 0, 0,
+	/* T47 Object */
+	0, 0, 0, 0, 0, 0, 3, 64, 66, 0,
+	/* T48 Object */
+	1, 64, 64, 0, 0, 0, 0, 0, 0, 0,
+	48, 40, 0, 10, 10, 0, 0, 100, 10, 80,
+	0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+	52, 0, 12, 0, 17, 0, 1, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T56 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	2, 99, 33, 0, 149, 24, 193, 255, 255, 255,
+	255,
+};
+
+/* configuration data for mxt1386e on 3D SKU using V2.1 firmware */
+static const u8 mxt1386e_config_data_3d[] = {
+	/* T6 Object */
+	0, 0, 0, 0, 0, 0,
+	/* T38 Object */
+	13, 1, 0, 23, 2, 12, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T7 Object */
+	100, 10, 50,
+	/* T8 Object */
+	25, 0, 20, 20, 0, 0, 0, 0, 0, 0,
+	/* T9 Object */
+	131, 0, 0, 26, 42, 0, 32, 80, 2, 5,
+	0, 5, 5, 0, 10, 30, 10, 10, 175, 4,
+	127, 7, 26, 21, 17, 19, 143, 35, 207, 40,
+	20, 5, 54, 49, 0,
+	/* T18 Object */
+	0, 0,
+	/* T24 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* T25 Object */
+	0, 0, 72, 113, 168, 97,
+	/* T27 Object */
+	0, 0, 0, 0, 0, 0, 0,
+	/* T40 Object */
+	0, 0, 0, 0, 0,
+	/* T42 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	/* T43 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0,
+	/* T46 Object */
+	68, 0, 16, 16, 0, 0, 0, 0, 0,
+	/* T47 Object */
+	0, 0, 0, 0, 0, 0, 3, 64, 66, 0,
+	/* T48 Object */
+	31, 64, 64, 0, 0, 0, 0, 0, 0, 0,
+	32, 50, 0, 10, 10, 0, 0, 100, 10, 90,
+	0, 0, 0, 0, 0, 0, 0, 10, 1, 30,
+	52, 10, 5, 0, 33, 0, 1, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0,
+	/* T56 Object */
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0,
+};
+
+#define MXT_TS_GPIO_IRQ			11
+#define MXT_TS_LDO_EN_GPIO		50
+#define MXT_TS_RESET_GPIO		52
+
+static void mxt_init_hw_liquid(void)
+{
+	int rc;
+
+	rc = gpio_request(MXT_TS_LDO_EN_GPIO, "mxt_ldo_en_gpio");
+	if (rc) {
+		pr_err("%s: unable to request mxt_ldo_en_gpio [%d]\n",
+			__func__, MXT_TS_LDO_EN_GPIO);
+		return;
+	}
+
+	rc = gpio_direction_output(MXT_TS_LDO_EN_GPIO, 1);
+	if (rc) {
+		pr_err("%s: unable to set_direction for mxt_ldo_en_gpio [%d]\n",
+			__func__, MXT_TS_LDO_EN_GPIO);
+		goto err_ldo_gpio_req;
+	}
+
+	return;
+
+err_ldo_gpio_req:
+	gpio_free(MXT_TS_LDO_EN_GPIO);
+}
+
+
+
 
 #ifdef CONFIG_TOUCHSCREEN_CLEARPAD
 static struct regulator *vreg_touch_vdd;
-
-struct synaptics_pointer_data pointer_data_0x19 = {
-	.offset_x = 0,
-	.offset_y = 49,
-};
-
-struct synaptics_pointer_data pointer_data_0x1A = {
-	.offset_x = 0,
-	.offset_y = 55,
-};
-
 
 struct synaptics_funcarea clearpad_funcarea_array[] = {
 	{
@@ -2559,49 +3622,9 @@ struct synaptics_funcarea clearpad_funcarea_array[] = {
 	{ .func = SYN_FUNCAREA_END }
 };
 
-struct synaptics_funcarea clearpad_funcarea_array_0x19[] = {
-	{
-		{ 0, 0, 719, 36 }, { 0, 0, 719, 36 },
-		SYN_FUNCAREA_INSENSIBLE, NULL
-	},
-	{
-		{ 0, 49, 719, 1328 }, { 0, 37, 719, 1332 },
-		SYN_FUNCAREA_POINTER, &pointer_data_0x19
-	},
-	{ .func = SYN_FUNCAREA_END }
-};
-
-struct synaptics_funcarea clearpad_funcarea_array_0x1A[] = {
-	{
-		{ 0, 0, 719, 42 }, { 0, 0, 719, 42 },
-		SYN_FUNCAREA_INSENSIBLE, NULL
-	},
-	{
-		{ 0, 55, 719, 1334 }, { 0, 43, 719, 1336 },
-		SYN_FUNCAREA_POINTER, &pointer_data_0x1A
-	},
-	{ .func = SYN_FUNCAREA_END }
-};
-
 struct synaptics_funcarea *clearpad_funcarea_get(u8 module_id, u8 rev)
 {
-	struct synaptics_funcarea *funcarea = NULL;
-
-	pr_info("%s: module_id=0x%02x rev=0x%02x\n", __func__, module_id, rev);
-	switch (module_id) {
-	case 0x19:
-		funcarea = clearpad_funcarea_array_0x19;
-		break;
-	case 0x1A:
-	case 0xFF:
-		funcarea = clearpad_funcarea_array_0x1A;
-		break;
-	default:
-		funcarea = clearpad_funcarea_array;
-		break;
-	}
-
-	return funcarea;
+	return clearpad_funcarea_array;
 }
 
 static int clearpad_vreg_low_power_mode(int enable)
@@ -2629,11 +3652,36 @@ static int clearpad_vreg_low_power_mode(int enable)
 	}
 }
 
+static int clearpad_verg_enable(int enable)
+{
+	int rc = 0;
+
+	if (IS_ERR_OR_NULL(vreg_touch_vdd))
+		return -ENODEV;
+
+	if (enable) {
+		rc = regulator_enable(vreg_touch_vdd);
+		if (rc) {
+			pr_err("%s: enable vdd failed, rc=%d\n", __func__, rc);
+			return rc;
+		}
+	} else {
+		rc = regulator_disable(vreg_touch_vdd);
+		if (rc)
+			pr_err("%s: disable vdd failed, rc=%d\n",
+								__func__, rc);
+			return rc;
+	}
+
+	return rc;
+}
+
 static int clearpad_vreg_configure(int enable)
 {
 	int rc = 0;
 
-	vreg_touch_vdd = regulator_get(NULL, "8921_l17");
+	if (IS_ERR_OR_NULL(vreg_touch_vdd))
+		vreg_touch_vdd = regulator_get(NULL, "clearpad_vdd");
 	if (IS_ERR(vreg_touch_vdd)) {
 		pr_err("%s: get vdd failed\n", __func__);
 		return -ENODEV;
@@ -2666,10 +3714,13 @@ static int clearpad_vreg_configure(int enable)
 		if (rc)
 			pr_err("%s: disable vdd failed, rc=%d\n",
 								__func__, rc);
+		regulator_put(vreg_touch_vdd);
+		vreg_touch_vdd = NULL;
 	}
 	return rc;
 clearpad_vreg_configure_err:
 	regulator_put(vreg_touch_vdd);
+	vreg_touch_vdd = NULL;
 	return rc;
 }
 
@@ -2677,14 +3728,15 @@ static int clearpad_vreg_reset(void)
 {
 	int rc = 0;
 
-	rc = clearpad_vreg_configure(0);
+	rc = clearpad_verg_enable(0);
 	if (rc)
 		return rc;
 	usleep(20000);
-	rc = clearpad_vreg_configure(1);
+	rc = clearpad_verg_enable(1);
 	return rc;
 }
 
+#define SYNAPTICS_TOUCH_GPIO_IRQ	(11)
 static int clearpad_gpio_configure(int enable)
 {
 	int rc = 0;
@@ -2738,430 +3790,6 @@ static struct clearpad_platform_data clearpad_platform_data = {
 };
 #endif
 
-#ifdef CONFIG_RMI4_BUS
-#define RMI4_VDD "touch_vdd"
-#define RMI4_VIO "touch_vio"
-static struct regulator *vreg_touch_vdd;
-static struct regulator *vreg_touch_vio;
-
-
-static int rmi4_vreg_config(struct device *dev, int enable)
-{
-	int rc;
-
-	dev_dbg(dev, "%s - Called (enable=%d)\n", __func__, enable);
-
-	if (enable) {
-		if (vreg_touch_vdd)
-			return 0;
-		vreg_touch_vdd = regulator_get(dev, RMI4_VDD);
-		if (IS_ERR(vreg_touch_vdd)) {
-			dev_err(dev, "get '%s' failed\n", RMI4_VDD);
-			rc = -ENODEV;
-			goto no_vdd;
-		}
-		rc = regulator_set_voltage(vreg_touch_vdd, 3000000, 3000000);
-		if (rc) {
-			dev_err(dev, "vdd set voltage failed, rc=%d\n", rc);
-			goto vdd_config_err;
-		}
-		rc = regulator_enable(vreg_touch_vdd);
-		if (rc) {
-			dev_err(dev, "vdd enable vdd failed, rc=%d\n", rc);
-			goto vdd_config_err;
-		}
-		vreg_touch_vio = regulator_get(dev, RMI4_VIO);
-		if (IS_ERR(vreg_touch_vio)) {
-			dev_err(dev, "get '%s' failed\n", RMI4_VIO);
-			rc = -ENODEV;
-			goto no_vio;
-		}
-		rc = regulator_set_voltage(vreg_touch_vio, 1800000, 1800000);
-		if (rc) {
-			dev_err(dev, "vio set voltage failed, rc=%d\n", rc);
-			goto vio_config_err;
-		}
-		rc = regulator_enable(vreg_touch_vio);
-		if (rc) {
-			dev_err(dev, "vio enable vdd failed, rc=%d\n", rc);
-			goto vio_config_err;
-		}
-		return -EAGAIN;
-	} else {
-		if (!IS_ERR(vreg_touch_vdd)) {
-			regulator_disable(vreg_touch_vdd);
-			regulator_put(vreg_touch_vdd);
-			vreg_touch_vdd = NULL;
-		}
-		if (!IS_ERR(vreg_touch_vio)) {
-			regulator_disable(vreg_touch_vio);
-			regulator_put(vreg_touch_vio);
-			vreg_touch_vio = NULL;
-		}
-	}
-	return 0;
-
-vio_config_err:
-	regulator_put(vreg_touch_vio);
-	vreg_touch_vio = NULL;
-no_vio:
-	regulator_disable(vreg_touch_vdd);
-vdd_config_err:
-	regulator_put(vreg_touch_vdd);
-	vreg_touch_vdd = NULL;
-no_vdd:
-	return rc;
-}
-
-static int rmi4_hard_reset(struct device *dev)
-{
-	int rc;
-
-	dev_info(dev, "%s\n", __func__);
-	if (IS_ERR_OR_NULL(vreg_touch_vdd) || IS_ERR_OR_NULL(vreg_touch_vio)) {
-		dev_info(dev, "%s: no vregs are present\n", __func__);
-		return -ENODEV;
-	}
-	regulator_disable(vreg_touch_vio);
-	regulator_disable(vreg_touch_vdd);
-	usleep(1000);
-	rc = regulator_enable(vreg_touch_vdd);
-	rc = rc ? rc : regulator_enable(vreg_touch_vio);
-	return rc;
-}
-
-static struct rmi4_wd_platform_data rmi4_wd_data = {
-	.reset_func = rmi4_hard_reset,
-	.poll_t_ms = 1000,
-};
-
-static struct rmi4_function_data fdata[] = {
-	{
-		.func_name = RMI4_WATCHDOG_NAME,
-		.func_id = 0x11,
-		.func_data = &rmi4_wd_data,
-	},
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	{
-		.func_name = RMI4_E_SUSP_NAME,
-		.func_id = 0x01,
-		.func_data = NULL,
-	},
-#endif
-
-};
-
-static struct rmi4_core_device_data rmi4_core_data = {
-	.core_name = RMI4_CORE_DRIVER_NAME,
-	.attn_gpio = SYNAPTICS_TOUCH_GPIO_IRQ,
-	.irq_polarity = IRQF_TRIGGER_FALLING,
-	.irq_is_shared = false,
-	.num_functions = ARRAY_SIZE(fdata),
-	.func_data = fdata,
-};
-
-static struct rmi4_i2c_adapter_platform_data rmi4_platform_data = {
-	.irq = MSM_GPIO_TO_INT(SYNAPTICS_TOUCH_GPIO_IRQ),
-	.vreg_config = rmi4_vreg_config,
-	.cdev_data = &rmi4_core_data,
-};
-#endif
-
-#ifdef CONFIG_LM3560_FLASHLED
-#define LM3560_HW_RESET_GPIO 2
-#define NTC_VREG_ID "lm3560_ntc"
-static struct regulator *lm3560_ntc_vreg;
-
-static int lm356x_pwr(struct device *dev, bool request)
-{
-	int rc = 0;
-
-	dev_dbg(dev, "%s: request %d\n", __func__, request);
-
-	if (IS_ERR_OR_NULL(lm3560_ntc_vreg))
-		return -ENODEV;
-
-	if (request) {
-		rc = regulator_enable(lm3560_ntc_vreg);
-		if (rc)
-			dev_err(dev, "failed to enable vreg '%s'\n",
-					NTC_VREG_ID);
-		else {
-			gpio_set_value(LM3560_HW_RESET_GPIO, 1);
-			udelay(20);
-		}
-	} else {
-		gpio_set_value(LM3560_HW_RESET_GPIO, 0);
-		rc = regulator_disable(lm3560_ntc_vreg);
-	}
-	return rc;
-}
-
-
-static int lm356x_platform_init(struct device *dev, bool request)
-{
-	int rc ;
-
-	if (request) {
-		rc = gpio_request(LM3560_HW_RESET_GPIO, "LM3560 hw reset");
-		if (rc)
-			goto err;
-
-		rc = gpio_direction_output(LM3560_HW_RESET_GPIO, 0);
-		if (rc) {
-			dev_err(dev, "failed to set direction rc %d\n", rc);
-			gpio_free(LM3560_HW_RESET_GPIO);
-			return -EIO;
-		}
-
-		lm3560_ntc_vreg = regulator_get(dev, NTC_VREG_ID);
-		if (IS_ERR_OR_NULL(lm3560_ntc_vreg)) {
-			dev_err(dev, "failed to get vreg '%s'\n", NTC_VREG_ID);
-			rc = -ENODEV;
-			goto free_gpio;
-		}
-	} else {
-		rc = 0;
-		if (!IS_ERR_OR_NULL(lm3560_ntc_vreg))
-			regulator_put(lm3560_ntc_vreg);
-		lm3560_ntc_vreg = NULL;
-free_gpio:
-		gpio_free(LM3560_HW_RESET_GPIO);
-	}
-err:
-	if (rc)
-		dev_err(dev, "%s: failed rc %d\n", __func__, rc);
-	return rc;
-}
-
-static struct lm3560_platform_data lm3560_platform_data = {
-	.power			= lm356x_pwr,
-	.platform_init          = lm356x_platform_init,
-	.led_nums		= 2,
-	.strobe_trigger		= LM3560_STROBE_TRIGGER_EDGE,
-	.privacy_terminate	= LM3560_PRIVACY_MODE_TURN_BACK,
-	.privacy_led_nums	= 1,
-	.privacy_blink_period	= 0, /* No bliking */
-	.current_limit		= 2300000, /* uA */
-	.flash_sync		= LM3560_SYNC_ON,
-	.strobe_polarity	= LM3560_STROBE_POLARITY_HIGH,
-	.ledintc_pin_setting	= LM3560_LEDINTC_NTC_THERMISTOR_INPUT,
-	.tx1_polarity		= LM3560_TX1_POLARITY_HIGH,
-	.tx2_polarity		= LM3560_TX2_POLARITY_HIGH,
-	.hw_torch_mode		= LM3560_HW_TORCH_MODE_DISABLE,
-};
-#endif /* CONFIG_LM3560_FLASHLED */
-
-static DEFINE_MUTEX(sensor_status_lock);
-#define VREGL9_IDDIO_LCURRENT 1000
-#define VREGL9_IDDIO_HCURRENT 30000
-
-static int sensor_power(struct device *dev, bool enable,
-				struct regulator **reg, const char *id)
-{
-	int rc;
-
-	mutex_lock(&sensor_status_lock);
-	if (!*reg)
-		*reg = regulator_get(dev, id);
-	if (IS_ERR_OR_NULL(*reg)) {
-		if (*reg == NULL)
-			rc = -ENODEV;
-		else
-			rc = PTR_ERR(*reg);
-		dev_err(dev, "%s: regulator_get failed. rc=%d\n",
-			__func__, rc);
-		goto err;
-	}
-
-	rc = regulator_set_optimum_mode(*reg, enable ?
-			VREGL9_IDDIO_HCURRENT : VREGL9_IDDIO_LCURRENT);
-	if (rc < 0)
-		dev_err(dev, "%s: set_optimum_mode l9 failed, rc=%d", __func__,
-									rc);
-	else
-		rc = 0;
-
-err:
-	mutex_unlock(&sensor_status_lock);
-
-	return rc;
-}
-
-#if defined CONFIG_INPUT_BMA250_NG || defined CONFIG_INPUT_BMA250
-#define BMA250_GPIO 10
-#define BMA250_DEFAULT_RATE 50
-static int bma250_power_mode(struct device *dev, int enable)
-{
-	static int powered;
-	static struct regulator *reg_acc;
-	int rc = 0;
-
-	if ((enable && !powered) || (!enable && powered)) {
-		rc = sensor_power(dev, enable, &reg_acc, "acc_vdd");
-		if (rc) {
-			dev_err(dev, "%s: power setup failed\n", __func__);
-			goto out;
-		}
-		powered = enable;
-	}
-out:
-	return rc;
-}
-
-static struct registers bma250_reg_setup = {
-	.range                = BMA250_RANGE_2G,
-	.bw_sel               = BMA250_BW_250HZ,
-};
-
-static struct bma250_platform_data bma250_platform_data = {
-	.hw_config	      = bma250_power_mode,
-	.reg                  = &bma250_reg_setup,
-#ifdef CONFIG_INPUT_BMA250_NG
-	.bypass_state         = mpu3050_bypassmode,
-	.read_axis_data       = bma250_read_axis_from_mpu3050,
-	.check_sleep_status   = check_bma250_sleep_state,
-	.vote_sleep_status    = vote_bma250_sleep_state,
-#endif
-	.rate                 = BMA250_DEFAULT_RATE,
-};
-#endif
-
-#ifdef CONFIG_INPUT_AKM8972
-#define AKM897X_GPIO 70
-static int akm897x_gpio_setup(void)
-{
-	int rc;
-
-	rc = gpio_request(AKM897X_GPIO, "akm8972_drdy");
-	if (rc)
-		pr_err("%s: gpio_request failed rc=%d\n", __func__, rc);
-	return rc;
-}
-
-static void akm897x_gpio_shutdown(void)
-{
-	gpio_free(AKM897X_GPIO);
-}
-
-static void akm897x_hw_config(struct device *dev, int enable)
-{
-	return;
-}
-
-static void akm897x_power_mode(struct device *dev, int enable)
-{
-	static int powered;
-	static struct regulator *reg_mag;
-	int rc = 0;
-
-	if ((enable && !powered) || (!enable && powered))  {
-		rc = sensor_power(dev, enable, &reg_mag, "mag_vdd");
-		if (rc) {
-			dev_err(dev, "%s: power setup failed\n", __func__);
-			return;
-		}
-		powered = enable;
-	}
-}
-
-
-static struct akm8972_platform_data akm8972_platform_data = {
-	.setup		= akm897x_gpio_setup,
-	.shutdown	= akm897x_gpio_shutdown,
-	.hw_config	= akm897x_hw_config,
-	.power_mode	= akm897x_power_mode,
-};
-#endif
-
-#ifdef CONFIG_SENSORS_MPU3050
-#define MPU3050_GPIO 69
-int mpu3050_gpio_setup(struct device *dev, int enable)
-{
-	int rc = 0;
-
-	if (enable) {
-		rc = gpio_request(MPU3050_GPIO, "MPUIRQ");
-		if (rc)
-			pr_err("%s: gpio_request failed. rc=%d\n",
-					__func__, rc);
-	} else {
-		gpio_free(MPU3050_GPIO);
-	}
-
-	return rc;
-}
-
-int mpu3050_power_mode(struct device *dev, int enable)
-{
-	static int powered;
-	static struct regulator *reg_gyro;
-	int rc = 0;
-
-	if ((enable && !powered) || (!enable && powered))  {
-		rc = sensor_power(dev, enable, &reg_gyro, "gyro_vdd");
-		if (rc) {
-			dev_err(dev, "%s: power setup failed\n", __func__);
-			goto out;
-		}
-		powered = enable;
-	}
-out:
-	return rc;
-}
-
-extern struct mpu3050_platform_data mpu_data;
-#endif /* CONFIG_SENSORS_MPU3050 */
-
-#ifdef CONFIG_INPUT_APDS9702
-#define APDS9702_DOUT_GPIO   49
-
-static int apds9702_gpio_setup(struct device *dev, int request)
-{
-	if (request) {
-		return gpio_request(APDS9702_DOUT_GPIO, "apds9702_dout");
-	} else {
-		gpio_free(APDS9702_DOUT_GPIO);
-		return 0;
-	}
-}
-
-static void apds9702_power_mode(struct device *dev, int enable)
-{
-	static int powered;
-	static struct regulator *reg_prox;
-	int rc = 0;
-
-	if ((enable && !powered) || (!enable && powered)) {
-		rc = sensor_power(dev, enable, &reg_prox, "prox_vdd");
-		if (rc) {
-			dev_err(dev, "%s: power setup failed\n", __func__);
-			goto out;
-		}
-		powered = enable;
-	}
-out:
-	return;
-}
-
-static struct apds9702_platform_data apds9702_pdata = {
-	.gpio_dout      = APDS9702_DOUT_GPIO,
-	.is_irq_wakeup  = 1,
-	.hw_config      = apds9702_power_mode,
-	.gpio_setup     = apds9702_gpio_setup,
-	.ctl_reg = {
-		.trg   = 1,
-		.pwr   = 1,
-		.burst = 7,
-		.frq   = 3,
-		.dur   = 2,
-		.th    = 15,
-		.rfilt = 0,
-	},
-	.phys_dev_path = "/sys/devices/i2c-12/12-0054"
-};
-#endif
-
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi4_pdata = {
 	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
@@ -3176,19 +3804,37 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi3_pdata = {
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi10_pdata = {
 	.clk_freq = 355000,
 	.src_clk_rate = 24000000,
-	.use_gsbi_shared_mode = 1,
 };
 
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
-	.clk_freq = 355000,
+	.clk_freq = 100000,
 	.src_clk_rate = 24000000,
-#ifdef CONFIG_MSM_GSBI12_UART
-	.use_gsbi_shared_mode = 1,
-#endif
 };
 
+static struct ks8851_pdata spi_eth_pdata = {
+	.irq_gpio = KS8851_IRQ_GPIO,
+	.rst_gpio = KS8851_RST_GPIO,
+};
+
+static struct spi_board_info spi_eth_info[] __initdata = {
+	{
+		.modalias               = "ks8851",
+		.irq                    = MSM_GPIO_TO_INT(KS8851_IRQ_GPIO),
+		.max_speed_hz           = 19200000,
+		.bus_num                = 0,
+		.chip_select            = 0,
+		.mode                   = SPI_MODE_0,
+		.platform_data		= &spi_eth_pdata
+	},
+};
 static struct spi_board_info spi_board_info[] __initdata = {
-	/* No devices yet */
+	{
+		.modalias               = "dsi_novatek_3d_panel_spi",
+		.max_speed_hz           = 10800000,
+		.bus_num                = 0,
+		.chip_select            = 1,
+		.mode                   = SPI_MODE_0,
+	},
 };
 
 static struct platform_device msm_device_saw_core0 = {
@@ -3233,7 +3879,13 @@ static struct platform_device fish_battery_device = {
 };
 #endif
 
-#ifdef CONFIG_MACH_BLUE_CDB
+#ifdef CONFIG_BATTERY_BCL
+static struct platform_device battery_bcl_device = {
+	.name = "battery_current_limit",
+	.id = -1,
+	};
+#endif
+
 static struct platform_device msm8960_device_ext_5v_vreg __devinitdata = {
 	.name	= GPIO_REGULATOR_DEV_NAME,
 	.id	= PM8921_MPP_PM_TO_SYS(7),
@@ -3241,26 +3893,6 @@ static struct platform_device msm8960_device_ext_5v_vreg __devinitdata = {
 		.platform_data = &msm_gpio_regulator_pdata[GPIO_VREG_ID_EXT_5V],
 	},
 };
-#endif
-
-static struct platform_device msm8960_device_ext_l2_vreg __devinitdata = {
-	.name	= GPIO_REGULATOR_DEV_NAME,
-	.id	= 91,
-	.dev	= {
-		.platform_data = &msm_gpio_regulator_pdata[GPIO_VREG_ID_EXT_L2],
-	},
-};
-
-static struct platform_device msm8960_device_ext_3p3v_vreg __devinitdata = {
-	.name	= GPIO_REGULATOR_DEV_NAME,
-	.id	= PM8921_GPIO_PM_TO_SYS(17),
-	.dev	= {
-		.platform_data =
-			&msm_gpio_regulator_pdata[GPIO_VREG_ID_EXT_3P3V],
-	},
-};
-
-
 
 static struct platform_device msm8960_device_rpm_regulator __devinitdata = {
 	.name	= "rpm-regulator",
@@ -3270,31 +3902,67 @@ static struct platform_device msm8960_device_rpm_regulator __devinitdata = {
 	},
 };
 
-#define CONSOLE_NAME "ttyHSL"
-#define CONSOLE_IX 0
-#define CONSOLE_OPTIONS "115200,n8"
-static int __init setup_serial_console(char *console_flag)
+#ifdef CONFIG_MACH_VISKAN_HUASHAN_CT
+#ifdef CONFIG_SERIAL_MSM_HS
+static int configure_uart_gpios(int on)
 {
-	if (console_flag &&
-		strlen(console_flag) >= 2 &&
-		(console_flag[0] != '0' || console_flag[1] != '0'))
-		add_preferred_console(CONSOLE_NAME,
-			CONSOLE_IX,
-			CONSOLE_OPTIONS);
-	return 1;
+	int ret = 0, i;
+	int uart_gpios[] = {93, 94, 95, 96};
+
+	for (i = 0; i < ARRAY_SIZE(uart_gpios); i++) {
+		if (on) {
+			ret = gpio_request(uart_gpios[i], NULL);
+			if (ret) {
+				pr_err("%s: unable to request uart gpio[%d]\n",
+						__func__, uart_gpios[i]);
+				break;
+			}
+		} else {
+			gpio_free(uart_gpios[i]);
+		}
+	}
+
+	if (ret && on && i)
+		for (; i >= 0; i--)
+			gpio_free(uart_gpios[i]);
+	return ret;
 }
 
-/*
-* The S1 Boot configuration TA unit can specify that the serial console
-* enable flag will be passed as Kernel boot arg with tag babe09A9.
-*/
-__setup("semcandroidboot.babe09a9=", setup_serial_console);
+static struct msm_serial_hs_platform_data msm_uart_dm9_pdata = {
+	.gpio_config	= configure_uart_gpios,
+};
 
-#ifdef CONFIG_SERIAL_MSM_HS
+static int configure_gsbi8_uart_gpios(int on)
+{
+	int ret = 0, i;
+	int uart_gpios[] = {34, 35, 36, 37};
 
+	for (i = 0; i < ARRAY_SIZE(uart_gpios); i++) {
+		if (on) {
+			ret = gpio_request(uart_gpios[i], NULL);
+			if (ret) {
+				pr_err("%s: unable to request uart gpio[%d]\n",
+						__func__, uart_gpios[i]);
+				break;
+			}
+		} else {
+			gpio_free(uart_gpios[i]);
+		}
+	}
+
+	if (ret && on && i)
+		for (; i >= 0; i--)
+			gpio_free(uart_gpios[i]);
+	return ret;
+}
+
+static struct msm_serial_hs_platform_data msm_uart_dm8_pdata = {
+	.gpio_config	= configure_gsbi8_uart_gpios,
+};
 #else
 static struct msm_serial_hs_platform_data msm_uart_dm8_pdata;
 static struct msm_serial_hs_platform_data msm_uart_dm9_pdata;
+#endif
 #endif
 
 #if defined(CONFIG_BT) && defined(CONFIG_BT_HCIUART_ATH3K)
@@ -3452,30 +4120,15 @@ static void __init bt_power_init(void)
 #define bt_power_init(x) do {} while (0)
 #endif
 
-#ifdef CONFIG_MSM_GSBI12_UART
-static struct msm_serial_hslite_platform_data msm_uart_gsbi12_pdata = {
-	.config_gpio	= 1,
-	.uart_tx_gpio	= 42,
-	.uart_rx_gpio	= 43,
-	.line		= 3,
-	.type		= PORT_IRDA,
-};
-#endif
-
 static struct platform_device *common_devices[] __initdata = {
 	&msm8960_device_dmov,
 	&msm_device_smd,
-	&msm8960_device_uart_gsbi8,
-#ifdef CONFIG_MSM_GSBI12_UART
-	&msm8960_device_uart_gsbi12,
-#endif
-//	&msm_device_uart_dm6,
+	&msm_device_uart_dm6,
 	&msm_device_saw_core0,
 	&msm_device_saw_core1,
-#ifdef CONFIG_MACH_BLUE_CDB
 	&msm8960_device_ext_5v_vreg,
-#endif
 	&msm8960_device_ssbi_pmic,
+	&msm8960_device_qup_spi_gsbi1,
 	&msm8960_device_qup_i2c_gsbi3,
 	&msm8960_device_qup_i2c_gsbi4,
 	&msm8960_device_qup_i2c_gsbi10,
@@ -3507,6 +4160,9 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm_device_sps,
 #ifdef CONFIG_MSM_FAKE_BATTERY
 	&fish_battery_device,
+#endif
+#ifdef CONFIG_BATTERY_BCL
+	&battery_bcl_device,
 #endif
 	&msm8960_fmem_device,
 #ifdef CONFIG_ANDROID_PMEM
@@ -3561,6 +4217,7 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm8960_iommu_domain_device,
 	&msm_tsens_device,
 	&msm8960_pc_cntr,
+	&msm8960_cpu_slp_status,
 };
 
 static struct platform_device *cdp_devices[] __initdata = {
@@ -3621,21 +4278,6 @@ static struct platform_device *cdp_devices[] __initdata = {
 
 static void __init msm8960_i2c_init(void)
 {
-	void *gsbi10_mem = ioremap_nocache(0x1A200000, 4);
-#ifdef CONFIG_MSM_GSBI12_UART
-	void *gsbi12_mem = ioremap_nocache(0x12480000, 4);
-#endif
-
-	/* Setting protocol code to 0x60 for dual UART/I2C in GSBI10 */
-	writel_relaxed(0x6 << 4, gsbi10_mem);
-	iounmap(gsbi10_mem);
-
-#ifdef CONFIG_MSM_GSBI12_UART
-	/* Setting protocol code to 0x60 for dual UART/I2C in GSBI12 */
-	writel_relaxed(0x6 << 4, gsbi12_mem);
-	iounmap(gsbi12_mem);
-#endif
-
 	msm8960_device_qup_i2c_gsbi4.dev.platform_data =
 					&msm8960_i2c_qup_gsbi4_pdata;
 
@@ -3657,9 +4299,12 @@ static void __init msm8960_gfx_init(void)
 
 	/* Fixup data that needs to change based on GPU ID */
 	if (cpu_is_msm8960ab()) {
-		kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 0);
-		/* 8960PRO nominal clock rate is 320Mhz */
-		kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 320000000;
+		if (SOCINFO_VERSION_MINOR(soc_platform_version) == 0)
+			kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 0);
+		else
+			kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 1);
+		/* 8960PRO nominal clock rate is 325Mhz instead of 320Mhz */
+		kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 325000000;
 	} else {
 		kgsl_3d0_pdata->iommu_count = 1;
 		if (SOCINFO_VERSION_MAJOR(soc_platform_version) == 1) {
@@ -3700,14 +4345,12 @@ static struct msm_rpmrs_level msm_rpmrs_levels[] = {
 		415, 715, 340827, 475,
 	},
 
-#ifdef CONFIG_MACH_BLUE_TSUBASA
 	{
 		MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE,
 		MSM_RPMRS_LIMITS(ON, ACTIVE, MAX, ACTIVE),
 		true,
 		1300, 228, 1200000, 2000,
 	},
-#endif
 
 	{
 		MSM_PM_SLEEP_MODE_POWER_COLLAPSE,
@@ -3784,6 +4427,290 @@ static struct msm_pm_boot_platform_data msm_pm_boot_pdata __initdata = {
 	.mode = MSM_PM_BOOT_CONFIG_TZ,
 };
 
+#if defined(CONFIG_INPUT_APDS9702) || defined(CONFIG_INPUT_L3GD20)\
+	|| defined(CONFIG_INPUT_LSM303DLHC_ACCELEROMETER_LT)\
+	|| defined(CONFIG_INPUT_AKM8963)
+int sensor_power(bool enable, struct device *dev,
+	struct regulator **vdd,	struct regulator **vio,
+		const char *id_vdd, const char *id_vio)
+{
+	int rc, already_enabled;
+
+	if (!*vdd)
+		*vdd = regulator_get(dev, id_vdd);
+	if (IS_ERR_OR_NULL(*vdd)) {
+		rc = PTR_ERR(*vdd);
+		dev_err(dev, "%s: regulator_get failed on %s. rc=%d\n",
+							__func__, id_vdd, rc);
+		rc = rc ? rc : -ENODEV;
+		goto err_vdd;
+	} else {
+		rc = regulator_set_voltage(*vdd, 2850000, 2850000);
+		if (rc)
+			goto err_vdd_set;
+	}
+
+	if (!*vio)
+		*vio = regulator_get(dev, id_vio);
+	if (IS_ERR_OR_NULL(*vio)) {
+		rc = PTR_ERR(*vio);
+		dev_err(dev, "%s: regulator_get failed on %s. rc=%d\n",
+							__func__, id_vio, rc);
+		rc = rc ? rc : -ENODEV;
+		goto err_vio;
+	}
+
+	if (enable) {
+		already_enabled = regulator_is_enabled(*vdd);
+		rc = regulator_enable(*vdd);
+		if (rc) {
+			dev_err(dev,
+				"%s: regulator_enable failed on %s. rc=%d\n",
+					__func__, id_vdd, rc);
+			return rc;
+		}
+		/*To satisfy the mpu3050 spec*/
+		if (already_enabled < 1)
+			usleep_range(6250, 8000);
+		rc = regulator_enable(*vio);
+		if (rc)
+			dev_err(dev,
+				"%s: regulator_enable failed on %s. rc=%d\n",
+					__func__, id_vio, rc);
+	} else {
+		rc = regulator_disable(*vio);
+		if (rc) {
+			dev_err(dev,
+				"%s: regulator_disable failed on %s. rc=%d\n",
+					__func__, id_vio, rc);
+			return rc;
+		}
+		rc = regulator_disable(*vdd);
+		if (rc) {
+			dev_err(dev,
+				"%s: regulator_disable failed on %s. rc=%d\n",
+					__func__, id_vdd, rc);
+			return rc;
+		}
+	}
+
+	return rc;
+err_vio:
+	*vio = NULL;
+err_vdd_set:
+	regulator_put(*vdd);
+err_vdd:
+	*vdd = NULL;
+	return rc;
+
+}
+#endif
+
+#ifdef CONFIG_INPUT_APDS9702
+#define APDS9702_DOUT_GPIO 49
+
+static int apds9702_setup(struct device *dev, int request)
+{
+	int rc;
+
+	if (request) {
+		rc = gpio_request(APDS9702_DOUT_GPIO, "apds9702_dout");
+		if (rc) {
+			dev_err(dev, "%s: failed to request gpio %d\n",
+					__func__, APDS9702_DOUT_GPIO);
+			return rc;
+		}
+		return 0;
+	}
+	rc = 0;
+	gpio_free(APDS9702_DOUT_GPIO);
+	return rc;
+}
+
+static void apds9702_set_power(struct device *dev, int enable)
+{
+	static int powered;
+	static struct regulator *prox_vdd;
+	static struct regulator *prox_vio;
+	static const char *prox_vdd_id = "apds9702_vdd";
+	static const char *prox_vio_id = "apds9702_vio";
+	int rc = 0;
+
+	if ((enable && !powered) || (!enable && powered)) {
+		rc = sensor_power(enable, dev,  &prox_vdd, &prox_vio,
+				prox_vdd_id , prox_vio_id);
+		if (rc) {
+			dev_err(dev, "%s: power setup failed\n", __func__);
+			goto out;
+		}
+		powered = enable;
+		if (enable)
+			usleep_range(1000, 2000);
+	}
+
+out:
+	return;
+}
+
+static struct apds9702_platform_data apds9702_pdata = {
+	.gpio_dout      = APDS9702_DOUT_GPIO,
+	.is_irq_wakeup  = 1,
+	.hw_config      = apds9702_set_power,
+	.gpio_setup     = apds9702_setup,
+	.ctl_reg = {
+		.trg   = 1,
+		.pwr   = 1,
+		.burst = 7,
+		.frq   = 3,
+		.dur   = 2,
+		.th    = 15,
+		.rfilt = 0,
+	},
+	.phys_dev_path = "/sys/devices/i2c-12/12-0054"
+};
+#endif
+
+#ifdef CONFIG_INPUT_LSM303DLHC_ACCELEROMETER_LT
+static int lsm303dlhc_acc_lt_power_mode(struct device *dev,
+			enum lsm303dlhc_acc_lt_power_state pwr_state)
+{
+	static int powered;
+	static struct regulator *reg_acc_vdd;
+	static struct regulator *reg_acc_vio;
+	int rc = 0;
+	int enable;
+
+	if (pwr_state == LSM303DLHC_LT_PWR_ON)
+		enable = 1;
+	else if (pwr_state == LSM303DLHC_LT_PWR_OFF)
+		enable = 0;
+	else
+		goto out;
+	if ((enable && !powered) || (!enable && powered))  {
+		rc = sensor_power(enable, dev, &reg_acc_vdd, &reg_acc_vio,
+					"lsm303_acc_vdd", "lsm303_acc_vio");
+		if (rc) {
+			dev_err(dev, "%s: power setup failed\n", __func__);
+			goto out;
+		}
+		powered = enable;
+		if (enable)
+			usleep_range(1000, 1000);
+	}
+
+out:
+	return rc;
+}
+
+static struct lsm303dlhc_acc_lt_platform_data
+			lsm303dlhc_acc_lt_platform_data = {
+	.range = 2,
+	.poll_interval_ms = 100,
+	.power = lsm303dlhc_acc_lt_power_mode,
+};
+#endif
+
+#ifdef CONFIG_INPUT_L3GD20
+static int l3gd20_power_mode(struct device *dev, int enable)
+{
+	static int powered;
+	static struct regulator *reg_gyro_vdd;
+	static struct regulator *reg_gyro_vio;
+	int rc = 0;
+
+	if ((enable && !powered) || (!enable && powered))  {
+		rc = sensor_power(enable, dev, &reg_gyro_vdd, &reg_gyro_vio,
+					"l3gd20_gyro_vdd", "l3gd20_gyro_vio");
+		if (rc) {
+			dev_err(dev, "%s: power setup failed\n", __func__);
+			goto out;
+		}
+		powered = enable;
+		if (enable)
+			usleep_range(15000, 15000);
+	}
+
+out:
+	return rc;
+}
+
+static int l3gd20_power_on(struct device *dev)
+{
+	return l3gd20_power_mode(dev, 1);
+}
+
+static int l3gd20_power_off(struct device *dev)
+{
+	return l3gd20_power_mode(dev, 0);
+}
+
+static struct l3gd20_gyr_platform_data l3gd20_gyro_platform_data = {
+	.poll_interval = 100,
+	.min_interval = 40,
+
+	.fs_range = L3GD20_FS_2000DPS,
+
+	.axis_map_x =  0,
+	.axis_map_y = 1,
+	.axis_map_z = 2,
+
+	.negate_x = 0,
+	.negate_y = 0,
+	.negate_z = 0,
+
+	.init = NULL,
+	.exit = NULL,
+	.power_on = l3gd20_power_on,
+	.power_off = l3gd20_power_off,
+};
+#endif
+
+#ifdef CONFIG_INPUT_AKM8963
+#define AKM8963_GPIO 70
+static int akm8963_gpio_setup(struct device *dev)
+{
+	int rc;
+
+	rc = gpio_request(AKM8963_GPIO, "akm8963_drdy");
+	if (rc)
+		pr_err("%s: gpio_request failed rc=%d\n", __func__, rc);
+	return rc;
+}
+
+static void akm8963_gpio_shutdown(struct device *dev)
+{
+	gpio_free(AKM8963_GPIO);
+}
+
+static int akm8963_power_mode(struct device *dev, int enable)
+{
+	static int powered;
+	static struct regulator *reg_mag_vdd;
+	static struct regulator *reg_mag_vio;
+	int rc = 0;
+
+	if ((enable && !powered) || (!enable && powered))  {
+		rc = sensor_power(enable, dev, &reg_mag_vdd, &reg_mag_vio,
+					"akm8963_vdd", "akm8963_vio");
+		if (rc) {
+			dev_err(dev, "%s: power setup failed\n", __func__);
+			goto out;
+		}
+		powered = enable;
+		if (enable)
+			usleep_range(50000, 50000);
+	}
+out:
+	return rc;
+}
+
+static struct akm8963_platform_data akm8963_platform_data = {
+	.setup		= akm8963_gpio_setup,
+	.shutdown	= akm8963_gpio_shutdown,
+	.hw_config	= akm8963_power_mode,
+};
+#endif
+
 #ifdef CONFIG_I2C
 #define I2C_SURF 1
 #define I2C_FFA  (1 << 1)
@@ -3822,138 +4749,6 @@ static void __init msm8960_init_dsps(void)
 	platform_device_register(&msm_dsps_device);
 #endif /* CONFIG_MSM_DSPS */
 }
-
-#ifdef CONFIG_VIBRATOR_LC898300
-#define VIB_RSTB	79
-#define VIB_EN		53
-
-static struct regulator *vib_supply_ldo;
-
-static int lc898300_rstb_gpio_setup(bool value)
-{
-	gpio_set_value(VIB_RSTB, value);
-	return 0;
-}
-
-static int lc898300_en_gpio_setup(bool value)
-{
-	gpio_set_value(VIB_EN, value);
-	return 0;
-}
-
-static int lc898300_gpio_allocate(struct device *dev)
-{
-	int rc;
-
-	rc = gpio_request(VIB_RSTB, "vibrator reset_gpio");
-	if (rc) {
-		dev_err(dev, "%s: GPIO %d: request failed. rc=%d\n",
-			      __func__, VIB_RSTB, rc);
-		return rc;
-	}
-
-	rc = gpio_direction_output(VIB_RSTB, 0);
-	if (rc) {
-		dev_err(dev, "%s: GPIO %d: direction out failed rc=%d\n",
-			      __func__, VIB_RSTB, rc);
-		goto error1;
-	}
-
-	rc = gpio_request(VIB_EN, "vibrator enable_gpio");
-	if (rc) {
-		dev_err(dev, "%s: GPIO %d: request failed. rc=%d\n",
-			      __func__, VIB_EN, rc);
-		goto error1;
-	}
-
-	rc = gpio_direction_output(VIB_EN, 0);
-	if (rc) {
-		dev_err(dev, "%s: GPIO %d: direction out failed rc=%d\n",
-			__func__, VIB_EN, rc);
-		goto error2;
-	}
-
-	return rc;
-
-error2:
-	gpio_free(VIB_EN);
-error1:
-	gpio_free(VIB_RSTB);
-	return rc;
-}
-
-static void lc898300_gpio_release(struct device *dev)
-{
-	gpio_free(VIB_RSTB);
-	gpio_free(VIB_EN);
-}
-
-static const char *vibrator_reg_name = "lc898300_vdd";
-static int lc898300_power_config(struct device *dev, bool on)
-{
-	int rc = 0;
-
-	if (on) {
-		vib_supply_ldo = regulator_get(dev, vibrator_reg_name);
-		if (IS_ERR_OR_NULL(vib_supply_ldo)) {
-			dev_err(dev, "%s: could not get %s, rc = %ld\n",
-				__func__, vibrator_reg_name,
-				PTR_ERR(vib_supply_ldo));
-			vib_supply_ldo = NULL;
-			return -ENODEV;
-		}
-		rc = regulator_set_voltage(vib_supply_ldo, 3050000, 3050000);
-		if (rc) {
-			dev_err(dev, "%s: unable to set vibrator supply voltage"
-				" to 3.05V, rc = %d!\n", __func__, rc);
-			rc = -ENODEV;
-			goto error;
-		}
-		return 0;
-	}
-
-error:
-	regulator_put(vib_supply_ldo);
-	vib_supply_ldo = NULL;
-	return rc;
-}
-
-static int lc898300_power_enable(struct device *dev, bool on)
-{
-	int rc = 0;
-
-	if (vib_supply_ldo == NULL) {
-		dev_err(dev, "%s: vib_supply_ldo = NULL\n", __func__);
-		rc = -EINVAL;
-		goto out;
-	}
-
-	if (on) {
-		rc = regulator_enable(vib_supply_ldo);
-		if (rc)
-			dev_err(dev, "%s: enable regulator %s failed\n",
-					__func__ , vibrator_reg_name);
-	} else {
-		rc = regulator_disable(vib_supply_ldo);
-		if (rc)
-			dev_err(dev, "%s: disable regulator %s failed\n",
-					__func__ , vibrator_reg_name);
-	}
-out:
-	return rc;
-}
-
-static struct lc898300_platform_data lc898300_platform_data = {
-	.name = "vibrator",
-	.power_config = lc898300_power_config,
-	.power_enable = lc898300_power_enable,
-	.gpio_allocate = lc898300_gpio_allocate,
-	.gpio_release = lc898300_gpio_release,
-	.rstb_gpio_setup = lc898300_rstb_gpio_setup,
-	.en_gpio_setup = lc898300_en_gpio_setup,
-	.vib_cmd_info = &lc898300_vib_cmd_data,
-};
-#endif
 
 static int hsic_peripheral_status = 1;
 static DEFINE_MUTEX(hsic_status_lock);
@@ -3998,38 +4793,23 @@ static void __init msm8960_init_smsc_hub(void)
 		platform_device_register(&smsc_hub_device);
 }
 
-static struct i2c_board_info gsbi3_peripherals_info[] __initdata = {
-#ifdef CONFIG_TOUCHSCREEN_CLEARPAD
-	{
-		/* Config-spec is 8-bit = 0x58, src-code need 7-bit => 0x2c */
-		I2C_BOARD_INFO(CLEARPADI2C_NAME, 0x58 >> 1),
-		.platform_data = &clearpad_platform_data,
-	}
+static void __init msm8960_init_hsic(void)
+{
+#ifdef CONFIG_USB_EHCI_MSM_HSIC
+	uint32_t version = socinfo_get_version();
+
+	if (SOCINFO_VERSION_MAJOR(version) == 1)
+		return;
+
+	if (machine_is_msm8960_liquid())
+		platform_device_register(&msm_device_hsic_host);
 #endif
-#ifdef CONFIG_RMI4_BUS
-	{
-		/* Config-spec is 8-bit = 0x58, src-code need 7-bit => 0x2c */
-		I2C_BOARD_INFO(RMI4_I2C_ADAPTER_NAME, 0x58 >> 1),
-		.platform_data = &rmi4_platform_data,
-	},
-#endif
-};
+}
+
+
+
 
 static struct i2c_board_info gsbi10_peripherals_info[] __initdata = {
-#ifdef CONFIG_LM3560_FLASHLED
-	{
-		/* Config-spec is 8-bit = 0xa6, src-code need 7-bit => 0x53 */
-		I2C_BOARD_INFO(LM3560_DRV_NAME, 0xa6 >> 1),
-		.platform_data = &lm3560_platform_data,
-	},
-#endif
-#ifdef CONFIG_LM3561_FLASHLED
-	{
-		/* Config-spec is 8-bit = 0xa6, src-code need 7-bit => 0x53 */
-		I2C_BOARD_INFO(LM3561_DRV_NAME, 0xa6 >> 1),
-		.platform_data = &lm3561_platform_data,
-	},
-#endif
 #ifdef CONFIG_LEDS_AS3676
 	{
 		/* Config-spec is 8-bit = 0x80, src-code need 7-bit => 0x40 */
@@ -4039,65 +4819,95 @@ static struct i2c_board_info gsbi10_peripherals_info[] __initdata = {
 #endif
 #ifdef CONFIG_FB_MSM_MHL_SII8334
 	{
-		I2C_BOARD_INFO("sii8334", 0x72 >> 1),
-		.irq = MSM_GPIO_TO_INT(MSM_GPIO_MHL_IRQ_N),
-		.platform_data = &mhl_sii_pdata,
+	I2C_BOARD_INFO("sii8334", 0x72 >> 1),
+	.irq = MSM_GPIO_TO_INT(MSM_GPIO_MHL_IRQ_N),
+	.platform_data = &mhl_sii_pdata,
 	},
 #endif /* CONFIG_FB_MSM_MHL_SII8334 */
+#ifdef CONFIG_LEDS_AS3677
+	{
+		/* Config-spec is 8-bit = 0x80, src-code need 7-bit => 0x40 */
+		I2C_BOARD_INFO("as3677", 0x80 >> 1),
+		.platform_data = &as3677_pdata,
+	},
+#endif
+
+#if defined(CONFIG_LEDS_AS3665) || defined(CONFIG_LEDS_AS3665_MODULE)
+	{
+		/* Config-spec is 8-bit = 0x8E, src-code need 7-bit => 0x47 */
+		I2C_BOARD_INFO("as3665", 0x8E >> 1),
+		.platform_data = &as3665_platform_data,
+	},
+#endif
+
 #ifdef CONFIG_NFC_PN544
 	{
 		/* Config-spec is 8-bit = 0x50, src-code need 7-bit => 0x28 */
 		I2C_BOARD_INFO(PN544_DEVICE_NAME, 0x50 >> 1),
-		.irq = MSM_GPIO_TO_INT(NXP_GPIO_NFC_IRQ),
+		.irq = MSM_GPIO_TO_INT(MSM_GPIO_NFC_IRQ),
 		.platform_data = &pn544_pdata,
+	},
+#endif
+
+#ifdef CONFIG_LM3561
+	{
+		I2C_BOARD_INFO(LM3561_DRV_NAME, 0xA6 >> 1),
+		.platform_data = &lm3561_platform_data,
 	},
 #endif
 };
 
+static struct i2c_board_info gsbi3_peripherals_info[] __initdata = {
+#ifdef CONFIG_TOUCHSCREEN_CLEARPAD
+	{
+		/* Config-spec is 8-bit = 0x58, src-code need 7-bit => 0x2c */
+		I2C_BOARD_INFO(CLEARPADI2C_NAME, 0x58 >> 1),
+		.platform_data = &clearpad_platform_data,
+	},
+#endif
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_I2C
+	{
+		I2C_BOARD_INFO(CYTTSP4_I2C_NAME, CYTTSP4_I2C_TCH_ADR),
+		.irq =  MSM_GPIO_TO_INT(CYTTSP4_I2C_IRQ_GPIO),
+		.platform_data = CYTTSP4_I2C_NAME,
+	}
+#endif
+};
+
 static struct i2c_board_info gsbi12_peripherals_info[] __initdata = {
-#ifdef CONFIG_VIBRATOR_LC898300
-	{
-		/* Config-spec is 8-bit = 0x92, src-code need 7-bit => 0x49 */
-		I2C_BOARD_INFO(LC898300_I2C_NAME, 0x92 >> 1),
-		.platform_data = &lc898300_platform_data,
-	},
-#endif
-#if defined CONFIG_INPUT_BMA250 || defined CONFIG_INPUT_BMA250_NG
-	{
-		/* Config-spec is 8-bit = 0x30, src-code need 7-bit => 0x18 */
-		I2C_BOARD_INFO("bma250", 0x30 >> 1),
-		.irq = MSM_GPIO_TO_INT(BMA250_GPIO),
-		.platform_data = &bma250_platform_data,
-	},
-#endif
-#ifdef CONFIG_INPUT_AKM8972
-	{
-		/* Config-spec is 8-bit = 0x18, src-code need 7-bit => 0x0c */
-		I2C_BOARD_INFO(AKM8972_I2C_NAME, 0x18 >> 1),
-		.irq = MSM_GPIO_TO_INT(AKM897X_GPIO),
-		.platform_data = &akm8972_platform_data,
-	},
-#endif
-#ifdef CONFIG_SENSORS_MPU3050
-	{
-		/* Config-spec is 8-bit = 0xD0, src-code need 7-bit => 0x68 */
-		I2C_BOARD_INFO(MPU_NAME, 0xD0 >> 1),
-		.irq = MSM_GPIO_TO_INT(MPU3050_GPIO),
-		.platform_data = &mpu_data,
-	},
-#endif
 #ifdef CONFIG_INPUT_APDS9702
 	{
-		/* Config-spec is 8-bit = 0xA8, src-code need 7-bit => 0x54 */
 		I2C_BOARD_INFO(APDS9702_NAME, 0xA8 >> 1),
 		.platform_data = &apds9702_pdata,
+	},
+#endif
+#ifdef CONFIG_INPUT_LSM303DLHC_ACCELEROMETER_LT
+	{
+		/* Config-spec is 8-bit = 0x32, src-code need 7-bit => 0x19 */
+		I2C_BOARD_INFO(LSM303DLHC_ACC_LT_DEV_NAME, 0x32 >> 1),
+		.platform_data = &lsm303dlhc_acc_lt_platform_data,
+	},
+#endif
+#ifdef CONFIG_INPUT_L3GD20
+	{
+		/* Config-spec is 8-bit = 0xd6, src-code need 7-bit => 0x6B */
+		I2C_BOARD_INFO(L3GD20_DEV_NAME, 0xd6 >> 1),
+		.platform_data = &l3gd20_gyro_platform_data,
+	},
+#endif
+#ifdef CONFIG_INPUT_AKM8963
+	{
+		/* Config-spec is 8-bit = 0x30, src-code need 7-bit => 0x18 */
+		I2C_BOARD_INFO("akm8963", 0x18 >> 1),
+		.irq = MSM_GPIO_TO_INT(AKM8963_GPIO),
+		.platform_data = &akm8963_platform_data,
 	},
 #endif
 };
 
 static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 	{
-		I2C_SURF | I2C_FFA,
+		0,
 		MSM_8960_GSBI3_QUP_I2C_BUS_ID,
 		gsbi3_peripherals_info,
 		ARRAY_SIZE(gsbi3_peripherals_info),
@@ -4113,7 +4923,7 @@ static struct i2c_registry msm8960_i2c_devices[] __initdata = {
 		MSM_8960_GSBI12_QUP_I2C_BUS_ID,
 		gsbi12_peripherals_info,
 		ARRAY_SIZE(gsbi12_peripherals_info),
-	}
+	},
 };
 #endif /* CONFIG_I2C */
 
@@ -4132,67 +4942,15 @@ static void __init register_i2c_devices(void)
 
 	/* Run the array and install devices as appropriate */
 	for (i = 0; i < ARRAY_SIZE(msm8960_i2c_devices); ++i) {
-		i2c_register_board_info(msm8960_i2c_devices[i].bus,
-					msm8960_i2c_devices[i].info,
-					msm8960_i2c_devices[i].len);
+			i2c_register_board_info(msm8960_i2c_devices[i].bus,
+						msm8960_i2c_devices[i].info,
+						msm8960_i2c_devices[i].len);
 	}
+
 #ifdef CONFIG_MSM_CAMERA
-	i2c_register_board_info(msm8960_camera_i2c_devices.bus,
-				msm8960_camera_i2c_devices.info,
-				msm8960_camera_i2c_devices.len);
-#endif
-#endif
-}
-
-static void setup_init_vregs(void)
-{
-	struct regulator *vreg;
-	int rc;
-
-	vreg = regulator_get(NULL, "8921_l9");
-	if (IS_ERR(vreg)) {
-		pr_err("%s: failed to get 8921_l9! rc = %ld\n", __func__,
-			PTR_ERR(vreg));
-		return;
-	}
-
-	rc = regulator_set_voltage(vreg, 2850000, 2850000);
-	if (rc) {
-		pr_err("%s: failed to set voltage on 8921_l9!\n", __func__);
-		return;
-	}
-
-	rc = regulator_enable(vreg);
-	if (rc) {
-		pr_err("%s: failed to enable 8921_l9!\n", __func__);
-		return;
-	}
-	mdelay(10);
-	vreg = regulator_get(NULL, "8921_lvs4");
-	if (IS_ERR(vreg)) {
-		pr_err("%s: failed to get vreg 8921_lvs4!\n", __func__);
-		return;
-	}
-
-	rc = regulator_enable(vreg);
-	if (rc) {
-		pr_err("%s: failed to enable 8921_lvs4!\n", __func__);
-		return;
-	}
-
-#ifdef CONFIG_SONY_FELICA_SUPPORT
-#ifndef CONFIG_SONY_FELICA_NFC_SUPPORT
-	vreg = regulator_get(NULL, "8921_lvs6");
-	if (IS_ERR(vreg)) {
-		pr_err("%s: failed to get vreg 8921_lvs6!\n", __func__);
-		return;
-	}
-
-	rc = regulator_enable(vreg);
-	if (rc) {
-		pr_err("%s: failed to enable 8921_lvs6!\n", __func__);
-		return;
-	}
+		i2c_register_board_info(msm8960_camera_i2c_devices.bus,
+			msm8960_camera_i2c_devices.info,
+			msm8960_camera_i2c_devices.len);
 #endif
 #endif
 }
@@ -4245,25 +5003,6 @@ static void __init msm8960ab_update_retention_spm(void)
 	}
 }
 
-#ifdef CONFIG_MSM_GSBI12_UART
-#define UART_RX_IRDA_GPIO 43
-static void __init setup_gsbi12_uart_gpio(void)
-{
-	static struct gpiomux_setting gpio_2ma_no_pull_in = {
-		.func = GPIOMUX_FUNC_GPIO,
-		.drv  = GPIOMUX_DRV_2MA,
-		.pull = GPIOMUX_PULL_NONE,
-		.dir  = GPIOMUX_IN,
-	};
-
-	if (msm_gpiomux_write(UART_RX_IRDA_GPIO, GPIOMUX_SUSPENDED,
-				&gpio_2ma_no_pull_in, NULL)) {
-		pr_err("%s: msm_gpiomux_write to GPIO %d failed.",
-			__func__, UART_RX_IRDA_GPIO);
-	}
-}
-#endif
-
 static void __init msm8960_cdp_init(void)
 {
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
@@ -4281,15 +5020,41 @@ static void __init msm8960_cdp_init(void)
 	configure_msm8960_power_grid();
 	platform_device_register(&msm8960_device_rpm_regulator);
 	msm_clock_init(&msm8960_clock_init_data);
+	if (machine_is_msm8960_liquid())
+		msm_otg_pdata.mhl_enable = true;
 	msm8960_device_otg.dev.platform_data = &msm_otg_pdata;
+	if (machine_is_msm8960_mtp() || machine_is_msm8960_fluid() ||
+		machine_is_msm8960_cdp()) {
+		/* Due to availability of USB Switch in SGLTE Platform
+		 * it requires different HSUSB PHY settings compare to
+		 * 8960 MTP/CDP platform.
+		 */
+		if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE)
+			msm_otg_pdata.phy_init_seq = sglte_phy_init_seq;
+		else
+			msm_otg_pdata.phy_init_seq = wr_phy_init_seq;
+	} else if (machine_is_msm8960_liquid()) {
+			msm_otg_pdata.phy_init_seq =
+				liquid_v1_phy_init_seq;
+	}
 	android_usb_pdata.swfi_latency =
 		msm_rpmrs_levels[0].latency_us;
 	msm_device_hsic_host.dev.platform_data = &msm_hsic_pdata;
+	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) >= 2 &&
+					machine_is_msm8960_liquid())
+		msm_device_hsic_host.dev.parent = &smsc_hub_device.dev;
 	msm8960_init_gpiomux();
+	msm8960_device_qup_spi_gsbi1.dev.platform_data =
+				&msm8960_qup_spi_gsbi1_pdata;
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
-
+	if (socinfo_get_platform_subtype() != PLATFORM_SUBTYPE_SGLTE)
+		spi_register_board_info(spi_eth_info, ARRAY_SIZE(spi_eth_info));
 
 	msm8960_init_pmic();
+	if (machine_is_msm8960_liquid() || (machine_is_msm8960_mtp() &&
+		(socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE ||
+			cpu_is_msm8960ab())))
+		msm_isa1200_board_info[0].platform_data = &isa1200_1_pdata;
 	msm8960_i2c_init();
 	msm8960_gfx_init();
  	if (cpu_is_msm8960ab())
@@ -4310,28 +5075,31 @@ static void __init msm8960_cdp_init(void)
 		platform_add_devices(msm8960_footswitch,
 				     msm8960_num_footswitch);
 	}
-	if (machine_is_msm8960_liquid())
-		platform_device_register(&msm8960_device_ext_3p3v_vreg);
-	if (machine_is_msm8960_cdp())
-		platform_device_register(&msm8960_device_ext_l2_vreg);
 
-	//if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE)
-		//platform_device_register(&msm8960_device_uart_gsbi8);
-	//else
-		//platform_device_register(&msm8960_device_uart_gsbi8);
+	platform_device_register(&msm8960_device_uart_gsbi8);
 
-
-
-
+#ifdef CONFIG_MACH_VISKAN_HUASHAN_CT
+	/* For 8960 Fusion 2.2 Primary IPC */
+	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE) {
+		msm_uart_dm9_pdata.wakeup_irq = gpio_to_irq(94); /* GSBI9(2) */
+		msm_device_uart_dm9.dev.platform_data = &msm_uart_dm9_pdata;
+	}
+#endif
+	platform_device_register(&msm_device_uart_dm9);
+#ifdef CONFIG_MACH_VISKAN_HUASHAN_CT
+	/* For 8960 Standalone External Bluetooth Interface */
+	if (socinfo_get_platform_subtype() != PLATFORM_SUBTYPE_SGLTE) {
+		msm_device_uart_dm8.dev.platform_data = &msm_uart_dm8_pdata;
+		platform_device_register(&msm_device_uart_dm8);
+	}
+#endif
 	if (cpu_is_msm8960ab())
 		platform_device_register(&msm8960ab_device_acpuclk);
 	else
 		platform_device_register(&msm8960_device_acpuclk);
 	platform_add_devices(common_devices, ARRAY_SIZE(common_devices));
 	msm8960_add_vidc_device();
-#ifdef CONFIG_MSM_GSBI12_UART
-	msm8960_device_uart_gsbi12.dev.platform_data = &msm_uart_gsbi12_pdata;
-#endif
+
 	msm8960_pm8921_gpio_mpp_init();
 	/* Don't add modem devices on APQ targets */
 	if (socinfo_get_id() != 124) {
@@ -4340,32 +5108,36 @@ static void __init msm8960_cdp_init(void)
 	}
 	platform_add_devices(cdp_devices, ARRAY_SIZE(cdp_devices));
 	msm8960_init_smsc_hub();
+	msm8960_init_hsic();
 #ifdef CONFIG_MSM_CAMERA
 	msm8960_init_cam();
 #endif
-	bt_power_init();
 	msm8960_init_mmc();
-	setup_init_vregs();
-#ifdef CONFIG_MSM_GSBI12_UART
-	setup_gsbi12_uart_gpio();
-#endif
+	if (machine_is_msm8960_liquid())
+		mxt_init_hw_liquid();
 	register_i2c_devices();
 	msm8960_init_fb();
 	slim_register_board_info(msm_slim_devices,
 		ARRAY_SIZE(msm_slim_devices));
 	msm8960_init_dsps();
 	BUG_ON(msm_pm_boot_init(&msm_pm_boot_pdata));
+	bt_power_init();
+#ifdef CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4
+	sony_viskan_cyttsp4_init();
+#endif
+#ifdef CONFIG_MACH_VISKAN_HUASHAN_CT
 	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE) {
 		mdm_sglte_device.dev.platform_data = &sglte_platform_data;
 		platform_device_register(&mdm_sglte_device);
 	}
+#endif
 	if (machine_is_msm8960_mtp() || machine_is_msm8960_fluid() ||
 		machine_is_msm8960_cdp()) {
 		platform_device_register(&msm_dev_avtimer_device);
 	}
 }
 
-MACHINE_START(BLUE_CDB, "BLUE CDB")
+MACHINE_START(MSM8960_CDP, "QCT MSM8960 CDP")
 	.map_io = msm8960_map_io,
 	.reserve = msm8960_reserve,
 	.init_irq = msm8960_init_irq,
@@ -4374,5 +5146,52 @@ MACHINE_START(BLUE_CDB, "BLUE CDB")
 	.init_machine = msm8960_cdp_init,
 	.init_early = msm8960_allocate_memory_regions,
 	.init_very_early = msm8960_early_memory,
-	.restart = msm_restart
+	.restart = msm_restart,
+MACHINE_END
+
+MACHINE_START(MSM8960_MTP, "QCT MSM8960 MTP")
+	.map_io = msm8960_map_io,
+	.reserve = msm8960_reserve,
+	.init_irq = msm8960_init_irq,
+	.handle_irq = gic_handle_irq,
+	.timer = &msm_timer,
+	.init_machine = msm8960_cdp_init,
+	.init_early = msm8960_allocate_memory_regions,
+	.init_very_early = msm8960_early_memory,
+	.restart = msm_restart,
+MACHINE_END
+
+MACHINE_START(MSM8960_FLUID, "QCT MSM8960 FLUID")
+	.map_io = msm8960_map_io,
+	.reserve = msm8960_reserve,
+	.init_irq = msm8960_init_irq,
+	.handle_irq = gic_handle_irq,
+	.timer = &msm_timer,
+	.init_machine = msm8960_cdp_init,
+	.init_early = msm8960_allocate_memory_regions,
+	.init_very_early = msm8960_early_memory,
+	.restart = msm_restart,
+MACHINE_END
+
+MACHINE_START(MSM8960_LIQUID, "QCT MSM8960 LIQUID")
+	.map_io = msm8960_map_io,
+	.reserve = msm8960_reserve,
+	.init_irq = msm8960_init_irq,
+	.handle_irq = gic_handle_irq,
+	.timer = &msm_timer,
+	.init_machine = msm8960_cdp_init,
+	.init_early = msm8960_allocate_memory_regions,
+	.init_very_early = msm8960_early_memory,
+MACHINE_END
+
+MACHINE_START(VISKAN_HUASHAN, "VISKAN HUASHAN")
+	.map_io = msm8960_map_io,
+	.reserve = msm8960_reserve,
+	.init_irq = msm8960_init_irq,
+	.handle_irq = gic_handle_irq,
+	.timer = &msm_timer,
+	.init_machine = msm8960_cdp_init,
+	.init_early = msm8960_allocate_memory_regions,
+	.init_very_early = msm8960_early_memory,
+	.restart = msm_restart,	
 MACHINE_END
