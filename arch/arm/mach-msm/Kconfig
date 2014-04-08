@@ -948,6 +948,13 @@ config MACH_BLUE_HAYABUSA
 	help
 	  Support for the Sony Hayabusa
 
+config MACH_VISKAN_HUASHAN
+	depends on ARCH_MSM8960
+	default n
+	bool "SONY HUASHAN"
+	help
+	  Support for the Sony Huashan
+
 config MACH_MSM_DUMMY
 	bool "NONE (No device)"
 

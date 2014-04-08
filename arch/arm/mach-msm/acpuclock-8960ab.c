@@ -107,8 +107,13 @@ static struct l2_level l2_freq_tbl[] __initdata = {
 
 #define AVS(x) .avsdscr_setting = (x)
 
+#ifdef CONFIG_MACH_VISKAN_HUASHAN
+#define VOLTAGE_TUNE 25000
+#define TURBO_FREQ_VOLTAGE_TUNE 25000
+#else
 #define VOLTAGE_TUNE 0
 #define TURBO_FREQ_VOLTAGE_TUNE 0
+#endif
 
 static struct acpu_level freq_tbl_PVS0[] __initdata = {
 	{ 1, {   384000, PLL_8, 0, 0x00 }, L2(0),   950000 + VOLTAGE_TUNE, AVS(0x70001F) },
