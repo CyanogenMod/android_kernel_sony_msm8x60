@@ -103,7 +103,7 @@ static unsigned long offset_translate(loff_t user_offset,
 }
 
 #define MAX_IOREMAP_SIZE SZ_1M
-#define USER_FLG 0x10000000
+#define USER_FLG 0x00010000
 
 static int ramdump_read(struct file *filep, char __user *buf, size_t count,
 			loff_t *pos)
