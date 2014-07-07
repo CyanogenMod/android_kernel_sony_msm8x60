@@ -271,11 +271,15 @@ static inline int TCP_ECN_rcv_ecn_echo(const struct tcp_sock *tp, const struct t
 
 static void tcp_fixup_sndbuf(struct sock *sk)
 {
-	int sndmem = SKB_TRUESIZE(tcp_sk(sk)->rx_opt.mss_clamp + MAX_TCP_HEADER);
+	int ini = 0;
+	int sndmem =
+		SKB_TRUESIZE(tcp_sk(sk)->rx_opt.mss_clamp + MAX_TCP_HEADER);
 
 	sndmem *= TCP_INIT_CWND;
+	ini = tcp_get_mem_size_pst(sk);
+
 	if (sk->sk_sndbuf < sndmem)
-		sk->sk_sndbuf = min(sndmem, sysctl_tcp_wmem[2]);
+		sk->sk_sndbuf = min(sndmem, sysctl_tcp_wmem[2+3*ini]);
 }
 
 /* 2. Tuning advertised window (window_clamp, rcv_ssthresh)
@@ -304,12 +308,13 @@ static void tcp_fixup_sndbuf(struct sock *sk)
  */
 
 /* Slow part of check#2. */
-static int __tcp_grow_window(const struct sock *sk, const struct sk_buff *skb)
+static int __tcp_grow_window(struct sock *sk, const struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	int ini = tcp_get_mem_size_pst(sk);
 	/* Optimize this! */
 	int truesize = tcp_win_from_space(skb->truesize) >> 1;
-	int window = tcp_win_from_space(sysctl_tcp_rmem[2]) >> 1;
+	int window = tcp_win_from_space(sysctl_tcp_rmem[2+3*ini]) >> 1;
 
 	while (tp->rcv_ssthresh <= window) {
 		if (truesize <= skb->len)
@@ -355,6 +360,7 @@ static void tcp_fixup_rcvbuf(struct sock *sk)
 	u32 mss = tcp_sk(sk)->advmss;
 	u32 icwnd = sysctl_tcp_default_init_rwnd;
 	int rcvmem;
+	int ini = tcp_get_mem_size_pst(sk);
 
 	/* Limit to 10 segments if mss <= 1460,
 	 * or 14600/mss segments, with a minimum of two segments.
@@ -369,7 +375,7 @@ static void tcp_fixup_rcvbuf(struct sock *sk)
 	rcvmem *= icwnd;
 
 	if (sk->sk_rcvbuf < rcvmem)
-		sk->sk_rcvbuf = min(rcvmem, sysctl_tcp_rmem[2]);
+		sk->sk_rcvbuf = min(rcvmem, sysctl_tcp_rmem[2+3*ini]);
 }
 
 /* 4. Try to fixup all. It is made immediately after connection enters
@@ -413,15 +419,16 @@ static void tcp_clamp_window(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct inet_connection_sock *icsk = inet_csk(sk);
+	int ini = tcp_get_mem_size_pst(sk);
 
 	icsk->icsk_ack.quick = 0;
 
-	if (sk->sk_rcvbuf < sysctl_tcp_rmem[2] &&
+	if (sk->sk_rcvbuf < sysctl_tcp_rmem[2+3*ini] &&
 	    !(sk->sk_userlocks & SOCK_RCVBUF_LOCK) &&
 	    !sk_under_memory_pressure(sk) &&
 	    sk_memory_allocated(sk) < sk_prot_mem_limits(sk, 0)) {
 		sk->sk_rcvbuf = min(atomic_read(&sk->sk_rmem_alloc),
-				    sysctl_tcp_rmem[2]);
+				    sysctl_tcp_rmem[2+3*ini]);
 	}
 	if (atomic_read(&sk->sk_rmem_alloc) > sk->sk_rcvbuf)
 		tp->rcv_ssthresh = min(tp->window_clamp, 2U * tp->advmss);
@@ -526,6 +533,7 @@ void tcp_rcv_space_adjust(struct sock *sk)
 	struct tcp_sock *tp = tcp_sk(sk);
 	int time;
 	int space;
+	int ini = tcp_get_mem_size_pst(sk);
 
 	if (tp->rcvq_space.time == 0)
 		goto new_measure;
@@ -558,7 +566,7 @@ void tcp_rcv_space_adjust(struct sock *sk)
 			while (tcp_win_from_space(rcvmem) < tp->advmss)
 				rcvmem += 128;
 			space *= rcvmem;
-			space = min(space, sysctl_tcp_rmem[2]);
+			space = min(space, sysctl_tcp_rmem[2+3*ini]);
 			if (space > sk->sk_rcvbuf) {
 				sk->sk_rcvbuf = space;
 
@@ -5048,6 +5056,7 @@ static int tcp_should_expand_sndbuf(const struct sock *sk)
 static void tcp_new_space(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+	int ini = tcp_get_mem_size_pst(sk);
 
 	if (tcp_should_expand_sndbuf(sk)) {
 		int sndmem = SKB_TRUESIZE(max_t(u32,
@@ -5058,7 +5067,7 @@ static void tcp_new_space(struct sock *sk)
 				     tp->reordering + 1);
 		sndmem *= 2 * demanded;
 		if (sndmem > sk->sk_sndbuf)
-			sk->sk_sndbuf = min(sndmem, sysctl_tcp_wmem[2]);
+			sk->sk_sndbuf = min(sndmem, sysctl_tcp_wmem[2+3*ini]);
 		tp->snd_cwnd_stamp = tcp_time_stamp;
 	}
 

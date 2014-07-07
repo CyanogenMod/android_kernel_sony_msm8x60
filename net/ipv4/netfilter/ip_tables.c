@@ -326,6 +326,7 @@ ipt_do_table(struct sk_buff *skb,
 	local_bh_disable();
 	addend = xt_write_recseq_begin();
 	private = table->private;
+	smp_read_barrier_depends();
 	cpu        = smp_processor_id();
 	/*
 	 * Ensure we load private-> members after we've fetched the base

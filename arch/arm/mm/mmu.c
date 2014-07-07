@@ -355,6 +355,8 @@ static void __init build_mem_type_table(void)
 	if (is_smp())
 		cachepolicy = CPOLICY_WRITEALLOC;
 
+	cachepolicy = CPOLICY_WRITETHROUGH;
+
 	/*
 	 * Strip out features not present on earlier architectures.
 	 * Pre-ARMv5 CPUs don't have TEX bits.  Pre-ARMv6 CPUs or those

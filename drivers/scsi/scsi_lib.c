@@ -401,10 +401,16 @@ static inline int scsi_host_is_busy(struct Scsi_Host *shost)
  */
 static void scsi_run_queue(struct request_queue *q)
 {
-	struct scsi_device *sdev = q->queuedata;
+	struct scsi_device *sdev = NULL;
 	struct Scsi_Host *shost;
 	LIST_HEAD(starved_list);
 	unsigned long flags;
+
+	/* if the device is dead, q will be NULL, so no queue to run */
+	if (q)
+		sdev = q->queuedata;
+	if (!sdev)
+		return;
 
 	shost = sdev->host;
 	if (scsi_target(sdev)->single_lun)

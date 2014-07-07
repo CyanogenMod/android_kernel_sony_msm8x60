@@ -51,6 +51,11 @@ else
 endif
 obj-$(CONFIG_HOTPLUG_CPU) += hotplug.o
 
+ifdef CONFIG_ARCH_MSM8960
+	obj-$(CONFIG_PM8921_MIC_BIAS) += pm8921-mic_bias.o
+	obj-$(CONFIG_SIMPLE_REMOTE_PLATFORM) += simple_remote_msm8960_pf.o
+endif
+
 obj-$(CONFIG_MSM_AVS_HW) += avs.o
 obj-$(CONFIG_CPU_V6) += idle-v6.o
 obj-$(CONFIG_CPU_V7) += idle-v7.o
@@ -298,6 +303,12 @@ obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
 
 obj-$(CONFIG_MACH_LGE) += lge/
 
+#viskan
+board-viskan-all-objs += board-viskan.o board-viskan-display.o board-viskan-storage.o
+
+obj-$(CONFIG_MACH_VISKAN_HUASHAN) += board-viskan-all.o board-viskan_huashan-gpiomux.o board-viskan_huashan-pmic.o board-viskan_huashan-regulator.o bms-batterydata-sleipner.o
+obj-$(CONFIG_MACH_VISKAN_HUASHAN) += board-viskan_huashan-camera.o
+
 CFLAGS_msm_vibrator.o += -Idrivers/staging/android
 CFLAGS_board-9615.o += -Idrivers/usb/gadget
 
@@ -371,6 +382,7 @@ obj-$(CONFIG_MSM_RTB) += msm_rtb.o
 obj-$(CONFIG_MSM_CACHE_ERP) += cache_erp.o
 obj-$(CONFIG_MSM_EBI_ERP) += ebi_erp.o
 obj-$(CONFIG_MSM_CACHE_DUMP) += msm_cache_dump.o
+obj-$(CONFIG_SONY_SSM) += sony_ssm.o
 
 obj-$(CONFIG_MSM_HSIC_SYSMON) += hsic_sysmon.o
 obj-$(CONFIG_MSM_HSIC_SYSMON_TEST) += hsic_sysmon_test.o
@@ -389,3 +401,9 @@ obj-$(CONFIG_MSM_CPU_PWRCTL) +=  msm_cpu_pwrctl.o
 obj-$(CONFIG_ARCH_RANDOM) += early_random.o
 
 obj-$(CONFIG_HAS_MACH_MEMUTILS) += memutils/
+
+obj-$(CONFIG_RAMDUMP_TAGS) += board-rdtags.o
+CFLAGS_board-rdtags.o	:= \
+	-D"INFO_PRODUCT=\"$(if $(TARGET_PRODUCT),$(TARGET_PRODUCT),unknown)\"" \
+	-D"INFO_VARIANT=\"$(if $(TARGET_BUILD_VARIANT),$(TARGET_BUILD_VARIANT),unknown)\"" \
+	-D"INFO_BUILDID=\"$(if $(SEMC_SYSTEM_VERSION),$(SEMC_SYSTEM_VERSION),private)\""

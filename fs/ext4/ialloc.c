@@ -800,6 +800,11 @@ got:
 	}
 	ext4_unlock_group(sb, group);
 
+	BUFFER_TRACE(inode_bitmap_bh, "call ext4_handle_dirty_metadata");
+	err = ext4_handle_dirty_metadata(handle, NULL, inode_bitmap_bh);
+	if (err)
+		goto fail;
+
 	BUFFER_TRACE(group_desc_bh, "call ext4_handle_dirty_metadata");
 	err = ext4_handle_dirty_metadata(handle, NULL, group_desc_bh);
 	if (err)
