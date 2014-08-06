@@ -401,6 +401,14 @@ config USE_USER_ACCESSIBLE_TIMERS
 	  architecture-specific code that will need to be enabled
 	  separately.
 
+
+config ZPOOL
+	tristate "Common API for compressed memory storage"
+	default n
+	help
+	  Compressed memory storage API.  This allows using either zbud or
+	  zsmalloc.
+
 config ZBUD
 	tristate "Low density storage for compressed pages"
 	default n
@@ -410,31 +418,6 @@ config ZBUD
 	  page.  While this design limits storage density, it has simple and
 	  deterministic reclaim properties that make it preferable to a higher
 	  density approach when reclaim will be used.
-
-config ZCACHE
-	   bool "Compressed cache for file pages (EXPERIMENTAL)"
-	   depends on CRYPTO && CLEANCACHE
-	   select CRYPTO_LZO
-	   select ZBUD
-	   default n
-	   help
-		 A compressed cache for file pages.
-		 It takes active file pages that are in the process of being reclaimed
-		 and attempts to compress them into a dynamically allocated RAM-based
-		 memory pool.
-
-		 If this process is successful, when those file pages needed again, the
-		 I/O reading operation was avoided. This results in a significant performance
-		 gains under memory pressure for systems full with file pages.
-
-config BALANCE_ANON_FILE_RECLAIM
-	bool "During reclaim treat anon and file backed pages equally"
-	depends on SWAP
-	help
-	  When performing memory reclaim treat anonymous and file backed pages
-	  equally.
-	  Swapping anonymous pages out to memory can be efficient enough to justify
-	  treating anonymous and file backed pages equally.
 
 config ZSMALLOC
 	tristate "Memory allocator for compressed pages"
@@ -447,6 +430,31 @@ config ZSMALLOC
 	  non-standard allocator interface where a handle, not a pointer, is
 	  returned by an alloc().  This handle must be mapped in order to
 	  access the allocated space.
+
+config ZCACHE
+       bool "Compressed cache for file pages (EXPERIMENTAL)"
+       depends on CRYPTO && CLEANCACHE
+       select CRYPTO_LZO
+       select ZBUD
+       default n
+       help
+         A compressed cache for file pages.
+         It takes active file pages that are in the process of being reclaimed
+         and attempts to compress them into a dynamically allocated RAM-based
+         memory pool.
+
+         If this process is successful, when those file pages needed again, the
+         I/O reading operation was avoided. This results in a significant performance
+         gains under memory pressure for systems full with file pages.
+
+config BALANCE_ANON_FILE_RECLAIM
+	bool "During reclaim treat anon and file backed pages equally"
+	depends on SWAP
+	help
+	  When performing memory reclaim treat anonymous and file backed pages
+	  equally.
+	  Swapping anonymous pages out to memory can be efficient enough to justify
+	  treating anonymous and file backed pages equally.
 
 config PROCESS_RECLAIM
 	bool "Enable process reclaim"
@@ -463,4 +471,3 @@ config PROCESS_RECLAIM
 	 (addr, addr + size-bytes) of the process.
 
 	 Any other vaule is ignored.
-
