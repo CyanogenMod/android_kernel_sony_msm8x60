@@ -302,6 +302,7 @@ obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
 
 obj-$(CONFIG_MACH_LGE) += lge/
+
 #blue
 board-blue-all-objs += board-blue.o board-blue-display.o board-blue-storage.o
 
