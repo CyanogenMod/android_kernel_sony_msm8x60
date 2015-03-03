@@ -1678,9 +1678,11 @@ stat:
 out:
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 
+#ifndef CONFIG_UML
 	if (notify)
 		atomic_notifier_call_chain(&migration_notifier_head,
 					   cpu, (void *)src_cpu);
+#endif
 	return success;
 }
 
