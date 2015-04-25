@@ -67,7 +67,7 @@ static void mipi_dsi_panel_esd_failed_check(struct mipi_dsi_data *dsi_data)
 
 	mutex_lock(&mipi_dsi_panel_mfd->power_lock);
 	/*if the panel was power off, it's no need to check ESD failed*/
-	if (!mipi_dsi_panel_mfd->panel_power_on)
+	if (!mipi_dsi_panel_mfd->panel_power_state)
 		goto unlock_exit;
 
 	/*ESD Failed check*/

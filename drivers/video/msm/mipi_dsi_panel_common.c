@@ -355,7 +355,7 @@ static ssize_t store_eco_mode(struct device *dev,
 	else
 		dsi_data->eco_mode_on = false;
 
-	if (mfd->panel_power_on)
+	if (!mdp_fb_is_power_off(mfd))
 		dsi_data->eco_mode_switch(mfd);
 
 exit:
@@ -525,7 +525,7 @@ int prepare_for_reg_access(struct msm_fb_data_type *mfd)
 	/* Needed to make sure the display stack isn't powered on/off while */
 	/* we are executing. Also locks in msm_fb.c */
 	mutex_lock(&mfd->power_lock);
-	if (!mfd->panel_power_on) {
+	if (mdp_fb_is_power_off(mfd)) {
 		dev_err(dev, "%s: panel is OFF, not supported\n", __func__);
 		mutex_unlock(&mfd->power_lock);
 #ifdef CONFIG_FB_MSM_RECOVER_PANEL
