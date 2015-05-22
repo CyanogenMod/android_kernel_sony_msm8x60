@@ -110,6 +110,8 @@
 
 /* BAM pipe selection */
 #define SPS_BAM_PIPE(n)             (1UL << (n))
+/* Hold memory for BAM DMUX */
+#define SPS_BAM_HOLD_MEM            (1UL << 8)
 
 /* This enum specifies the operational mode for an SPS connection */
 enum sps_mode {
