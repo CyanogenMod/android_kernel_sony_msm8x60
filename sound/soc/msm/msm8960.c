@@ -1118,7 +1118,7 @@ end:
 
 static int msm8960_audrx_init(struct snd_soc_pcm_runtime *rtd)
 {
-	int err, use_pmic;
+	int err, use_pmic, ret;
 	struct snd_soc_codec *codec = rtd->codec;
 	struct snd_soc_dapm_context *dapm = &codec->dapm;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
@@ -1183,6 +1183,14 @@ static int msm8960_audrx_init(struct snd_soc_pcm_runtime *rtd)
 			pr_err("failed to create new jack\n");
 			return err;
 		}
+	}
+
+	ret = snd_jack_set_key(button_jack.jack,
+			       SND_JACK_BTN_0,
+			       KEY_MEDIA);
+	if (ret) {
+		pr_err("%s: Failed to set code for btn-0\n", __func__);
+		return ret;
 	}
 
 	codec_clk = clk_get(cpu_dai->dev, "osr_clk");
