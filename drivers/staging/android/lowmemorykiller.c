@@ -520,7 +520,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			     current->comm, current->pid,
 			     cache_size, cache_limit,
 			     min_score_adj,
-			     other_free * (long)(PAGE_SIZE / 1024),
+			     free,
 			     global_page_state(NR_FREE_CMA_PAGES) *
 				(long)(PAGE_SIZE / 1024),
 			     totalreserve_pages * (long)(PAGE_SIZE / 1024),
