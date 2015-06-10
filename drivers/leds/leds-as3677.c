@@ -1884,7 +1884,7 @@ static ssize_t as3677_als_lx_show(struct device *dev,
 			AS3677_REG_ALS_result);
 	struct as3677_als_fsm_state *s = data->fsm + data->curr_state;
 
-	/* Start measuring GPIO2/LIGHT */
+	/* Start measuring ALS/GPIO1 */
 	AS3677_WRITE_REG(AS3677_REG_ADC_control, 0x82);
 	for (i = 0; i < 10; i++) {
 		adc_result = i2c_smbus_read_byte_data(data->client,
@@ -2153,6 +2153,48 @@ static ssize_t as3677_als_use_fsm_store(struct device *dev,
 
 exit:
 	return strnlen(buf, PAGE_SIZE);
+}
+
+static ssize_t as3677_adc_als_value_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct as3677_data *data = dev_get_drvdata(dev);
+	int i;
+	s32 als_result, amb_gain, offset;
+	u32 adc_result;
+
+	/* Start measuring ALS/GPIO1 */
+	AS3677_LOCK();
+	AS3677_WRITE_REG(AS3677_REG_ADC_control, 0x82);
+	for (i = 0; i < 10; i++) {
+		adc_result = i2c_smbus_read_byte_data(data->client,
+				AS3677_REG_ADC_MSB_result);
+		if (!(adc_result & 0x80))
+			break;
+		udelay(10);
+	}
+	adc_result <<= 3;
+	adc_result |= i2c_smbus_read_byte_data(data->client,
+			AS3677_REG_ADC_LSB_result);
+
+	amb_gain = (AS3677_READ_REG(AS3677_REG_ALS_control) & 0x06) >> 1;
+	amb_gain = 1 << amb_gain; /* Have gain ready for calculations */
+	offset = AS3677_READ_REG(AS3677_REG_ALS_offset);
+	AS3677_UNLOCK();
+
+	/* multiply always before doing divisions to preserve precision.
+	   Overflows should not happen with the values */
+	als_result = (adc_result - 4 * offset) * amb_gain / 4;
+
+	snprintf(buf, PAGE_SIZE, "%u\n", adc_result);
+	return strnlen(buf, PAGE_SIZE);
+}
+
+static ssize_t as3677_adc_als_value_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t size)
+{
+	return -EINVAL;
 }
 
 static ssize_t as3677_als_fsm_show(struct device *dev,
@@ -2453,6 +2495,7 @@ static struct device_attribute as3677_attributes[] = {
 	AS3677_ATTR(als_on),
 	AS3677_ATTR(als_sample_fsm),
 	AS3677_ATTR(als_use_fsm),
+	AS3677_ATTR(adc_als_value),
 	__ATTR_NULL
 };
 
