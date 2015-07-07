@@ -1253,8 +1253,8 @@ csum_copy_err:
 		UDP_INC_STATS_USER(sock_net(sk), UDP_MIB_INERRORS, is_udplite);
 	unlock_sock_fast(sk, slow);
 
-	if (noblock)
-		return -EAGAIN;
+	/* starting over for a new packet, but check if we need to yield */
+	cond_resched();
 
 	/* starting over for a new packet */
 	msg->msg_flags &= ~MSG_TRUNC;
