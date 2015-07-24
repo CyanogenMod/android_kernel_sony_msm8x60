@@ -4299,14 +4299,21 @@ static void __init msm8960_gfx_init(void)
 
 	/* Fixup data that needs to change based on GPU ID */
 	if (cpu_is_msm8960ab()) {
-		if (SOCINFO_VERSION_MINOR(soc_platform_version) == 0)
-			kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 0);
-		else
-			kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 1);
-		/* 8960PRO nominal clock rate is 325Mhz instead of 320Mhz */
-		kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 325000000;
+		kgsl_3d0_pdata->chipid = ADRENO_CHIPID(3, 2, 1, 0);
+		/* 8960PRO nominal clock rate is 320Mhz */
+		kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 320000000;
+
+		/*
+		 * If this an A320 GPU device (MSM8960AB), then
+		 * switch the resource table to 8960AB, to reflect the
+		 * separate register and shader memory mapping used in A320.
+		 */
+
+		msm_kgsl_3d0.num_resources = kgsl_num_resources_8960ab;
+		msm_kgsl_3d0.resource = kgsl_3d0_resources_8960ab;
 	} else {
 		kgsl_3d0_pdata->iommu_count = 1;
+
 		if (SOCINFO_VERSION_MAJOR(soc_platform_version) == 1) {
 			kgsl_3d0_pdata->pwrlevel[0].gpu_freq = 320000000;
 			kgsl_3d0_pdata->pwrlevel[1].gpu_freq = 266667000;
@@ -4967,7 +4974,6 @@ static void __init msm8960_tsens_init(void)
 static void __init msm8960ab_update_krait_spm(void)
  {
  	int i;
- 
 
 	/* Update the SPM sequences for SPC and PC */
 	for (i = 0; i < ARRAY_SIZE(msm_spm_data); i++) {
@@ -5193,5 +5199,5 @@ MACHINE_START(VISKAN_HUASHAN, "VISKAN HUASHAN")
 	.init_machine = msm8960_cdp_init,
 	.init_early = msm8960_allocate_memory_regions,
 	.init_very_early = msm8960_early_memory,
-	.restart = msm_restart,	
+	.restart = msm_restart,
 MACHINE_END
