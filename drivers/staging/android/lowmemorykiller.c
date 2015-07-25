@@ -18,7 +18,6 @@
  * and processes may not get killed until the normal oom killer is triggered.
  *
  * Copyright (C) 2007-2008 Google, Inc.
- * Copyright (C) 2012 Sony Mobile Communications AB.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -38,10 +37,9 @@
 #include <linux/sched.h>
 #include <linux/rcupdate.h>
 #include <linux/notifier.h>
+#include <linux/swap.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
-#include <linux/ktime.h>
-#include <linux/swap.h>
 #include <linux/fs.h>
 #include <linux/cpuset.h>
 
@@ -68,7 +66,7 @@ static int lowmem_minfree[6] = {
 static int lowmem_minfree_size = 4;
 static int lmk_fast_run = 1;
 
-static ktime_t lowmem_deathpending_timeout;
+static unsigned long lowmem_deathpending_timeout;
 
 #define lowmem_print(level, x...)			\
 	do {						\
@@ -265,8 +263,6 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	struct task_struct *tsk;
 	struct task_struct *selected = NULL;
 	int rem = 0;
-	static int same_count;
-	static int oldpid;
 	int tasksize;
 	int i;
 	int min_score_adj = OOM_SCORE_ADJ_MAX + 1;
@@ -337,40 +333,14 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		if (test_task_flag(tsk, TIF_MM_RELEASED))
 			continue;
 
-		if (ktime_us_delta(ktime_get(), lowmem_deathpending_timeout) < 0
-		    && (test_task_flag(tsk, TIF_MEMDIE))) {
-			same_count++;
-			if (tsk->pid != oldpid || same_count > 1000) {
-				lowmem_print(1, "terminate loop for %d (%s)" \
-					"old:%d %ld %d\n",
-					tsk->pid,
-					tsk->comm,
-					oldpid,
-					(long)ktime_us_delta(
-						ktime_get(),
-						lowmem_deathpending_timeout),
-					same_count);
-#if defined(CONFIG_SCHEDSTATS) || defined(CONFIG_TASK_DELAY_ACCT)
-				lowmem_print(2,
-					"state:%ld flag:0x%x la:%lld\n",
-					tsk->state,
-					tsk->flags,
-					tsk->sched_info.last_arrival);
-#else
-				lowmem_print(2,
-					"state:%ld flag:0x%x\n",
-					tsk->state, tsk->flags);
-#endif
-				oldpid = tsk->pid;
-				same_count = 0;
-			  }
-
-			rcu_read_unlock();
-			/* give the system time to free up the memory */
-			msleep_interruptible(20);
-
-			mutex_unlock(&scan_mutex);
-			return 0;
+		if (time_before_eq(jiffies, lowmem_deathpending_timeout)) {
+			if (test_task_flag(tsk, TIF_MEMDIE)) {
+				rcu_read_unlock();
+				/* give the system time to free up the memory */
+				msleep_interruptible(20);
+				mutex_unlock(&scan_mutex);
+				return 0;
+			}
 		}
 
 		p = find_lock_task_mm(tsk);
