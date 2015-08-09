@@ -357,7 +357,6 @@ static int mipi_dsi_late_init(struct platform_device *pdev)
 	return panel_next_late_init(pdev);
 }
 
-
 static int mipi_dsi_resource_initialized;
 
 static int mipi_dsi_probe(struct platform_device *pdev)
