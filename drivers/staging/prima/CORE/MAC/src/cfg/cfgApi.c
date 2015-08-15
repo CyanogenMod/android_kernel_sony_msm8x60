@@ -193,7 +193,7 @@ cfgSetInt(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 value)
     // Check if parameter is valid
     if ((control & CFG_CTL_VALID) == 0)
     {
-        PELOGE(cfgLog(pMac, LOGE, FL("Not valid cfg id %d"), cfgId);)
+        PELOGE(cfgLog(pMac, LOG3, FL("Not valid cfg id %d"), cfgId);)
         retVal = eSIR_CFG_INVALID_ID;
     }
     else if ((pMac->cfg.gCfgIBufMin[index] > value) ||
@@ -325,7 +325,7 @@ wlan_cfgGetInt(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 *pValue)
     // Check if parameter is valid
     if ((control & CFG_CTL_VALID) == 0)
     {
-        PELOGE(cfgLog(pMac, LOGE, FL("Not valid cfg id %d"), cfgId);)
+        PELOGE(cfgLog(pMac, LOG3, FL("Not valid cfg id %d"), cfgId);)
         retVal = eSIR_CFG_INVALID_ID;
     }
     else {
@@ -387,7 +387,7 @@ cfgIncrementInt(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 value)
     // Check if parameter is valid
     if ((control & CFG_CTL_VALID) == 0)
     {
-        PELOGE(cfgLog(pMac, LOGE, FL("Not valid cfg id %d"), cfgId);)
+        PELOGE(cfgLog(pMac, LOG3, FL("Not valid cfg id %d"), cfgId);)
         retVal = eSIR_CFG_INVALID_ID;
     }
     else
@@ -600,7 +600,7 @@ wlan_cfgGetStr(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U8 *pBuf, tANI_U32 *pLe
     // Check if parameter is valid
     if ((control & CFG_CTL_VALID) == 0)
     {
-        PELOGE(cfgLog(pMac, LOGE, FL("Not valid cfg id %d"), cfgId);)
+        PELOGE(cfgLog(pMac, LOG3, FL("Not valid cfg id %d"), cfgId);)
         retVal = eSIR_CFG_INVALID_ID;
     }
     else
@@ -681,7 +681,7 @@ wlan_cfgGetStrMaxLen(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 *pLength)
     // Check if parameter is valid
     if ((control & CFG_CTL_VALID) == 0)
     {
-        PELOGE(cfgLog(pMac, LOGE, FL("Not valid cfg id %d"), cfgId);)
+        PELOGE(cfgLog(pMac, LOG3, FL("Not valid cfg id %d"), cfgId);)
         retVal = eSIR_CFG_INVALID_ID;
     }
     else
@@ -747,7 +747,7 @@ wlan_cfgGetStrLen(tpAniSirGlobal pMac, tANI_U16 cfgId, tANI_U32 *pLength)
     // Check if parameter is valid
     if ((control & CFG_CTL_VALID) == 0)
     {
-        PELOGE(cfgLog(pMac, LOGE, FL("Not valid cfg id %d"), cfgId);)
+        PELOGE(cfgLog(pMac, LOG3, FL("Not valid cfg id %d"), cfgId);)
         retVal = eSIR_CFG_INVALID_ID;
     }
     else
