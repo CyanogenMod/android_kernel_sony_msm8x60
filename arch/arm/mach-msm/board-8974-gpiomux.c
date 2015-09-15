@@ -19,7 +19,7 @@
 
 #define KS8851_IRQ_GPIO 90
 
-static struct gpiomux_setting gpio_uart_config = {
+static struct gpiomux_setting gpio_uart_config __initdata = {
 	.func = GPIOMUX_FUNC_2,
 	.drv = GPIOMUX_DRV_16MA,
 	.pull = GPIOMUX_PULL_NONE,

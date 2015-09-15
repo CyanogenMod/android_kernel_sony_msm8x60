@@ -40,12 +40,6 @@ import subprocess
 # force LANG to be set to en_US.UTF-8 to get consistent warnings.
 
 allowed_warnings = set([
-   "return_address.c:62",
-   "transport.c:660",
-   "inet_hashtables.h:356",
-   "dynamic_debug.h:75",
-   "swab.h:34",
-   "hid-wiimote-debug.c:69",
  ])
 
 # Capture the name of the object file, can find it.
