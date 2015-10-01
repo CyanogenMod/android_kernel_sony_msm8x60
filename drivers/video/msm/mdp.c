@@ -2485,6 +2485,7 @@ static int mdp_on(struct platform_device *pdev)
 	}
 
 	mdp_histogram_ctrl_all(TRUE);
+	mdp_restore_rgb();
 
 	if (ret == 0)
 		ret = panel_next_late_init(pdev);
