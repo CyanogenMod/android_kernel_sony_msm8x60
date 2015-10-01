@@ -369,8 +369,15 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	atomic_inc(&mm->mm_count);
 	current->active_mm = mm;
 	cpumask_set_cpu(cpu, mm_cpumask(mm));
+<<<<<<< HEAD
 
 	cpu_init();
+||||||| parent of 275ed87... Linux 3.4.17
+	cpu_switch_mm(mm->pgd, mm);
+	enter_lazy_tlb(mm, current);
+	local_flush_tlb_all();
+=======
+>>>>>>> 275ed87... Linux 3.4.17
 
 	pr_debug("CPU%u: Booted secondary processor\n", cpu);
 
