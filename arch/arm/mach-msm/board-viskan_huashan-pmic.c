@@ -257,7 +257,11 @@ static struct pm8xxx_mpp_platform_data pm8xxx_mpp_pdata __devinitdata = {
 };
 
 static struct pm8xxx_rtc_platform_data pm8xxx_rtc_pdata __devinitdata = {
+#ifdef CONFIG_RTC_SEMC_ETS
+	.rtc_write_enable       = true,
+#else
 	.rtc_write_enable       = false,
+#endif
 	.rtc_alarm_powerup	= false,
 };
 

@@ -2578,6 +2578,12 @@ config MSM_DCVS
 	  algorithm and the algorithm returns a frequency for the core which is
 	  passed to the frequency change driver.
 
+config RTC_SEMC_ETS
+	bool "SEMC ETS RTC flag"
+	default n
+	help
+	  This enables RTC write function with SEMC ETS
+
 config MSM_CPR
 	tristate "Use MSM CPR in S/W mode"
 	help
