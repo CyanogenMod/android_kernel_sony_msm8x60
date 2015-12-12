@@ -444,36 +444,67 @@ static void cyttsp4_mt_close(struct input_dev *input)
 	pm_runtime_put(dev);
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void cyttsp4_mt_early_suspend(struct early_suspend *h)
+#ifdef CONFIG_FB
+static void cyttsp4_mt_fb_suspend(struct cyttsp4_mt_data *ts)
 {
-	struct cyttsp4_mt_data *md =
-		container_of(h, struct cyttsp4_mt_data, es);
-	struct device *dev = &md->ttsp->dev;
+	struct device *dev = &ts->ttsp->dev;
 
-	dev_dbg(dev, "%s\n", __func__);
+	if (ts->is_suspended)
+		return;
+
+	dev_info(dev, "%s\n", __func__);
 
 	pm_runtime_put(dev);
+	ts->is_suspended = true;
 }
 
-static void cyttsp4_mt_late_resume(struct early_suspend *h)
+static void cyttsp4_mt_fb_resume(struct cyttsp4_mt_data *ts)
 {
-	struct cyttsp4_mt_data *md =
-		container_of(h, struct cyttsp4_mt_data, es);
-	struct device *dev = &md->ttsp->dev;
+	struct device *dev = &ts->ttsp->dev;
 
-	dev_dbg(dev, "%s\n", __func__);
+	if (!ts->is_suspended)
+		return;
+
+	dev_info(dev, "%s\n", __func__);
 
 	pm_runtime_get_sync(dev);
+	ts->is_suspended = false;
 }
 
-void cyttsp4_setup_early_suspend(struct cyttsp4_mt_data *md)
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
 {
-	md->es.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-	md->es.suspend = cyttsp4_mt_early_suspend;
-	md->es.resume = cyttsp4_mt_late_resume;
+	struct fb_event *evdata = data;
+	int *blank;
+	struct cyttsp4_mt_data *ts = container_of(self, struct cyttsp4_mt_data, fb_notif);
 
-	register_early_suspend(&md->es);
+	if (evdata && evdata->data && ts) {
+		if (event == FB_EVENT_BLANK) {
+			blank = evdata->data;
+			if (*blank == FB_BLANK_UNBLANK)
+				cyttsp4_mt_fb_resume(ts);
+			else if (*blank == FB_BLANK_POWERDOWN)
+				cyttsp4_mt_fb_suspend(ts);
+		}
+	}
+
+	return 0;
+}
+
+void cyttsp4_setup_fb_suspend(struct cyttsp4_mt_data *ts)
+{
+	int retval = 0;
+	struct device *dev = &ts->ttsp->dev;
+
+	ts->fb_notif.notifier_call = fb_notifier_callback;
+	retval = fb_register_client(&ts->fb_notif);
+	if (retval) {
+		dev_err(dev, "%s: Failed to register fb_notifier\n",
+			__func__);
+		return;
+	}
+
+	dev_info(dev, "%s: Registered fb_notifier\n", __func__);
 }
 #endif
 
@@ -517,8 +548,8 @@ int cyttsp4_mt_release(struct cyttsp4_device *ttsp)
 
 	dev_dbg(dev, "%s\n", __func__);
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&md->es);
+#ifdef CONFIG_FB
+	fb_unregister_client(&md->fb_notif);
 #endif
 
 	input_unregister_device(md->input);
@@ -660,8 +691,8 @@ static int cyttsp4_mt_probe(struct cyttsp4_device *ttsp)
 		goto error_init_input;
 	}
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	cyttsp4_setup_early_suspend(md);
+#ifdef CONFIG_FB
+	cyttsp4_setup_fb_suspend(md);
 #endif
 	dev_dbg(dev, "%s: OK\n", __func__);
 	return 0;

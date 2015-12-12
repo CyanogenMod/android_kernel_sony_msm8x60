@@ -30,8 +30,9 @@
 #include <linux/cyttsp4_bus.h>
 
 #include <linux/delay.h>
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
+#ifdef CONFIG_FB
+#include <linux/notifier.h>
+#include <linux/fb.h>
 #endif
 #include <linux/gpio.h>
 #include <linux/input.h>
@@ -66,8 +67,8 @@ struct cyttsp4_mt_data {
 	struct cyttsp4_sysinfo *si;
 	struct input_dev *input;
 	struct cyttsp4_mt_function mt_function;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	struct early_suspend es;
+#ifdef CONFIG_FB
+	struct notifier_block fb_notif;
 #endif
 	struct mutex report_lock;
 	bool is_suspended;
