@@ -69,6 +69,7 @@ struct cyttsp4_mt_data {
 	struct cyttsp4_mt_function mt_function;
 #ifdef CONFIG_FB
 	struct notifier_block fb_notif;
+	bool fb_suspended;
 #endif
 	struct mutex report_lock;
 	bool is_suspended;
