@@ -154,6 +154,7 @@ struct mhl_device {
 	struct input_dev *input;
 #ifdef CONFIG_FB
 	struct notifier_block fb_notif;
+	bool fb_suspended;
 #endif
 };
 
