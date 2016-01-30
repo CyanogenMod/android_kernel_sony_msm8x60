@@ -481,10 +481,18 @@ static int fb_notifier_callback(struct notifier_block *self,
 	if (evdata && evdata->data && ts) {
 		if (event == FB_EVENT_BLANK) {
 			blank = evdata->data;
-			if (*blank == FB_BLANK_UNBLANK)
-				cyttsp4_mt_fb_resume(ts);
-			else if (*blank == FB_BLANK_POWERDOWN)
-				cyttsp4_mt_fb_suspend(ts);
+			switch (*blank) {
+				case FB_BLANK_UNBLANK:
+				case FB_BLANK_NORMAL:
+				case FB_BLANK_VSYNC_SUSPEND:
+				case FB_BLANK_HSYNC_SUSPEND:
+					cyttsp4_mt_fb_resume(ts);
+					break;
+				default:
+				case FB_BLANK_POWERDOWN:
+					cyttsp4_mt_fb_suspend(ts);
+					break;
+			}
 		}
 	}
 
