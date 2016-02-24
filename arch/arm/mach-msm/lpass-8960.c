@@ -25,11 +25,6 @@
 #include <mach/subsystem_restart.h>
 #include <mach/subsystem_notif.h>
 
-#if defined(CONFIG_LGE_CRASH_HANDLER)
-#include <mach/restart.h>
-#include <mach/board_lge.h>
-#endif
-
 #ifdef CONFIG_RAMDUMP_TAGS
 #include <linux/rdtags.h>
 #endif
@@ -129,10 +124,6 @@ static void lpass_fatal_fn(struct work_struct *work)
 	pr_err("%s %s: Watchdog bite received from Q6!\n", MODULE_NAME,
 		__func__);
 	lpass_log_failure_reason();
-#if defined(CONFIG_LGE_CRASH_HANDLER)
-	set_ssr_magic_number("lpass");
-	msm_set_restart_mode(0x6d634130);
-#endif
 	panic(MODULE_NAME ": Resetting the SoC");
 }
 
@@ -155,10 +146,6 @@ static void lpass_smsm_state_cb(void *data, uint32_t old_state,
 #endif
 
 		lpass_log_failure_reason();
-#if defined(CONFIG_LGE_CRASH_HANDLER)
-		set_ssr_magic_number("lpass");
-		msm_set_restart_mode(0x6d634130);
-#endif
 		panic(MODULE_NAME ": Resetting the SoC");
 	}
 }
