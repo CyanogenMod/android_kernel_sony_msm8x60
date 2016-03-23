@@ -160,7 +160,7 @@ static int hidp_queue_event(struct hidp_session *session, struct input_dev *dev,
 	unsigned char newleds;
 	struct sk_buff *skb;
 
-	BT_DBG("session %p type %d code %d value %d", session, type, code, value);
+	BT_DBG("session %pK type %d code %d value %d", session, type, code, value);
 
 	if (type != EV_LED)
 		return -1;
@@ -268,7 +268,7 @@ static int __hidp_send_ctrl_message(struct hidp_session *session,
 {
 	struct sk_buff *skb;
 
-	BT_DBG("session %p data %p size %d", session, data, size);
+	BT_DBG("session %pK data %pK size %d", session, data, size);
 
 	skb = alloc_skb(size + 1, GFP_ATOMIC);
 	if (!skb) {
@@ -302,7 +302,7 @@ static int hidp_queue_report(struct hidp_session *session,
 {
 	struct sk_buff *skb;
 
-	BT_DBG("session %p hid %p data %p size %d", session, session->hid, data, size);
+	BT_DBG("session %pK hid %pK data %pK size %d", session, session->hid, data, size);
 
 	skb = alloc_skb(size + 1, GFP_ATOMIC);
 	if (!skb) {
@@ -513,7 +513,7 @@ static inline void hidp_del_timer(struct hidp_session *session)
 static void hidp_process_handshake(struct hidp_session *session,
 					unsigned char param)
 {
-	BT_DBG("session %p param 0x%02x", session, param);
+	BT_DBG("session %pK param 0x%02x", session, param);
 	session->output_report_success = 0; /* default condition */
 
 	switch (param) {
@@ -559,7 +559,7 @@ static void hidp_process_handshake(struct hidp_session *session,
 static void hidp_process_hid_control(struct hidp_session *session,
 					unsigned char param)
 {
-	BT_DBG("session %p param 0x%02x", session, param);
+	BT_DBG("session %pK param 0x%02x", session, param);
 
 	if (param == HIDP_CTRL_VIRTUAL_CABLE_UNPLUG) {
 		/* Flush the transmit queues */
@@ -577,7 +577,7 @@ static int hidp_process_data(struct hidp_session *session, struct sk_buff *skb,
 				unsigned char param)
 {
 	int done_with_skb = 1;
-	BT_DBG("session %p skb %p len %d param 0x%02x", session, skb, skb->len, param);
+	BT_DBG("session %pK skb %pK len %d param 0x%02x", session, skb, skb->len, param);
 
 	switch (param) {
 	case HIDP_DATA_RTYPE_INPUT:
@@ -621,7 +621,7 @@ static void hidp_recv_ctrl_frame(struct hidp_session *session,
 	unsigned char hdr, type, param;
 	int free_skb = 1;
 
-	BT_DBG("session %p skb %p len %d", session, skb, skb->len);
+	BT_DBG("session %pK skb %pK len %d", session, skb, skb->len);
 
 	hdr = skb->data[0];
 	skb_pull(skb, 1);
@@ -657,7 +657,7 @@ static void hidp_recv_intr_frame(struct hidp_session *session,
 {
 	unsigned char hdr;
 
-	BT_DBG("session %p skb %p len %d", session, skb, skb->len);
+	BT_DBG("session %pK skb %pK len %d", session, skb, skb->len);
 
 	hdr = skb->data[0];
 	skb_pull(skb, 1);
@@ -684,7 +684,7 @@ static int hidp_send_frame(struct socket *sock, unsigned char *data, int len)
 	struct kvec iv = { data, len };
 	struct msghdr msg;
 
-	BT_DBG("sock %p data %p len %d", sock, data, len);
+	BT_DBG("sock %pK data %pK len %d", sock, data, len);
 
 	if (!len)
 		return 0;
@@ -698,7 +698,7 @@ static void hidp_process_transmit(struct hidp_session *session)
 {
 	struct sk_buff *skb;
 
-	BT_DBG("session %p", session);
+	BT_DBG("session %pK", session);
 
 	while ((skb = skb_dequeue(&session->ctrl_transmit))) {
 		if (hidp_send_frame(session->ctrl_sock, skb->data, skb->len) < 0) {
@@ -730,7 +730,7 @@ static int hidp_session(void *arg)
 	int vendor = 0x0000, product = 0x0000;
 	wait_queue_t ctrl_wait, intr_wait;
 
-	BT_DBG("session %p", session);
+	BT_DBG("session %pK", session);
 
 	if (session->input) {
 		vendor  = session->input->id.vendor;
@@ -1021,7 +1021,7 @@ int hidp_add_connection(struct hidp_connadd_req *req, struct socket *ctrl_sock, 
 	if (!session)
 		return -ENOMEM;
 
-	BT_DBG("rd_data %p rd_size %d", req->rd_data, req->rd_size);
+	BT_DBG("rd_data %pK rd_size %d", req->rd_data, req->rd_size);
 
 	down_write(&hidp_session_sem);
 
