@@ -487,8 +487,9 @@ static int cyttsp4_core_drv_probe(struct device *_dev)
 
 int cyttsp4_register_driver(struct cyttsp4_driver *drv)
 {
-	struct cyttsp4_device *d;
 	int ret = 0;
+#ifdef CONFIG_MODULES
+	struct cyttsp4_device *d;
 
 	/*
 	 * We need to ensure that the driver of this device's
@@ -522,6 +523,7 @@ int cyttsp4_register_driver(struct cyttsp4_driver *drv)
 				__func__);
 		goto fail;
 	}
+#endif
 
 	drv->driver.bus = &cyttsp4_bus_type;
 	if (drv->probe)
@@ -529,7 +531,10 @@ int cyttsp4_register_driver(struct cyttsp4_driver *drv)
 	if (drv->remove)
 		drv->driver.remove = cyttsp4_drv_remove;
 	ret = driver_register(&drv->driver);
+
+#ifdef CONFIG_MODULES
 fail:
+#endif
 	pr_debug("%s: '%s' returned %d\n", __func__, drv->driver.name, ret);
 	return ret;
 }
@@ -537,8 +542,9 @@ EXPORT_SYMBOL_GPL(cyttsp4_register_driver);
 
 int cyttsp4_register_core_driver(struct cyttsp4_core_driver *drv)
 {
-	struct cyttsp4_core *d;
 	int ret = 0;
+#ifdef CONFIG_MODULES
+	struct cyttsp4_core *d;
 
 	/*
 	 * We need to ensure that the driver of this core device's
@@ -574,6 +580,7 @@ int cyttsp4_register_core_driver(struct cyttsp4_core_driver *drv)
 				__func__);
 		goto fail;
 	}
+#endif
 
 	drv->driver.bus = &cyttsp4_bus_type;
 	if (drv->probe)
@@ -581,7 +588,10 @@ int cyttsp4_register_core_driver(struct cyttsp4_core_driver *drv)
 	if (drv->remove)
 		drv->driver.remove = cyttsp4_core_drv_remove;
 	ret = driver_register(&drv->driver);
+
+#ifdef CONFIG_MODULES
 fail:
+#endif
 	pr_debug("%s: '%s' returned %d\n", __func__, drv->driver.name, ret);
 	return ret;
 }
