@@ -554,7 +554,7 @@ void vmpressure_init(struct vmpressure *vmpr, bool is_root)
 
 int vmpressure_global_init(void)
 {
-	vmpressure_init(&global_vmpressure);
+	vmpressure_init(&global_vmpressure, NULL);
 	return 0;
 }
 late_initcall(vmpressure_global_init);
