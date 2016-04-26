@@ -110,8 +110,6 @@ source "drivers/edac/Kconfig"
 
 source "drivers/rtc/Kconfig"
 
-source "drivers/esoc/Kconfig"
-
 source "drivers/dma/Kconfig"
 
 source "drivers/dca/Kconfig"
@@ -153,6 +151,8 @@ source "drivers/gud/Kconfig"
 source "drivers/coresight/Kconfig"
 
 source "drivers/sensors/Kconfig"
+
+source "drivers/esoc/Kconfig"
 
 source "drivers/rmi4/Kconfig"
 
