@@ -303,6 +303,24 @@ obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
 
 obj-$(CONFIG_MACH_LGE) += lge/
 
+#blue
+board-blue-all-objs += board-blue.o board-blue-display.o board-blue-storage.o
+
+obj-$(CONFIG_MACH_BLUE_CDB) += board-blue-all.o board-blue_cdb-pmic.o board-blue_cdb-gpiomux.o board-blue_cdb-regulator.o
+obj-$(CONFIG_MACH_BLUE_CDB) += gyro-sony_common.o board-blue_cdb-mpu.o board-blue_cdb-leds.o board-blue_cdb-camera.o board-blue_cdb-usb.o
+obj-$(CONFIG_MACH_BLUE_CDB) += irda-blue_common.o
+obj-$(CONFIG_MACH_BLUE_CDB) += oneseg-blue_common.o
+
+obj-$(CONFIG_MACH_BLUE_TSUBASA) += board-blue-all.o board-blue_tsubasa-pmic.o board-blue_tsubasa-gpiomux.o board-blue_tsubasa-regulator.o bms-batterydata-august.o
+obj-$(CONFIG_MACH_BLUE_TSUBASA) += gyro-sony_common.o board-blue_tsubasa-mpu.o board-blue_tsubasa-leds.o board-blue_tsubasa-camera.o board-blue_tsubasa-usb.o
+
+
+obj-$(CONFIG_MACH_BLUE_MINT) += board-blue-all.o board-blue_mint-pmic.o board-blue_mint-gpiomux.o board-blue_mint-regulator.o bms-batterydata-mentos.o
+obj-$(CONFIG_MACH_BLUE_MINT) += gyro-sony_common.o board-blue_mint-mpu.o board-blue_mint-camera.o board-blue_mint-leds.o board-blue_mint-usb.o
+
+obj-$(CONFIG_MACH_BLUE_HAYABUSA) += board-blue-all.o board-blue_hayabusa-pmic.o board-blue_hayabusa-gpiomux.o board-blue_hayabusa-regulator.o devices-8960.o bms-batterydata-falk.o
+obj-$(CONFIG_MACH_BLUE_HAYABUSA) += gyro-sony_common.o board-blue_hayabusa-mpu.o board-blue_hayabusa-camera.o board-blue_hayabusa-leds.o board-blue_hayabusa-usb.o
+
 #viskan
 board-viskan-all-objs += board-viskan.o board-viskan-display.o board-viskan-storage.o
 
