@@ -4135,6 +4135,32 @@ static void __init setup_gsbi12_uart_gpio(void)
 }
 #endif
 
+#ifdef CONFIG_INPUT_KEYRESET
+#include <linux/keyreset.h>
+/* keyreset platform device */
+static int blue_reset_keys_up[] = {
+	KEY_VOLUMEDOWN,
+	0
+};
+
+static struct keyreset_platform_data blue_reset_keys_pdata = {
+	.down_time_ms = 5000,
+	.keys_up = blue_reset_keys_up,
+	.keys_down = {
+		KEY_POWER,
+		KEY_VOLUMEUP,
+		0
+	},
+};
+
+struct platform_device blue_reset_keys_device = {
+	.name = KEYRESET_NAME,
+	.dev    = {
+		.platform_data = &blue_reset_keys_pdata,
+	},
+};
+#endif
+
 static void __init msm8960_cdp_init(void)
 {
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
@@ -4221,6 +4247,10 @@ static void __init msm8960_cdp_init(void)
 	setup_gsbi12_uart_gpio();
 #endif
 	register_i2c_devices();
+
+#ifdef CONFIG_INPUT_KEYRESET
+	platform_device_register(&blue_reset_keys_device);
+#endif
 	msm8960_init_fb();
 	slim_register_board_info(msm_slim_devices,
 		ARRAY_SIZE(msm_slim_devices));
