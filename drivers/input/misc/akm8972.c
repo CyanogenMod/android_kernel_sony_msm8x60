@@ -642,20 +642,6 @@ static ssize_t bin_attr_regacc_write(struct file *file, struct kobject *kobj,
 	return size;
 }
 
-#define __BIN_ATTR(name_, mode_, size_, private_, read_, write_) \
-	{ \
-		.attr	= { .name = __stringify(name_), .mode = mode_ }, \
-		.size	= size_, \
-		.private = private_, \
-		.read	= read_, \
-		.write   = write_, \
-	}
-
-#define __BIN_ATTR_NULL \
-	{ \
-		.attr	= { .name = NULL }, \
-	}
-
 static struct device_attribute akm8972_attributes[] = {
 	__ATTR(interval, 0600, attr_interval_show, attr_interval_store),
 	__ATTR(selftest, 0600, attr_selftest_show, attr_selftest_store),
@@ -663,10 +649,11 @@ static struct device_attribute akm8972_attributes[] = {
 	__ATTR_NULL,
 };
 
+
 static struct bin_attribute akm8972_bin_attributes[] = {
-	__BIN_ATTR(registers, 0400, 13, NULL, bin_attr_registers_read, NULL),
-	__BIN_ATTR(regacc, 0600, 1, NULL,
-		   bin_attr_regacc_read, bin_attr_regacc_write),
+	__BIN_ATTR(registers, 0400, bin_attr_registers_read, NULL, 13),
+	__BIN_ATTR(regacc, 0600, bin_attr_regacc_read, bin_attr_regacc_write,
+	           1),
 	__BIN_ATTR_NULL
 };
 
