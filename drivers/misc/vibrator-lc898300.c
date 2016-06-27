@@ -301,6 +301,58 @@ static void lc898300_resume_work(struct work_struct *work)
 	wake_up(&data->resume_queue);
 }
 
+static ssize_t lc898300_level_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct timed_output_dev *tdev = dev_get_drvdata(dev);
+	struct lc898300_data *data = container_of(tdev, struct lc898300_data,
+							 timed_dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			data->pdata->vib_cmd_info->vib_cmd_intensity);
+}
+
+static ssize_t lc898300_level_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct timed_output_dev *tdev = dev_get_drvdata(dev);
+	struct lc898300_data *data = container_of(tdev, struct lc898300_data,
+							 timed_dev);
+	struct lc898300_vib_cmd *vib_cmd_info = data->pdata->vib_cmd_info;
+	int val;
+	int rc;
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc) {
+		pr_err("%s: error getting level\n", __func__);
+		return -EINVAL;
+	}
+
+	if (val < VIB_CMD_PWM_OFF) {
+		pr_err("%s: level %d not in range (%d - %d), using min.",
+				__func__, val, VIB_CMD_PWM_OFF,
+				VIB_CMD_PWM_15_15);
+		val = VIB_CMD_PWM_OFF;
+	} else if (val > VIB_CMD_PWM_15_15) {
+		pr_err("%s: level %d not in range (%d - %d), using max.",
+				__func__, val, VIB_CMD_PWM_OFF,
+				VIB_CMD_PWM_15_15);
+		val = VIB_CMD_PWM_15_15;
+	}
+
+	vib_cmd_info->vib_cmd_intensity = val;
+	rc = i2c_smbus_write_i2c_block_data(data->client, LC898300_REG_HBPW,
+				sizeof(struct lc898300_vib_cmd),
+				(void *)&vib_cmd_info->vib_cmd_intensity);
+	if (rc) {
+		dev_err(data->dev, "Failed to setup vibrator; rc = %d\n", rc);
+	}
+
+	return strnlen(buf, count);
+}
+
 static ssize_t lc898300_intensity_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
@@ -497,6 +549,8 @@ static ssize_t lc898300_stops_store(struct device *dev,
 	return strnlen(buf, count);
 }
 
+static DEVICE_ATTR(level, S_IRUGO | S_IWUSR, lc898300_level_show, lc898300_level_store);
+
 static struct device_attribute attributes[] = {
 	__ATTR(lc898300_intensity, S_IRUGO | S_IWUSR,
 		lc898300_intensity_show, lc898300_intensity_store),
@@ -578,6 +632,10 @@ static int __devinit lc898300_probe(struct i2c_client *client,
 	data->timed_dev.enable = lc898300_vib_enable;
 
 	rc = timed_output_dev_register(&data->timed_dev);
+	if (rc < 0)
+		goto error_power_release;
+
+	rc = device_create_file(data->timed_dev.dev, &dev_attr_level);
 	if (rc < 0)
 		goto error_power_release;
 
