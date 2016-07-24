@@ -184,19 +184,4 @@ config RMI4_WATCHDOG
 
 	  If unsure, say Y here.
 
-config RMI4_EARLY_SUSPEND
-	tristate "Enable early suspend for the RMI4 driver"
-	depends on HAS_EARLYSUSPEND
-	default n
-	help
-	  This module implements early suspend functionality
-	  for the Synaptics RMI4 based touch chip.
-	  If you are using one of these chips and are running
-	  on Android, you will want to say yes here.
-
-	  To compile this driver as a module, choose M here. The module
-	  will be called rmi4_early_suspend
-
-	  If unsure, say N here.
-
 endif # RMI4_BUS
