@@ -31,6 +31,11 @@
 #include <linux/slab.h>
 #include <linux/input.h>
 #include <linux/list.h>
+#ifdef CONFIG_FB
+#include <linux/fb.h>
+#include <linux/notifier.h>
+#include <linux/pm_runtime.h>
+#endif
 
 #define F11_MAX_NUM_OF_FINGERS		10
 #define F11_REL_POS_MIN		-128
@@ -353,6 +358,12 @@ struct rmi4_f11_2d_sensor {
 	struct input_dev *input;
 	bool mouse_dev_registered;
 	struct input_dev *mouse_input;
+
+#ifdef CONFIG_FB
+	struct rmi4_function_device *fb_rmi4_dev;
+	struct notifier_block fb_notif;
+	bool fb_suspended;
+#endif
 };
 #define to_rmi4_f11_2d_sensor(l)				\
 	container_of(l, struct rmi4_f11_2d_sensor, entry)
@@ -401,11 +412,82 @@ struct rmi4_f11_data {
 	struct rmi_f11_2d_ctrl dev_controls;
 };
 
+#ifdef CONFIG_FB
+static void rmi4_fb_suspend(struct rmi4_f11_2d_sensor *ts)
+{
+	struct device *dev = &ts->input->dev;
+
+	if (ts->fb_suspended)
+		return;
+
+	dev_info(dev, "%s\n", __func__);
+
+	rmi4_bus_notify(ts->fb_rmi4_dev, RMI4_CHIP_SUSPEND);
+	ts->fb_suspended = true;
+}
+
+static void rmi4_fb_resume(struct rmi4_f11_2d_sensor *ts)
+{
+	struct device *dev = &ts->input->dev;
+
+	if (!ts->fb_suspended)
+		return;
+
+	dev_info(dev, "%s\n", __func__);
+
+	rmi4_bus_notify(ts->fb_rmi4_dev, RMI4_CHIP_WAKEUP);
+	ts->fb_suspended = false;
+}
+
+static int fb_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int *blank;
+	struct rmi4_f11_2d_sensor *ts = container_of(self,
+			struct rmi4_f11_2d_sensor, fb_notif);
+
+	if (evdata && evdata->data && ts) {
+		if (event == FB_EVENT_BLANK) {
+			blank = evdata->data;
+			if (*blank == FB_BLANK_UNBLANK)
+				rmi4_fb_resume(ts);
+			else if (*blank == FB_BLANK_POWERDOWN)
+				rmi4_fb_suspend(ts);
+		}
+	}
+
+	return 0;
+}
+
+void rmi4_setup_fb_suspend(struct rmi4_f11_2d_sensor *ts,
+		struct rmi4_function_device *fdev)
+{
+	int retval = 0;
+	struct device *dev = &ts->input->dev;
+
+	ts->fb_rmi4_dev = fdev;
+	ts->fb_suspended = false;
+	ts->fb_notif.notifier_call = fb_notifier_callback;
+	retval = fb_register_client(&ts->fb_notif);
+	if (retval) {
+		dev_err(dev, "%s: Failed to register fb_notifier\n",
+			__func__);
+		return;
+	}
+
+	dev_info(dev, "%s: Registered fb_notifier\n", __func__);
+}
+#endif
+
 static void rmi4_f11_irq_handler(int irq, void *data);
 
 static void rmi4_f11_destroy_sensor(struct rmi4_f11_2d_sensor *sensor) {
 	if (sensor) {
 		if (sensor->input) {
+#ifdef CONFIG_FB
+			fb_unregister_client(&sensor->fb_notif);
+#endif
 			kfree(sensor->input->name);
 			kfree(sensor->input->phys);
 			if (sensor->input_dev_registered)
@@ -980,6 +1062,9 @@ static int rmi4_f11_register_input_devs(struct rmi4_function_device *fdev)
 					__func__);
 				goto exit;
 			}
+#ifdef CONFIG_FB
+			rmi4_setup_fb_suspend(sensor, fdev);
+#endif
 			sensor->input_dev_registered = true;
 		}
 		if (sensor->mouse_input) {
