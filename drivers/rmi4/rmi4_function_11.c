@@ -30,6 +30,7 @@
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/input.h>
+#include <linux/input/mt.h>
 #include <linux/list.h>
 #ifdef CONFIG_FB
 #include <linux/fb.h>
@@ -648,17 +649,15 @@ static void rmi_f11_abs_pos_report(struct rmi4_function_device *fdev,
 		"%s: f_state[%d]:%d - x:%d y:%d z:%d w_max:%d w_min:%d\n",
 		__func__, n_finger, finger_state, x, y, z, w_max, w_min);
 
-
+	input_mt_slot(sensor->input, n_finger);
+	input_mt_report_slot_state(sensor->input, MT_TOOL_FINGER, true);
 	input_report_abs(sensor->input, ABS_MT_PRESSURE, z);
 	input_report_abs(sensor->input, ABS_MT_TOUCH_MAJOR, w_max);
 	input_report_abs(sensor->input, ABS_MT_TOUCH_MINOR, w_min);
 	input_report_abs(sensor->input, ABS_MT_ORIENTATION, orient);
 	input_report_abs(sensor->input, ABS_MT_POSITION_X, x);
 	input_report_abs(sensor->input, ABS_MT_POSITION_Y, y);
-	input_report_abs(sensor->input, ABS_MT_TRACKING_ID, n_finger);
 	input_report_key(sensor->input, BTN_TOUCH, !!finger_state);
-	/* MT sync between fingers */
-	input_mt_sync(sensor->input);
 }
 
 static void rmi_f11_finger_handler(struct rmi4_function_device *fdev,
@@ -685,7 +684,7 @@ static void rmi_f11_finger_handler(struct rmi4_function_device *fdev,
 			finger_pressed_count++;
 
 			dev_dbg(&fdev->dev,
-				 "Finger %d is present. Reporting\n", i);
+				 "%s: Finger %d is present. Reporting\n", __func__, i);
 
 			if (sensor->data.abs_pos)
 				rmi_f11_abs_pos_report(fdev, sensor,
@@ -693,14 +692,18 @@ static void rmi_f11_finger_handler(struct rmi4_function_device *fdev,
 
 			if (sensor->data.rel_pos)
 				rmi_f11_rel_pos_report(fdev, sensor, i);
+		} else if (finger_state == F11_NO_FINGER) {
+			dev_dbg(&fdev->dev,
+				 "%s: Finger %d is absent. Ignoring\n", __func__, i);
+			input_mt_slot(sensor->input, i);
+			input_mt_report_slot_state(sensor->input, MT_TOOL_FINGER, false);
 		}
 	}
 
 	if (!finger_pressed_count) {
 		dev_dbg(&fdev->dev, "%s - All fingers released\n", __func__);
-		input_mt_sync(sensor->input);
 	} else {
-		dev_dbg(&fdev->dev, "%d fingers used\n", finger_pressed_count);
+		dev_dbg(&fdev->dev, "%s: %d fingers used\n", __func__, finger_pressed_count);
 	}
 
 	input_sync(sensor->input);
@@ -946,6 +949,8 @@ static void rmi4_f11_set_abs_params(struct rmi4_function_device *fdev,
 	int y_max = sensor->max_y;
 
 	/* TODO: Implement clipping and ralated stuff */
+	input_mt_init_slots(sensor->input,
+			     sensor->nbr_fingers);
 	input_set_abs_params(sensor->input, ABS_MT_PRESSURE, 0,
 			     DEFAULT_MAX_ABS_MT_PRESSURE, 0, 0);
 	input_set_abs_params(sensor->input, ABS_MT_TOUCH_MAJOR,
@@ -962,6 +967,8 @@ static void rmi4_f11_set_abs_params(struct rmi4_function_device *fdev,
 			     x_min, x_max, 0, 0);
 	input_set_abs_params(sensor->input, ABS_MT_POSITION_Y,
 			     y_min, y_max, 0, 0);
+	input_set_abs_params(sensor->input, ABS_MT_TOOL_TYPE,
+			     0, MT_TOOL_FINGER, 0, 0);
 }
 
 static int rmi4_f11_create_input_dev(struct rmi4_function_device *fdev,
@@ -1094,16 +1101,15 @@ static void rmi4_f11_force_abs_release(struct rmi4_function_device *fdev,
 
 	for (i = 0; i < sensor->nbr_fingers; i++) {
 		dev_dbg(&fdev->dev, "%s - Releasing finger %d\n", __func__, i);
+		input_mt_slot(sensor->input, i);
+		input_mt_report_slot_state(sensor->input, MT_TOOL_FINGER, false);
 		input_report_abs(sensor->input, ABS_MT_PRESSURE, 0);
 		input_report_abs(sensor->input, ABS_MT_TOUCH_MAJOR, 0);
 		input_report_abs(sensor->input, ABS_MT_TOUCH_MINOR, 0);
 		input_report_abs(sensor->input, ABS_MT_ORIENTATION, 0);
 		input_report_abs(sensor->input, ABS_MT_POSITION_X, 0);
 		input_report_abs(sensor->input, ABS_MT_POSITION_Y, 0);
-		input_report_abs(sensor->input, ABS_MT_TRACKING_ID, i);
 
-		/* MT sync between fingers */
-		input_mt_sync(sensor->input);
 		sensor->finger_tracker[i] = 0;
 	}
 
